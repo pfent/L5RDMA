@@ -24,6 +24,7 @@
 #include "Network.hpp"
 //---------------------------------------------------------------------------
 using namespace std;
+using namespace rdma;
 //---------------------------------------------------------------------------
 int main(int argc, char *argv[]) {
    if (argc != 3) {
@@ -36,8 +37,8 @@ int main(int argc, char *argv[]) {
    int ID = atoi(argv[2]);
 
    // connect network
-   vector<rdma::Address> addresses(NODES);
-   rdma::Network network(NODES);
+   vector<Address> addresses(NODES);
+   Network network(NODES);
    for (int node = 0; node != NODES; ++node) {
       if (node == ID) {
          addresses[node] = {network.getLID(), network.getQPN(node)};
@@ -52,7 +53,7 @@ int main(int argc, char *argv[]) {
 
    // receive message
    char *receive = new char[MESSAGE_SIZE];
-   rdma::MemoryRegion receiveMR(receive, MESSAGE_SIZE, network.getProtectionDomain());
+   MemoryRegion receiveMR(receive, MESSAGE_SIZE, network.getProtectionDomain(), MemoryRegion::Permission::LocalWrite);
    network.postRecv(receiveMR, 0);
    int ignore;
    cout << "[ENTER MESSAGE]" << endl;
@@ -62,7 +63,7 @@ int main(int argc, char *argv[]) {
    // send message
    char *send = new char[MESSAGE_SIZE];
    snprintf(send, MESSAGE_SIZE, "%s", message.c_str());
-   rdma::MemoryRegion sendMR(send, MESSAGE_SIZE, network.getProtectionDomain());
+   MemoryRegion sendMR(send, MESSAGE_SIZE, network.getProtectionDomain(), MemoryRegion::Permission::LocalWrite | MemoryRegion::Permission::RemoteWrite);
    network.postSend((ID+1)%NODES, sendMR, true, 0);
    network.waitForCompletionSend();
    network.waitForCompletionReceive();

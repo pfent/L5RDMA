@@ -31,8 +31,24 @@ using namespace std;
 //---------------------------------------------------------------------------
 namespace rdma {
 //---------------------------------------------------------------------------
-MemoryRegion::MemoryRegion(void *address, size_t size, ibv_pd *protectionDomain) : address(address), size(size) {
-   key = ::ibv_reg_mr(protectionDomain, address, size, IBV_ACCESS_LOCAL_WRITE);
+int convertPermissions(MemoryRegion::Permission permissions) {
+   int flags = 0;
+   if (static_cast<underlying_type<MemoryRegion::Permission>::type>(permissions & MemoryRegion::Permission::LocalWrite)) {
+      flags |= IBV_ACCESS_LOCAL_WRITE;
+   } else if (static_cast<underlying_type<MemoryRegion::Permission>::type>(permissions & MemoryRegion::Permission::RemoteWrite)) {
+      flags |= IBV_ACCESS_REMOTE_WRITE;
+   } else if (static_cast<underlying_type<MemoryRegion::Permission>::type>(permissions & MemoryRegion::Permission::RemoteRead)) {
+      flags |= IBV_ACCESS_REMOTE_READ;
+   } else if (static_cast<underlying_type<MemoryRegion::Permission>::type>(permissions & MemoryRegion::Permission::RemoteAtomic)) {
+      flags |= IBV_ACCESS_REMOTE_ATOMIC;
+   } else if (static_cast<underlying_type<MemoryRegion::Permission>::type>(permissions & MemoryRegion::Permission::MemoryWindowBind)) {
+      flags |= IBV_ACCESS_MW_BIND;
+   }
+   return flags;
+}
+//---------------------------------------------------------------------------
+MemoryRegion::MemoryRegion(void *address, size_t size, ibv_pd *protectionDomain, Permission permissions) : address(address), size(size) {
+   key = ::ibv_reg_mr(protectionDomain, address, size, convertPermissions(permissions));
    if (key == nullptr) {
       string reason = "registering memory failed with error " + to_string(errno) + ": " + strerror(errno);
       cerr << reason << endl;

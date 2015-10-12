@@ -47,18 +47,34 @@ public:
 /// A region of main memory pinned to avoid swapping to disk
 class MemoryRegion {
 public:
+   enum class Permission : uint8_t {
+      None = 0,
+      LocalWrite = 1 << 0,
+      RemoteWrite = 1 << 1,
+      RemoteRead = 1 << 2,
+      RemoteAtomic = 1 << 3,
+      MemoryWindowBind = 1 << 4
+   };
+
    ibv_mr *key;
    const void *address;
    const size_t size;
 
    /// Constructor
-   MemoryRegion(void *address, size_t size, ibv_pd *protectionDomain);
+   MemoryRegion(void *address, size_t size, ibv_pd *protectionDomain, Permission permissions);
    /// Destructor
    ~MemoryRegion();
 
    MemoryRegion(MemoryRegion const&) = delete;
    void operator=(MemoryRegion const&) = delete;
 };
+//---------------------------------------------------------------------------
+inline MemoryRegion::Permission operator|(MemoryRegion::Permission a, MemoryRegion::Permission b) {
+   return static_cast<MemoryRegion::Permission>(static_cast<std::underlying_type<MemoryRegion::Permission>::type>(a) | static_cast<std::underlying_type<MemoryRegion::Permission>::type>(b));
+}
+inline MemoryRegion::Permission operator&(MemoryRegion::Permission a, MemoryRegion::Permission b) {
+   return static_cast<MemoryRegion::Permission>(static_cast<std::underlying_type<MemoryRegion::Permission>::type>(a) & static_cast<std::underlying_type<MemoryRegion::Permission>::type>(b));
+}
 //---------------------------------------------------------------------------
 /// The LID and QPN uniquely address a queue pair
 struct Address {
