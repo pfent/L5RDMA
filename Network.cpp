@@ -35,13 +35,13 @@ int convertPermissions(MemoryRegion::Permission permissions) {
    int flags = 0;
    if (static_cast<underlying_type<MemoryRegion::Permission>::type>(permissions & MemoryRegion::Permission::LocalWrite)) {
       flags |= IBV_ACCESS_LOCAL_WRITE;
-   } else if (static_cast<underlying_type<MemoryRegion::Permission>::type>(permissions & MemoryRegion::Permission::RemoteWrite)) {
+   } if (static_cast<underlying_type<MemoryRegion::Permission>::type>(permissions & MemoryRegion::Permission::RemoteWrite)) {
       flags |= IBV_ACCESS_REMOTE_WRITE;
-   } else if (static_cast<underlying_type<MemoryRegion::Permission>::type>(permissions & MemoryRegion::Permission::RemoteRead)) {
+   } if (static_cast<underlying_type<MemoryRegion::Permission>::type>(permissions & MemoryRegion::Permission::RemoteRead)) {
       flags |= IBV_ACCESS_REMOTE_READ;
-   } else if (static_cast<underlying_type<MemoryRegion::Permission>::type>(permissions & MemoryRegion::Permission::RemoteAtomic)) {
+   } if (static_cast<underlying_type<MemoryRegion::Permission>::type>(permissions & MemoryRegion::Permission::RemoteAtomic)) {
       flags |= IBV_ACCESS_REMOTE_ATOMIC;
-   } else if (static_cast<underlying_type<MemoryRegion::Permission>::type>(permissions & MemoryRegion::Permission::MemoryWindowBind)) {
+   } if (static_cast<underlying_type<MemoryRegion::Permission>::type>(permissions & MemoryRegion::Permission::MemoryWindowBind)) {
       flags |= IBV_ACCESS_MW_BIND;
    }
    return flags;
@@ -455,7 +455,7 @@ void Network::connect(vector<Address> addresses, unsigned retryCount)
 }
 //---------------------------------------------------------------------------
 void Network::postSend(unsigned target, const MemoryRegion& mr, bool completion, uint64_t context, int flags)
-   /// Send a work request
+   /// Post a send work request
 {
    // Add the memory region to the scatter/gather list
    ibv_sge sge;
@@ -475,6 +475,40 @@ void Network::postSend(unsigned target, const MemoryRegion& mr, bool completion,
    workRequest.num_sge = 1;                                       // Size of the s/g array
    workRequest.opcode = IBV_WR_SEND;                              // Operation type
    workRequest.send_flags = flags | (completion ? IBV_SEND_SIGNALED : 0); // Request completion notification
+
+   // Post work request
+   ibv_send_wr *badWorkRequest = nullptr;
+   int status = ::ibv_post_send(queuePairs[target], &workRequest, &badWorkRequest);
+   if (status != 0) {
+      string reason = "posting the work request failed with error " + to_string(status) + ": " + strerror(status);
+      cerr << reason << endl;
+      throw NetworkException(reason);
+   }
+}
+//---------------------------------------------------------------------------
+void Network::postWrite(unsigned target, const RemoteMemoryRegion& t_mr, const MemoryRegion& s_mr, bool completion, uint64_t context, int flags)
+   /// Post a write work request
+{
+   // Add the memory region to the scatter/gather list
+   ibv_sge sge;
+   memset(&sge, 0, sizeof(sge));
+   sge.addr = reinterpret_cast<uintptr_t>(s_mr.address);   // Start address of the local memory buffer
+   sge.length = s_mr.size;                                 // Length of the buffer
+   if (!(flags & IBV_SEND_INLINE)) {
+      sge.lkey = s_mr.key->lkey;                           // Key of the local Memory Region
+   }
+
+   // Create the work request
+   ibv_send_wr workRequest;
+   memset(&workRequest, 0, sizeof(workRequest));
+   workRequest.wr_id = context;                                   // User defined WR ID
+   workRequest.next = nullptr;                                    // Pointer to next WR in list, NULL if last WR
+   workRequest.sg_list = &sge;                                    // Pointer to the s/g array
+   workRequest.num_sge = 1;                                       // Size of the s/g array
+   workRequest.opcode = IBV_WR_RDMA_WRITE;                        // Operation type
+   workRequest.send_flags = flags | (completion ? IBV_SEND_SIGNALED : 0); // Request completion notification
+   workRequest.wr.rdma.remote_addr = t_mr.address;
+   workRequest.wr.rdma.rkey = t_mr.key;
 
    // Post work request
    ibv_send_wr *badWorkRequest = nullptr;
@@ -513,6 +547,40 @@ void Network::postRecv(const MemoryRegion& mr, uint64_t context)
       throw NetworkException(reason);
    }
 }
+//---------------------------------------------------------------------------
+void Network::postRead(unsigned target, const MemoryRegion& t_mr, const RemoteMemoryRegion& s_mr, bool completion, uint64_t context, int flags)
+   /// Post a read work request
+   {
+      // Add the memory region to the scatter/gather list
+      ibv_sge sge;
+      memset(&sge, 0, sizeof(sge));
+      sge.addr = reinterpret_cast<uintptr_t>(t_mr.address);   // Start address of the local memory buffer
+      sge.length = t_mr.size;                                 // Length of the buffer
+      if (!(flags & IBV_SEND_INLINE)) {
+         sge.lkey = t_mr.key->lkey;                           // Key of the local Memory Region
+      }
+
+      // Create the work request
+      ibv_send_wr workRequest;
+      memset(&workRequest, 0, sizeof(workRequest));
+      workRequest.wr_id = context;                                   // User defined WR ID
+      workRequest.next = nullptr;                                    // Pointer to next WR in list, NULL if last WR
+      workRequest.sg_list = &sge;                                    // Pointer to the s/g array
+      workRequest.num_sge = 1;                                       // Size of the s/g array
+      workRequest.opcode = IBV_WR_RDMA_READ;                         // Operation type
+      workRequest.send_flags = flags | (completion ? IBV_SEND_SIGNALED : 0); // Request completion notification
+      workRequest.wr.rdma.remote_addr = s_mr.address;
+      workRequest.wr.rdma.rkey = s_mr.key;
+
+      // Post work request
+      ibv_send_wr *badWorkRequest = nullptr;
+      int status = ::ibv_post_send(queuePairs[target], &workRequest, &badWorkRequest);
+      if (status != 0) {
+         string reason = "posting the work request failed with error " + to_string(status) + ": " + strerror(status);
+         cerr << reason << endl;
+         throw NetworkException(reason);
+      }
+   }
 //---------------------------------------------------------------------------
 void Network::postFetchAdd(unsigned target, const MemoryRegion& beforeValue, const RemoteMemoryRegion& remoteAddress, uint64_t add, bool completion, uint64_t context, int flags)
    /// Post an atomic fetch/add request

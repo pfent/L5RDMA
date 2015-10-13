@@ -145,8 +145,12 @@ public:
 
    /// Post a send work request
    void postSend(unsigned target, const MemoryRegion& mr, bool completion, uint64_t context, int flags = 0);
+   /// Post a write work request
+   void postWrite(unsigned target, const RemoteMemoryRegion& t_mr, const MemoryRegion& s_mr, bool completion, uint64_t context, int flags = 0);
    /// Post a receive request
    void postRecv(const MemoryRegion& mr, uint64_t context);
+   /// Post a read work request
+   void postRead(unsigned target, const MemoryRegion& t_mr, const RemoteMemoryRegion& s_mr, bool completion, uint64_t context, int flags = 0);
    /// Post an atomic fetch/add request
    void postFetchAdd(unsigned target, const MemoryRegion& beforeValue, const RemoteMemoryRegion& remoteAddress, uint64_t add, bool completion, uint64_t context, int flags = 0);
    /// Post an atomic compare/swap request
