@@ -176,6 +176,8 @@ public:
 
    /// Print the capabilities of the RDMA host channel adapter
    void printCapabilities();
+   /// Print detailed information about the specified queue pair
+   void printQueuePairDetails(unsigned qpid);
 };
 //---------------------------------------------------------------------------
 }
