@@ -18,9 +18,11 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //---------------------------------------------------------------------------
+#include <infiniband/verbs.h>
 #include <iomanip>
 #include <iostream>
 #include <memory>
+#include <unistd.h>
 //---------------------------------------------------------------------------
 #include "Network.hpp"
 //---------------------------------------------------------------------------
@@ -64,8 +66,9 @@ public:
       // send message
       char *send = new char[MESSAGE_SIZE];
       snprintf(send, MESSAGE_SIZE, "%s", message.c_str());
-      MemoryRegion sendMR(send, MESSAGE_SIZE, network.getProtectionDomain(), MemoryRegion::Permission::LocalWrite | MemoryRegion::Permission::RemoteWrite);
-      network.postSend((id+1)%nodes, sendMR, true, 0);
+      MemoryRegion sendMR(send, MESSAGE_SIZE, network.getProtectionDomain(), MemoryRegion::Permission::LocalWrite);
+      int target = (id+1)%nodes;
+      network.postSend(target, sendMR, true, 0);
       network.waitForCompletionSend();
       network.waitForCompletionReceive();
       cout << "message: " << receive << endl;
@@ -75,7 +78,30 @@ public:
    }
 
    void testAtomics() {
-   
+      int target = (id+1)%nodes;
+
+      cout << "before" << endl;
+      uint64_t *beforeValue = new uint64_t;
+      *beforeValue = 0;
+      MemoryRegion beforeValueMR(beforeValue, sizeof(*beforeValue), network.getProtectionDomain(), MemoryRegion::Permission::All);
+
+      cout << "receive" << endl;
+      uint64_t *receive = new uint64_t;
+      MemoryRegion receiveMR(receive, sizeof(*receive), network.getProtectionDomain(), MemoryRegion::Permission::All);
+      cout << receiveMR.address << endl;
+      cout << reinterpret_cast<uintptr_t>(receiveMR.address) << " " << receiveMR.key->rkey << endl;
+
+      cout << "remote" << endl;
+      RemoteMemoryRegion remoteAddress;
+      cin >> remoteAddress.address;
+      cin >> remoteAddress.key;
+
+      network.postFetchAdd(target, beforeValueMR, remoteAddress, 42, true, 0);
+      network.waitForCompletionSend();
+      cout << *beforeValue << endl;
+
+      // network.postCompareSwap(target, beforeValue, remoteAddress, compare, swap, true, 0);
+      delete receive;
    }
 };
 //---------------------------------------------------------------------------
@@ -86,7 +112,7 @@ int main(int argc, char *argv[]) {
    }
    int nodes = atoi(argv[1]);
    int id = atoi(argv[2]);
-   
+
    RDMATest test(nodes, id);
    test.testAtomics();
 }

@@ -412,7 +412,7 @@ void Network::connect(vector<Address> addresses, unsigned retryCount)
       attributes.qp_state = IBV_QPS_INIT;
       attributes.pkey_index = 0;       // Partition the queue pair belongs to
       attributes.port_num = ibport;    // The local physical port
-      attributes.qp_access_flags = 0;  // Allowed access flags of the remote operations for incoming packets (i.e., none, RDMA read, RDMA write, or atomics)
+      attributes.qp_access_flags = IBV_ACCESS_REMOTE_WRITE | IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_ATOMIC;  // Allowed access flags of the remote operations for incoming packets (i.e., none, RDMA read, RDMA write, or atomics)
       if (::ibv_modify_qp(queuePairs[i], &attributes, IBV_QP_STATE | IBV_QP_PKEY_INDEX | IBV_QP_PORT | IBV_QP_ACCESS_FLAGS)) {
          string reason = "failed to transition QP to INIT state";
          cerr << reason << endl;
@@ -459,6 +459,7 @@ void Network::postSend(unsigned target, const MemoryRegion& mr, bool completion,
 {
    // Add the memory region to the scatter/gather list
    ibv_sge sge;
+   memset(&sge, 0, sizeof(sge));
    sge.addr = reinterpret_cast<uintptr_t>(mr.address);   // Start address of the local memory buffer
    sge.length = mr.size;                                 // Length of the buffer
    if (!(flags & IBV_SEND_INLINE)) {
@@ -490,6 +491,7 @@ void Network::postRecv(const MemoryRegion& mr, uint64_t context)
 {
    // Add the memory region to the scatter/gather list
    ibv_sge sge;
+   memset(&sge, 0, sizeof(sge));
    sge.addr = reinterpret_cast<uintptr_t>(mr.address);  // Start address of the local memory buffer
    sge.length = mr.size;                                // Length of the buffer
    sge.lkey = mr.key->lkey;                             // Key of the local Memory Region
@@ -507,6 +509,73 @@ void Network::postRecv(const MemoryRegion& mr, uint64_t context)
    int status = ::ibv_post_srq_recv(srq, &workRequest, &badWorkRequest);
    if (status != 0) {
       string reason = "posting the receive work request failed with error " + to_string(errno) + ": " + strerror(errno);
+      cerr << reason << endl;
+      throw NetworkException(reason);
+   }
+}
+//---------------------------------------------------------------------------
+void Network::postFetchAdd(unsigned target, const MemoryRegion& beforeValue, const RemoteMemoryRegion& remoteAddress, uint64_t add, bool completion, uint64_t context, int flags)
+   /// Post an atomic fetch/add request
+{
+   // Add the memory region to the scatter/gather list
+   ibv_sge sge;
+   memset(&sge, 0, sizeof(sge));
+   sge.addr = reinterpret_cast<uintptr_t>(beforeValue.address);   // Start address of the local memory buffer
+   sge.length = beforeValue.size;                                 // Length of the buffer
+   sge.lkey = beforeValue.key->lkey;                              // Key of the local Memory Region
+
+   // Create the work request
+   ibv_send_wr workRequest;
+   memset(&workRequest, 0, sizeof(workRequest));
+   workRequest.wr_id = context;                                   // User defined WR ID
+   workRequest.next = nullptr;                                    // Pointer to next WR in list, NULL if last WR
+   workRequest.sg_list = &sge;                                    // Pointer to the s/g array
+   workRequest.num_sge = 1;                                       // Size of the s/g array
+   workRequest.opcode = IBV_WR_ATOMIC_FETCH_AND_ADD;              // Operation type
+   workRequest.send_flags = flags | (completion ? IBV_SEND_SIGNALED : 0); // Request completion notification
+   workRequest.wr.atomic.remote_addr = remoteAddress.address;
+   workRequest.wr.atomic.rkey = remoteAddress.key;
+   workRequest.wr.atomic.compare_add = add;
+
+   // Post work request
+   ibv_send_wr *badWorkRequest = nullptr;
+   int status = ::ibv_post_send(queuePairs[target], &workRequest, &badWorkRequest);
+   if (status != 0) {
+      string reason = "posting the work request failed with error " + to_string(status) + ": " + strerror(status);
+      cerr << reason << endl;
+      throw NetworkException(reason);
+   }
+}
+//---------------------------------------------------------------------------
+void Network::postCompareSwap(unsigned target, const MemoryRegion& beforeValue, const RemoteMemoryRegion& remoteAddress, uint64_t compare, uint64_t swap, bool completion, uint64_t context, int flags)
+   /// Post an atomic compare/swap request
+{
+   // Add the memory region to the scatter/gather list
+   ibv_sge sge;
+   memset(&sge, 0, sizeof(sge));
+   sge.addr = reinterpret_cast<uintptr_t>(beforeValue.address);   // Start address of the local memory buffer
+   sge.length = beforeValue.size;                                 // Length of the buffer
+   sge.lkey = beforeValue.key->lkey;                              // Key of the local Memory Region
+
+   // Create the work request
+   ibv_send_wr workRequest;
+   memset(&workRequest, 0, sizeof(workRequest));
+   workRequest.wr_id = context;                                   // User defined WR ID
+   workRequest.next = nullptr;                                    // Pointer to next WR in list, NULL if last WR
+   workRequest.sg_list = &sge;                                    // Pointer to the s/g array
+   workRequest.num_sge = 1;                                       // Size of the s/g array
+   workRequest.opcode = IBV_WR_ATOMIC_CMP_AND_SWP;                // Operation type
+   workRequest.send_flags = flags | (completion ? IBV_SEND_SIGNALED : 0); // Request completion notification
+   workRequest.wr.atomic.remote_addr = remoteAddress.address;
+   workRequest.wr.atomic.rkey = remoteAddress.key;
+   workRequest.wr.atomic.compare_add = compare;
+   workRequest.wr.atomic.swap = swap;
+
+   // Post work request
+   ibv_send_wr *badWorkRequest = nullptr;
+   int status = ::ibv_post_send(queuePairs[target], &workRequest, &badWorkRequest);
+   if (status != 0) {
+      string reason = "posting the work request failed with error " + to_string(status) + ": " + strerror(status);
       cerr << reason << endl;
       throw NetworkException(reason);
    }

@@ -44,6 +44,11 @@ public:
    NetworkException(std::string reason) : std::runtime_error(reason) {}
 };
 //---------------------------------------------------------------------------
+struct RemoteMemoryRegion {
+   uintptr_t address;
+   uint32_t key;
+};
+//---------------------------------------------------------------------------
 /// A region of main memory pinned to avoid swapping to disk
 class MemoryRegion {
 public:
@@ -53,7 +58,8 @@ public:
       RemoteWrite = 1 << 1,
       RemoteRead = 1 << 2,
       RemoteAtomic = 1 << 3,
-      MemoryWindowBind = 1 << 4
+      MemoryWindowBind = 1 << 4,
+      All = LocalWrite | RemoteWrite | RemoteRead | RemoteAtomic | MemoryWindowBind
    };
 
    ibv_mr *key;
@@ -141,6 +147,10 @@ public:
    void postSend(unsigned target, const MemoryRegion& mr, bool completion, uint64_t context, int flags = 0);
    /// Post a receive request
    void postRecv(const MemoryRegion& mr, uint64_t context);
+   /// Post an atomic fetch/add request
+   void postFetchAdd(unsigned target, const MemoryRegion& beforeValue, const RemoteMemoryRegion& remoteAddress, uint64_t add, bool completion, uint64_t context, int flags = 0);
+   /// Post an atomic compare/swap request
+   void postCompareSwap(unsigned target, const MemoryRegion& beforeValue, const RemoteMemoryRegion& remoteAddress, uint64_t compare, uint64_t swap, bool completion, uint64_t context, int flags = 0);
 
    /// Poll the send completion queue
    uint64_t pollSendCompletionQueue();
