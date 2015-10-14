@@ -27,6 +27,8 @@
 #include <unistd.h>
 //---------------------------------------------------------------------------
 #include "Network.hpp"
+#include "MemoryRegion.hpp"
+#include "WorkRequest.hpp"
 //---------------------------------------------------------------------------
 using namespace std;
 using namespace rdma;
@@ -101,6 +103,49 @@ public:
       cin >> remoteAddress.key;
 
       cout << "> sending to: " << remoteAddress.address << " " << remoteAddress.key << endl;
+      network.postFetchAdd(target, beforeValueMR, remoteAddress, 42, true, 8028);
+      network.waitForCompletionSend();
+
+      cout << "[PRESS ENTER TO CONTINUE]" << endl;
+      cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+      cin.get();
+
+      cout << "beforeValue: " << *beforeValue << endl; assert(*beforeValue == 28);
+      cout << "targetValue: " << *targetValue << endl; assert(*targetValue == 70);
+
+      delete beforeValue;
+      delete targetValue;
+   }
+
+   void testAtomicFetchAndAddNew() {
+      cout << "----------> AtomicFetchAndAddNew" << endl;
+      int target = (id + 1) % nodes;
+
+      cout << "> pin before buffer" << endl;
+      uint64_t *beforeValue = new uint64_t;
+      *beforeValue = 8;
+      MemoryRegion beforeValueMR(beforeValue, sizeof(*beforeValue), network.getProtectionDomain(), MemoryRegion::Permission::All);
+
+      cout << "> pin target buffer" << endl;
+      uint64_t *targetValue = new uint64_t;
+      *targetValue = 28;
+      MemoryRegion targetMR(targetValue, sizeof(*targetValue), network.getProtectionDomain(), MemoryRegion::Permission::All);
+
+      cout << "> addrs & key: " << reinterpret_cast<uintptr_t>(targetMR.address) << " " << targetMR.key->rkey << endl;
+      cout << "[ENTER REMOTE ADDRESS]" << endl;
+      RemoteMemoryRegion remoteAddress;
+      cin >> remoteAddress.address;
+      cin >> remoteAddress.key;
+
+      cout << "> sending to: " << remoteAddress.address << " " << remoteAddress.key << endl;
+      AtomicFetchAndAddWorkRequest workRequest;
+      workRequest.setId(8028);
+      workRequest.setAddValue(42);
+      workRequest.setCompletion(true);
+      workRequest.setLocalAddress(beforeValueMR);
+      workRequest.setRemoteAddress(remoteAddress);
+
+
       network.postFetchAdd(target, beforeValueMR, remoteAddress, 42, true, 8028);
       network.waitForCompletionSend();
 
@@ -199,5 +244,6 @@ int main(int argc, char *argv[]) {
 //   test.testSendReceive();
 //   test.testRemoteWrite();
 //   test.testRemoteRead();
-   test.testAtomicFetchAndAdd();
+//   test.testAtomicFetchAndAdd();
+   test.testAtomicFetchAndAddNew();
 }

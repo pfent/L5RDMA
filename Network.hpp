@@ -21,9 +21,7 @@
 #pragma once
 //---------------------------------------------------------------------------
 #include <mutex>
-#include <queue>
 #include <stdexcept>
-#include <unordered_map>
 #include <vector>
 //---------------------------------------------------------------------------
 struct ibv_comp_channel;
@@ -37,6 +35,9 @@ struct ibv_srq;
 //---------------------------------------------------------------------------
 namespace rdma {
 //---------------------------------------------------------------------------
+class WorkRequest;
+class MemoryRegion;
+//---------------------------------------------------------------------------
 /// A network exception
 class NetworkException : public std::runtime_error
 {
@@ -48,39 +49,6 @@ struct RemoteMemoryRegion {
    uintptr_t address;
    uint32_t key;
 };
-//---------------------------------------------------------------------------
-/// A region of main memory pinned to avoid swapping to disk
-class MemoryRegion {
-public:
-   enum class Permission : uint8_t {
-      None = 0,
-      LocalWrite = 1 << 0,
-      RemoteWrite = 1 << 1,
-      RemoteRead = 1 << 2,
-      RemoteAtomic = 1 << 3,
-      MemoryWindowBind = 1 << 4,
-      All = LocalWrite | RemoteWrite | RemoteRead | RemoteAtomic | MemoryWindowBind
-   };
-
-   ibv_mr *key;
-   const void *address;
-   const size_t size;
-
-   /// Constructor
-   MemoryRegion(void *address, size_t size, ibv_pd *protectionDomain, Permission permissions);
-   /// Destructor
-   ~MemoryRegion();
-
-   MemoryRegion(MemoryRegion const&) = delete;
-   void operator=(MemoryRegion const&) = delete;
-};
-//---------------------------------------------------------------------------
-inline MemoryRegion::Permission operator|(MemoryRegion::Permission a, MemoryRegion::Permission b) {
-   return static_cast<MemoryRegion::Permission>(static_cast<std::underlying_type<MemoryRegion::Permission>::type>(a) | static_cast<std::underlying_type<MemoryRegion::Permission>::type>(b));
-}
-inline MemoryRegion::Permission operator&(MemoryRegion::Permission a, MemoryRegion::Permission b) {
-   return static_cast<MemoryRegion::Permission>(static_cast<std::underlying_type<MemoryRegion::Permission>::type>(a) & static_cast<std::underlying_type<MemoryRegion::Permission>::type>(b));
-}
 //---------------------------------------------------------------------------
 /// The LID and QPN uniquely address a queue pair
 struct Address {
@@ -155,6 +123,8 @@ public:
    void postFetchAdd(unsigned target, const MemoryRegion& beforeValue, const RemoteMemoryRegion& remoteAddress, uint64_t add, bool completion, uint64_t context, int flags = 0);
    /// Post an atomic compare/swap request
    void postCompareSwap(unsigned target, const MemoryRegion& beforeValue, const RemoteMemoryRegion& remoteAddress, uint64_t compare, uint64_t swap, bool completion, uint64_t context, int flags = 0);
+   /// Post a generic work request
+   void postWorkRequest(unsigned target, const WorkRequest& workRequest);
 
    /// Poll the send completion queue
    uint64_t pollSendCompletionQueue();
