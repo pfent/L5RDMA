@@ -26,9 +26,9 @@
 #include <cassert>
 #include <unistd.h>
 //---------------------------------------------------------------------------
-#include "Network.hpp"
-#include "MemoryRegion.hpp"
-#include "WorkRequest.hpp"
+#include "rdma/Network.hpp"
+#include "rdma/MemoryRegion.hpp"
+#include "rdma/WorkRequest.hpp"
 //---------------------------------------------------------------------------
 using namespace std;
 using namespace rdma;

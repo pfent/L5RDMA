@@ -1,8 +1,5 @@
 # Compiled Object files
-*.slo
-*.lo
-*.o
-*.obj
+bin
 
 # Precompiled Headers
 *.gch
@@ -26,3 +23,7 @@
 *.exe
 *.out
 *.app
+tester
+
+# Project files
+.idea
