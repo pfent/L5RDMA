@@ -42,7 +42,7 @@ class MemoryRegion;
 class NetworkException : public std::runtime_error
 {
 public:
-   NetworkException(std::string reason) : std::runtime_error(reason) {}
+   NetworkException(const std::string& reason) : std::runtime_error(reason) {}
 };
 //---------------------------------------------------------------------------
 struct RemoteMemoryRegion {
