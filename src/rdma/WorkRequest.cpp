@@ -46,6 +46,7 @@ void WorkRequest::reset()
    auto tmp = wr->sg_list;
    memset(wr.get(), 0, sizeof(ibv_send_wr));
    wr->sg_list = tmp;
+   wr->num_sge = 1;
    memset(wr->sg_list, 0, sizeof(ibv_sge));
 }
 //---------------------------------------------------------------------------
@@ -70,6 +71,11 @@ void WorkRequest::setCompletion(bool flag)
 bool WorkRequest::getCompletion() const
 {
    return wr->send_flags & IBV_SEND_SIGNALED;
+}
+//---------------------------------------------------------------------------
+AtomicFetchAndAddWorkRequest::AtomicFetchAndAddWorkRequest()
+{
+   wr->opcode = IBV_WR_ATOMIC_FETCH_AND_ADD;
 }
 //---------------------------------------------------------------------------
 void AtomicFetchAndAddWorkRequest::setAddValue(uint64_t value)

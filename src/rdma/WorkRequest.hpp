@@ -35,6 +35,9 @@ class WorkRequest {
 protected:
    std::unique_ptr <ibv_send_wr> wr;
    WorkRequest();
+   WorkRequest(const WorkRequest &) = delete;
+   WorkRequest(WorkRequest &&) = delete;
+   const WorkRequest &operator=(const WorkRequest &) = delete;
    ~WorkRequest();
 
 public:
@@ -52,6 +55,8 @@ public:
 //---------------------------------------------------------------------------
 class AtomicFetchAndAddWorkRequest : public WorkRequest {
 public:
+   AtomicFetchAndAddWorkRequest();
+
    /// The number to be added to the remote address
    void setAddValue(uint64_t value);
    uint64_t getAddValue() const;
