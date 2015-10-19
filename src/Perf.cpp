@@ -20,6 +20,7 @@
 //---------------------------------------------------------------------------
 #include <infiniband/verbs.h>
 #include <iomanip>
+#include <chrono>
 #include <iostream>
 #include <memory>
 #include <algorithm>
@@ -64,7 +65,6 @@ struct TestHarness {
       vector <Address> localAddresses;
       for (uint32_t i = 0; i<nodeCount; ++i) {
          localAddresses.push_back(Address{network.getLID(), network.getQPN(i)});
-         cout << network.getLID() << " " << network.getQPN(i) << endl;
       }
       if (verbose)
          cout << "> Created RDMA Network" << endl;
@@ -133,6 +133,74 @@ struct TestHarness {
    }
 };
 //---------------------------------------------------------------------------
+void runServerCode(TestHarness &testHarness)
+{
+   // Create memory
+   vector <uint64_t> shared(128);
+   fill(shared.begin(), shared.end(), 0);
+   MemoryRegion sharedMR(shared.data(), sizeof(uint64_t) * shared.size(), testHarness.network.getProtectionDomain(), MemoryRegion::Permission::All);
+
+   // Publish address
+   RemoteMemoryRegion rmr{reinterpret_cast<uintptr_t>(sharedMR.address), sharedMR.key->rkey};
+   testHarness.publishAddress(rmr);
+   testHarness.retrieveAddress();
+
+   // Done
+   cout << "[PRESS ENTER TO CONTINUE]" << endl;
+   cin.get();
+   cout << "data: " << shared[0] << endl;
+}
+//---------------------------------------------------------------------------
+void runClientCode(TestHarness &testHarness)
+{
+   // Pin return value
+   vector <uint64_t> shared(1);
+   MemoryRegion sharedMR(shared.data(), sizeof(uint64_t) * shared.size(), testHarness.network.getProtectionDomain(), MemoryRegion::Permission::All);
+
+   // Get target memory
+   RemoteMemoryRegion rmr = testHarness.retrieveAddress();
+
+   // Create work request
+   AtomicFetchAndAddWorkRequest request;
+   request.setId(8028);
+   request.setCompletion(true);
+   request.setLocalAddress(sharedMR);
+   request.setRemoteAddress(rmr);
+   request.setAddValue(1);
+
+   for (int run = 0; run<=20; run++) {
+      const int requestBeforeCompletion = (1 << run) - 1;
+      const int totalRequests = 1 << 20;
+      const int iterations = totalRequests / (requestBeforeCompletion + 1);
+
+      // Performance
+      auto begin = chrono::high_resolution_clock::now();
+      for (int i = 0; i<iterations; ++i) {
+         request.setCompletion(false);
+         for (int j = 0; j<requestBeforeCompletion; j++)
+            testHarness.network.postWorkRequest(0, request);
+
+         request.setCompletion(true);
+         testHarness.network.postWorkRequest(0, request);
+         testHarness.network.waitForCompletionSend();
+      }
+      auto end = chrono::high_resolution_clock::now();
+
+      cout << "run: " << run << endl;
+      cout << "total: " << totalRequests << endl;
+      cout << "iterations: " << iterations << endl;
+      cout << "request: " << requestBeforeCompletion << endl;
+      cout << "time: " << chrono::duration_cast<chrono::nanoseconds>(end - begin).count() << endl;
+      cout << "data: " << shared[0] + 1 << endl;
+      cout << "---" << endl;
+   }
+
+   // Done
+   cout << "[PRESS ENTER TO CONTINUE]" << endl;
+   cin.get();
+   cout << "data: " << shared[0] << endl;
+}
+//---------------------------------------------------------------------------
 int main(int argc, char **argv)
 {
    // Parse input
@@ -144,40 +212,13 @@ int main(int argc, char **argv)
    string coordinatorName = argv[2];
 
    // Create Network
-   TestHarness alex(nodeCount, coordinatorName);
-   alex.createFullyConnectedNetwork();
+   TestHarness testHarness(nodeCount, coordinatorName);
+   testHarness.createFullyConnectedNetwork();
 
-   vector <uint64_t> shared(128);
-   fill(shared.begin(), shared.end(), 0);
-   MemoryRegion sharedMR(shared.data(), sizeof(uint64_t) * shared.size(), alex.network.getProtectionDomain(), MemoryRegion::Permission::All);
-
-   // Exchange memory region address
-   if (alex.localId == 0) {
-      RemoteMemoryRegion rmr{reinterpret_cast<uintptr_t>(sharedMR.address), sharedMR.key->rkey};
-      alex.publishAddress(rmr);
+   // Run performance tests
+   if (testHarness.localId == 0) {
+      runServerCode(testHarness);
+   } else {
+      runClientCode(testHarness);
    }
-   RemoteMemoryRegion rmr = alex.retrieveAddress();
-
-   // Do performance test
-   if (alex.localId == 1) {
-      vector <uint64_t> shared(1);
-      MemoryRegion sharedMR(shared.data(), sizeof(uint64_t) * shared.size(), alex.network.getProtectionDomain(), MemoryRegion::Permission::All);
-
-      AtomicFetchAndAddWorkRequest request;
-      request.setId(8028);
-      request.setCompletion(true);
-      request.setLocalAddress(sharedMR);
-      request.setRemoteAddress(rmr);
-      request.setAddValue(1);
-//      alex.network.postFetchAdd(0, sharedMR, rmr, 42, true, 8028);
-      alex.network.postWorkRequest(0, request);
-      alex.network.waitForCompletionSend();
-
-      cout << "previous: " << shared[0] << endl;
-   }
-
-   cout << "[PRESS ENTER TO CONTINUE]" << endl;
-   cin.get();
-
-   cout << "data: " << shared[0] << endl;
 }
