@@ -145,8 +145,7 @@ public:
       workRequest.setLocalAddress(beforeValueMR);
       workRequest.setRemoteAddress(remoteAddress);
 
-
-      network.postFetchAdd(target, beforeValueMR, remoteAddress, 42, true, 8028);
+      network.postWorkRequest(target, workRequest);
       network.waitForCompletionSend();
 
       cout << "[PRESS ENTER TO CONTINUE]" << endl;
