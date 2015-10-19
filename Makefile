@@ -25,7 +25,7 @@ src_obj := $(patsubst src/%,$(TARGET_DIR)/src/%, $(patsubst %.cpp,%.o,$(shell fi
 ## -------------------------------------------------------------------------------------------------
 ## Build the test program
 tester_obj := $(src_obj) bin/src/Tester.o
-alex: $(tester_obj)
+tester: $(tester_obj)
 	@if [ $(VERBOSE) ]; then echo $(CXX) -o tester $(tester_obj) $(LF); else echo $(CXX) -o tester; fi
 	@$(CXX) -o tester $(tester_obj) $(LF)
 ## -------------------------------------------------------------------------------------------------

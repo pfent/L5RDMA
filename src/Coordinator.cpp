@@ -30,7 +30,6 @@
 #include "rdma/Network.hpp"
 #include "rdma/MemoryRegion.hpp"
 #include "rdma/WorkRequest.hpp"
-#include "gda/MemoryRef.hpp"
 //---------------------------------------------------------------------------
 using namespace std;
 using namespace rdma;
@@ -103,18 +102,19 @@ struct SetupSupport {
 int main(int argc, char **argv)
 {
    uint32_t nodeCount = getNodeCount(argc, argv);
-
    SetupSupport setupSupport;
 
-   cout << "> Creating FullyConnectedNetworkCreation" << endl;
-   setupSupport.supportFullyConnectedNetworkCreation(nodeCount);
-   cout << "> Done" << endl;
+   while (1) {
+      cout << "> Creating FullyConnectedNetworkCreation" << endl;
+      setupSupport.supportFullyConnectedNetworkCreation(nodeCount);
+      cout << "> Done" << endl;
 
-   cout << "> Publish RemoteAddress" << endl;
-   setupSupport.supportRemoteMemoryAddressPublishing();
-   cout << "> Done" << endl;
+      cout << "> Publish RemoteAddress" << endl;
+      setupSupport.supportRemoteMemoryAddressPublishing();
+      cout << "> Done" << endl;
 
-   cout << "[PRESS ENTER TO CONTINUE]" << endl;
-   //   cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-   cin.get();
+      //      cout << "[PRESS ENTER TO CONTINUE]" << endl;
+      //   cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+      //      cin.get();
+   }
 }

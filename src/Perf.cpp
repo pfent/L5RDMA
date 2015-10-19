@@ -30,7 +30,6 @@
 #include "rdma/Network.hpp"
 #include "rdma/MemoryRegion.hpp"
 #include "rdma/WorkRequest.hpp"
-#include "gda/MemoryRef.hpp"
 //---------------------------------------------------------------------------
 using namespace std;
 using namespace rdma;
@@ -62,18 +61,18 @@ struct TestHarness {
    void createFullyConnectedNetwork()
    {
       // Create RDMA QPs
-      Network network(nodeCount);
-      vector <Address> addresses;
+      vector <Address> localAddresses;
       for (uint32_t i = 0; i<nodeCount; ++i) {
-         addresses.push_back(Address{network.getLID(), network.getQPN(i)});
+         localAddresses.push_back(Address{network.getLID(), network.getQPN(i)});
+         cout << network.getLID() << " " << network.getQPN(i) << endl;
       }
       if (verbose)
          cout << "> Created RDMA Network" << endl;
 
       // Send address
       zmq::message_t request(nodeCount * sizeof(Address));
-      assert(addresses.size() * sizeof(Address) == request.size());
-      memcpy(request.data(), addresses.data(), request.size());
+      assert(localAddresses.size() * sizeof(Address) == request.size());
+      memcpy(request.data(), localAddresses.data(), request.size());
       masterSocket->send(request);
       if (verbose)
          cout << "> Sent qp addresses" << endl;
@@ -88,12 +87,14 @@ struct TestHarness {
 
       // Receive addresses of other clients
       zmq::message_t allAddresses(nodeCount * nodeCount * sizeof(Address));
-      Address *addressPtr = reinterpret_cast<Address *>(allAddresses.data());
       broadcastSocket->recv(&allAddresses);
+      vector <Address> remoteAddresses(nodeCount);
+      Address *addressPtr = reinterpret_cast<Address *>(allAddresses.data());
       for (uint32_t i = 0; i<nodeCount; i++) {
-         addresses[i] = addressPtr[i * nodeCount + localId];
+         remoteAddresses[i] = addressPtr[i * nodeCount + localId];
+         cout << "connecting: " << remoteAddresses[i].lid << " " << remoteAddresses[i].qpn << endl;
       }
-      network.connect(addresses);
+      network.connect(remoteAddresses);
       if (verbose)
          cout << ">> Done" << endl;
    }
@@ -147,18 +148,36 @@ int main(int argc, char **argv)
    alex.createFullyConnectedNetwork();
 
    vector <uint64_t> shared(128);
+   fill(shared.begin(), shared.end(), 0);
    MemoryRegion sharedMR(shared.data(), sizeof(uint64_t) * shared.size(), alex.network.getProtectionDomain(), MemoryRegion::Permission::All);
 
    // Exchange memory region address
    if (alex.localId == 0) {
-      fill(shared.begin(), shared.end(), 0);
       RemoteMemoryRegion rmr{reinterpret_cast<uintptr_t>(sharedMR.address), sharedMR.key->rkey};
       alex.publishAddress(rmr);
    }
-
    RemoteMemoryRegion rmr = alex.retrieveAddress();
-   cout << "Memory Region: " << rmr.key << " " << rmr.address << endl;
+
+   // Do performance test
+   if (alex.localId == 1) {
+      vector <uint64_t> shared(1);
+      MemoryRegion sharedMR(shared.data(), sizeof(uint64_t) * shared.size(), alex.network.getProtectionDomain(), MemoryRegion::Permission::All);
+
+      AtomicFetchAndAddWorkRequest request;
+      request.setId(8028);
+      request.setCompletion(true);
+      request.setLocalAddress(sharedMR);
+      request.setRemoteAddress(rmr);
+      request.setAddValue(1);
+//      alex.network.postFetchAdd(0, sharedMR, rmr, 42, true, 8028);
+      alex.network.postWorkRequest(0, request);
+      alex.network.waitForCompletionSend();
+
+      cout << "previous: " << shared[0] << endl;
+   }
 
    cout << "[PRESS ENTER TO CONTINUE]" << endl;
    cin.get();
+
+   cout << "data: " << shared[0] << endl;
 }
