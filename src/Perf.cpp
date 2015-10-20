@@ -56,6 +56,9 @@ struct TestHarness {
       broadcastSocket = make_unique<zmq::socket_t>(context, ZMQ_SUB);
       broadcastSocket->setsockopt(ZMQ_SUBSCRIBE, "", 0);
       broadcastSocket->connect(("tcp://" + coordinatorHostName + ":8029").c_str());
+
+      // Wait for setup to finish .. great job zmq
+      usleep(100000); // = 100ms
    }
 
    // requires a coordinator on [HOSTNAME] running "supportFullyConnectedNetworkCreation"
