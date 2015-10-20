@@ -156,38 +156,38 @@ void runServerCode(TestHarness &testHarness)
 //---------------------------------------------------------------------------
 void runClientCode(TestHarness &testHarness)
 {
-   // Pin return value
-   vector <uint64_t> shared(1);
-   MemoryRegion sharedMR(shared.data(), sizeof(uint64_t) * shared.size(), testHarness.network.getProtectionDomain(), MemoryRegion::Permission::All);
-
    // Get target memory
    RemoteMemoryRegion rmr = testHarness.retrieveAddress();
 
-   // Create work request
-   AtomicFetchAndAddWorkRequest request;
-   request.setId(8028);
-   request.setCompletion(true);
-   request.setLocalAddress(sharedMR);
-   request.setRemoteAddress(rmr);
-   request.setAddValue(1);
+   // Pin local memory
+   vector <uint64_t> shared(1);
+   MemoryRegion sharedMR(shared.data(), sizeof(uint64_t) * shared.size(), testHarness.network.getProtectionDomain(), MemoryRegion::Permission::All);
 
    const int maxOpenCompletions = 4;
    int openCompletions = 0;
 
    for (int run = 0; run<=20; run++) {
-      const int requestBeforeCompletion = (1 << run) - 1;
+      const int bundleSize = (1 << run);
       const int totalRequests = 1 << 20;
-      const int iterations = totalRequests / (requestBeforeCompletion + 1);
+      const int iterations = totalRequests / bundleSize;
+
+      // Create work requests
+      vector <unique_ptr<AtomicFetchAndAddWorkRequest>> workRequests(bundleSize);
+      for (int i = 0; i<bundleSize; ++i) {
+         workRequests[i] = make_unique<AtomicFetchAndAddWorkRequest>();
+         workRequests[i]->setId(8028 + i);
+         workRequests[i]->setLocalAddress(sharedMR);
+         workRequests[i]->setRemoteAddress(rmr);
+         workRequests[i]->setAddValue(1);
+         workRequests[i]->setCompletion(i == bundleSize - 1);
+         if (i != 0)
+            workRequests[i - 1]->setNextWorkRequest(workRequests[i].get());
+      }
 
       // Performance
       auto begin = chrono::high_resolution_clock::now();
       for (int i = 0; i<iterations; ++i) {
-         request.setCompletion(false);
-         for (int j = 0; j<requestBeforeCompletion; j++)
-            testHarness.network.postWorkRequest(0, request);
-
-         request.setCompletion(true);
-         testHarness.network.postWorkRequest(0, request);
+         testHarness.network.postWorkRequest(0, *workRequests[0]);
          openCompletions++;
 
          if (openCompletions == maxOpenCompletions) {
@@ -199,13 +199,12 @@ void runClientCode(TestHarness &testHarness)
          testHarness.network.waitForCompletionSend();
          openCompletions--;
       }
-
       auto end = chrono::high_resolution_clock::now();
 
       cout << "run: " << run << endl;
       cout << "total: " << totalRequests << endl;
       cout << "iterations: " << iterations << endl;
-      cout << "request: " << requestBeforeCompletion << endl;
+      cout << "bundleSize: " << bundleSize << endl;
       cout << "time: " << chrono::duration_cast<chrono::nanoseconds>(end - begin).count() << endl;
       cout << "data: " << shared[0] + 1 << endl;
       cout << "---" << endl;
