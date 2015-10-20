@@ -34,6 +34,8 @@ class WorkRequest {
 
 protected:
    std::unique_ptr <ibv_send_wr> wr;
+   const WorkRequest *next;
+
    WorkRequest();
    WorkRequest(const WorkRequest &) = delete;
    WorkRequest(WorkRequest &&) = delete;
@@ -51,6 +53,10 @@ public:
    /// Should the work request produce a completion event
    void setCompletion(bool flag);
    bool getCompletion() const;
+
+   /// Build a chain of work requests
+   void setNextWorkRequest(const WorkRequest *workRequest);
+   const WorkRequest *getNextWorkRequest();
 };
 //---------------------------------------------------------------------------
 class AtomicFetchAndAddWorkRequest : public WorkRequest {

@@ -73,6 +73,20 @@ bool WorkRequest::getCompletion() const
    return wr->send_flags & IBV_SEND_SIGNALED;
 }
 //---------------------------------------------------------------------------
+void WorkRequest::setNextWorkRequest(const WorkRequest *workRequest)
+{
+   next = workRequest;
+   if (next == nullptr)
+      wr->next = nullptr;
+   else
+      wr->next = workRequest->wr.get();
+}
+//---------------------------------------------------------------------------
+const WorkRequest *WorkRequest::getNextWorkRequest()
+{
+   return next;
+}
+//---------------------------------------------------------------------------
 AtomicFetchAndAddWorkRequest::AtomicFetchAndAddWorkRequest()
 {
    wr->opcode = IBV_WR_ATOMIC_FETCH_AND_ADD;
