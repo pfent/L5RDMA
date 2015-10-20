@@ -171,6 +171,9 @@ void runClientCode(TestHarness &testHarness)
    request.setRemoteAddress(rmr);
    request.setAddValue(1);
 
+   const int maxOpenCompletions = 4;
+   int openCompletions = 0;
+
    for (int run = 0; run<=20; run++) {
       const int requestBeforeCompletion = (1 << run) - 1;
       const int totalRequests = 1 << 20;
@@ -185,8 +188,18 @@ void runClientCode(TestHarness &testHarness)
 
          request.setCompletion(true);
          testHarness.network.postWorkRequest(0, request);
-         testHarness.network.waitForCompletionSend();
+         openCompletions++;
+
+         if (openCompletions == maxOpenCompletions) {
+            testHarness.network.waitForCompletionSend();
+            openCompletions--;
+         }
       }
+      while (openCompletions != 0) {
+         testHarness.network.waitForCompletionSend();
+         openCompletions--;
+      }
+
       auto end = chrono::high_resolution_clock::now();
 
       cout << "run: " << run << endl;
