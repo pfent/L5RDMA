@@ -166,7 +166,7 @@ void runClientCode(TestHarness &testHarness)
    const int maxOpenCompletions = 4;
    int openCompletions = 0;
 
-   for (int run = 0; run<=20; run++) {
+   for (int run = 2; run<=2; run++) {
       const int bundleSize = (1 << run);
       const int totalRequests = 1 << 20;
       const int iterations = totalRequests / bundleSize;

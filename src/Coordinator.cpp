@@ -94,6 +94,9 @@ struct SetupSupport {
       // Read address from master socket and send to everyone
       zmq::message_t msg(sizeof(RemoteMemoryRegion));
       masterSocket->recv(&msg);
+      cout << "geeeeet reeeeeaaaaady tooooo ... " << endl;
+      usleep(2000000);
+      cout << "rrrrumble !!!!" << endl;
       broadcastSocket->send(msg);
       masterSocket->send(msg); // Does not matter
    }
