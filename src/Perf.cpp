@@ -18,6 +18,11 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //---------------------------------------------------------------------------
+#include "rdma/Network.hpp"
+#include "rdma/MemoryRegion.hpp"
+#include "rdma/WorkRequest.hpp"
+#include "util/ConnectionSetup.hpp"
+//---------------------------------------------------------------------------
 #include <infiniband/verbs.h>
 #include <iomanip>
 #include <chrono>
@@ -28,115 +33,10 @@
 #include <unistd.h>
 #include <zmq.hpp>
 //---------------------------------------------------------------------------
-#include "rdma/Network.hpp"
-#include "rdma/MemoryRegion.hpp"
-#include "rdma/WorkRequest.hpp"
-//---------------------------------------------------------------------------
 using namespace std;
 using namespace rdma;
 //---------------------------------------------------------------------------
-struct TestHarness {
-
-   Network network;
-   uint32_t localId;
-   uint32_t nodeCount;
-   string coordinatorHostName;
-   zmq::context_t context;
-   bool verbose;
-   unique_ptr <zmq::socket_t> masterSocket;
-   unique_ptr <zmq::socket_t> broadcastSocket;
-
-   TestHarness(uint32_t nodeCount, string coordinatorHostName) : network(nodeCount), localId(-1), nodeCount(nodeCount), coordinatorHostName(coordinatorHostName), context(1), verbose(getenv("VERBOSE"))
-   {
-      // Request reply socket
-      masterSocket = make_unique<zmq::socket_t>(context, ZMQ_REQ);
-      masterSocket->connect(("tcp://" + coordinatorHostName + ":8028").c_str());
-
-      // Broadcast socket
-      broadcastSocket = make_unique<zmq::socket_t>(context, ZMQ_SUB);
-      broadcastSocket->setsockopt(ZMQ_SUBSCRIBE, "", 0);
-      broadcastSocket->connect(("tcp://" + coordinatorHostName + ":8029").c_str());
-
-      // Wait for setup to finish .. great job zmq
-      usleep(100000); // = 100ms
-   }
-
-   // requires a coordinator on [HOSTNAME] running "supportFullyConnectedNetworkCreation"
-   void createFullyConnectedNetwork()
-   {
-      // Create RDMA QPs
-      vector <Address> localAddresses;
-      for (uint32_t i = 0; i<nodeCount; ++i) {
-         localAddresses.push_back(Address{network.getLID(), network.getQPN(i)});
-      }
-      if (verbose)
-         cout << "> Created RDMA Network" << endl;
-
-      // Send address
-      zmq::message_t request(nodeCount * sizeof(Address));
-      assert(localAddresses.size() * sizeof(Address) == request.size());
-      memcpy(request.data(), localAddresses.data(), request.size());
-      masterSocket->send(request);
-      if (verbose)
-         cout << "> Sent qp addresses" << endl;
-
-      // Receive Id
-      zmq::message_t reply;
-      masterSocket->recv(&reply);
-      assert(reply.size() == sizeof(uint32_t));
-      localId = *reinterpret_cast<uint32_t *>(reply.data());
-      if (verbose)
-         cout << "> Local id: " << localId << endl;
-
-      // Receive addresses of other clients
-      zmq::message_t allAddresses(nodeCount * nodeCount * sizeof(Address));
-      broadcastSocket->recv(&allAddresses);
-      vector <Address> remoteAddresses(nodeCount);
-      Address *addressPtr = reinterpret_cast<Address *>(allAddresses.data());
-      for (uint32_t i = 0; i<nodeCount; i++) {
-         remoteAddresses[i] = addressPtr[i * nodeCount + localId];
-         cout << "connecting: " << remoteAddresses[i].lid << " " << remoteAddresses[i].qpn << endl;
-      }
-      network.connect(remoteAddresses);
-      if (verbose)
-         cout << ">> Done" << endl;
-   }
-
-   // requires a coordinator on [HOSTNAME] running "supportRemoteMemoryAddressPublishing"
-   void publishAddress(RemoteMemoryRegion &remoteMemoryRegion)
-   {
-      // Send address
-      if (verbose)
-         cout << "> Publish Remote Address: key=" << remoteMemoryRegion.key << " address=" << remoteMemoryRegion.address << endl;
-      zmq::message_t request(sizeof(RemoteMemoryRegion));
-      *reinterpret_cast<RemoteMemoryRegion *>(request.data()) = remoteMemoryRegion;
-      masterSocket->send(request);
-      masterSocket->recv(&request); // Does not matter
-      if (verbose)
-         cout << ">> Done" << endl;
-   }
-
-   // requires a coordinator on [HOSTNAME] running "supportRemoteMemoryAddressPublishing"
-   RemoteMemoryRegion retrieveAddress()
-   {
-      // Create TCP Client
-      if (verbose)
-         cout << "> Retrieve Remote Address" << endl;
-
-      // Receive address
-      zmq::message_t request(sizeof(RemoteMemoryRegion));
-      broadcastSocket->recv(&request);
-      RemoteMemoryRegion remoteMemoryRegion = *reinterpret_cast<RemoteMemoryRegion *>(request.data());
-      if (verbose) {
-         cout << "> Remote Address: key=" << remoteMemoryRegion.key << " address=" << remoteMemoryRegion.address << endl;
-         cout << ">> Done" << endl;
-      }
-
-      return remoteMemoryRegion;
-   }
-};
-//---------------------------------------------------------------------------
-void runServerCode(TestHarness &testHarness)
+void runServerCode(util::TestHarness &testHarness)
 {
    // Create memory
    vector <uint64_t> shared(128);
@@ -154,7 +54,7 @@ void runServerCode(TestHarness &testHarness)
    cout << "data: " << shared[0] << endl;
 }
 //---------------------------------------------------------------------------
-void runClientCode(TestHarness &testHarness)
+void runClientCode(util::TestHarness &testHarness)
 {
    // Get target memory
    RemoteMemoryRegion rmr = testHarness.retrieveAddress();
@@ -227,7 +127,8 @@ int main(int argc, char **argv)
    string coordinatorName = argv[2];
 
    // Create Network
-   TestHarness testHarness(nodeCount, coordinatorName);
+   zmq::context_t context(1);
+   util::TestHarness testHarness(context, nodeCount, coordinatorName);
    testHarness.createFullyConnectedNetwork();
 
    // Run performance tests

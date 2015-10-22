@@ -18,6 +18,10 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //---------------------------------------------------------------------------
+#include "rdma/Network.hpp"
+#include "rdma/MemoryRegion.hpp"
+#include "rdma/WorkRequest.hpp"
+//---------------------------------------------------------------------------
 #include <infiniband/verbs.h>
 #include <iomanip>
 #include <iostream>
@@ -25,10 +29,6 @@
 #include <algorithm>
 #include <cassert>
 #include <unistd.h>
-//---------------------------------------------------------------------------
-#include "rdma/Network.hpp"
-#include "rdma/MemoryRegion.hpp"
-#include "rdma/WorkRequest.hpp"
 //---------------------------------------------------------------------------
 using namespace std;
 using namespace rdma;
@@ -42,7 +42,8 @@ class RDMATest {
 
 public:
    /// Constructor
-   RDMATest(int nodes, int id) : nodes(nodes), id(id), network(nodes) {
+   RDMATest(int nodes, int id) : nodes(nodes), id(id), network(nodes)
+   {
       vector <Address> addresses(nodes);
       for (int node = 0; node != nodes; ++node) {
          if (node == id) {
@@ -57,7 +58,8 @@ public:
       network.connect(addresses);
    }
 
-   void testSendReceive() {
+   void testSendReceive()
+   {
       cout << "----------> SendReceive" << endl;
 
       // receive message
@@ -82,7 +84,8 @@ public:
       delete[] send;
    }
 
-   void testAtomicFetchAndAdd() {
+   void testAtomicFetchAndAdd()
+   {
       cout << "----------> AtomicFetchAndAdd" << endl;
       int target = (id + 1) % nodes;
 
@@ -110,14 +113,17 @@ public:
       cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
       cin.get();
 
-      cout << "beforeValue: " << *beforeValue << endl; assert(*beforeValue == 28);
-      cout << "targetValue: " << *targetValue << endl; assert(*targetValue == 70);
+      cout << "beforeValue: " << *beforeValue << endl;
+      assert(*beforeValue == 28);
+      cout << "targetValue: " << *targetValue << endl;
+      assert(*targetValue == 70);
 
       delete beforeValue;
       delete targetValue;
    }
 
-   void testAtomicFetchAndAddNew() {
+   void testAtomicFetchAndAddNew()
+   {
       cout << "----------> AtomicFetchAndAddNew" << endl;
       int target = (id + 1) % nodes;
 
@@ -152,15 +158,18 @@ public:
       cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
       cin.get();
 
-      cout << "beforeValue: " << *beforeValue << endl; assert(*beforeValue == 28);
-      cout << "targetValue: " << *targetValue << endl; assert(*targetValue == 70);
+      cout << "beforeValue: " << *beforeValue << endl;
+      assert(*beforeValue == 28);
+      cout << "targetValue: " << *targetValue << endl;
+      assert(*targetValue == 70);
 
       delete beforeValue;
       delete targetValue;
    }
 
    // ORIGIN -> TARGET
-   void testRemoteWrite() {
+   void testRemoteWrite()
+   {
       cout << "----------> RemoteWrite" << endl;
       int target = (id + 1) % nodes;
 
@@ -195,7 +204,8 @@ public:
    }
 
    // TARGET <- ORIGIN
-   void testRemoteRead() {
+   void testRemoteRead()
+   {
       cout << "----------> RemoteRead" << endl;
       int target = (id + 1) % nodes;
 
@@ -230,7 +240,8 @@ public:
    }
 };
 //---------------------------------------------------------------------------
-int main(int argc, char *argv[]) {
+int main(int argc, char *argv[])
+{
    if (argc != 3) {
       cerr << "Usage: nodes id" << endl;
       exit(EXIT_FAILURE);
@@ -240,9 +251,9 @@ int main(int argc, char *argv[]) {
 
    RDMATest test(nodes, id);
 
-//   test.testSendReceive();
-//   test.testRemoteWrite();
-//   test.testRemoteRead();
-//   test.testAtomicFetchAndAdd();
+   //   test.testSendReceive();
+   //   test.testRemoteWrite();
+   //   test.testRemoteRead();
+   //   test.testAtomicFetchAndAdd();
    test.testAtomicFetchAndAddNew();
 }

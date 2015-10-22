@@ -18,54 +18,53 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //---------------------------------------------------------------------------
-#include "rdma/Network.hpp"
-#include "rdma/MemoryRegion.hpp"
-#include "rdma/WorkRequest.hpp"
-#include "util/ConnectionSetup.hpp"
+#pragma once
 //---------------------------------------------------------------------------
-#include <iomanip>
-#include <iostream>
+#include <string>
 #include <memory>
-#include <algorithm>
-#include <cassert>
-#include <unistd.h>
 #include <zmq.hpp>
 //---------------------------------------------------------------------------
-using namespace std;
-using namespace rdma;
+#include "rdma/Network.hpp"
 //---------------------------------------------------------------------------
-namespace {
-uint32_t getNodeCount(int argc, char **argv)
-{
-   if (argc != 2) {
-      cerr << "usage: " << argv[0] << " [nodeCount]" << endl;
-      exit(EXIT_FAILURE);
-   }
+namespace util {
+//---------------------------------------------------------------------------
+struct TestHarness {
+   zmq::context_t &context;
+
+   std::unique_ptr <zmq::socket_t> masterSocket;
+   std::unique_ptr <zmq::socket_t> broadcastSocket;
+
+   rdma::Network network;
+   uint32_t localId;
    uint32_t nodeCount;
-   istringstream in(argv[1]);
-   in >> nodeCount;
-   return nodeCount;
-}
-}
+   std::string coordinatorHostName;
+   bool verbose;
+
+   TestHarness(zmq::context_t &context, uint32_t nodeCount, const std::string& coordinatorHostName);
+
+   // requires a coordinator on [HOSTNAME] running "supportFullyConnectedNetworkCreation"
+   void createFullyConnectedNetwork();
+
+   // requires a coordinator on [HOSTNAME] running "supportRemoteMemoryAddressPublishing"
+   void publishAddress(rdma::RemoteMemoryRegion &remoteMemoryRegion);
+
+   // requires a coordinator on [HOSTNAME] running "supportRemoteMemoryAddressPublishing"
+   rdma::RemoteMemoryRegion retrieveAddress();
+};
 //---------------------------------------------------------------------------
-int main(int argc, char **argv)
-{
-   uint32_t nodeCount = getNodeCount(argc, argv);
-   zmq::context_t context(1);
-   util::SetupSupport setupSupport(context);
+struct SetupSupport {
+   zmq::context_t &context;
 
-   while (1) {
-      cout << "> Creating FullyConnectedNetworkCreation" << endl;
-      setupSupport.supportFullyConnectedNetworkCreation(nodeCount);
-      cout << "> Done" << endl;
+   std::unique_ptr <zmq::socket_t> masterSocket;
+   std::unique_ptr <zmq::socket_t> broadcastSocket;
 
-      cout << "> Publish RemoteAddress" << endl;
-      setupSupport.supportRemoteMemoryAddressPublishing();
-      cout << "> Done" << endl;
+   SetupSupport(zmq::context_t &context);
+   ~SetupSupport();
 
-      //      cout << "[PRESS ENTER TO CONTINUE]" << endl;
-      //   cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-      //      cin.get();
-   }
-}
+   void supportFullyConnectedNetworkCreation(uint32_t nodeCount);
+
+   void supportRemoteMemoryAddressPublishing();
+};
+//---------------------------------------------------------------------------
+} // End of namespace util
 //---------------------------------------------------------------------------

@@ -17,55 +17,22 @@
 //
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
+// ---------------------------------------------------------------------------
+#include "Utility.hpp"
 //---------------------------------------------------------------------------
-#include "rdma/Network.hpp"
-#include "rdma/MemoryRegion.hpp"
-#include "rdma/WorkRequest.hpp"
-#include "util/ConnectionSetup.hpp"
-//---------------------------------------------------------------------------
-#include <iomanip>
-#include <iostream>
-#include <memory>
-#include <algorithm>
-#include <cassert>
-#include <unistd.h>
-#include <zmq.hpp>
+#include<unistd.h>
 //---------------------------------------------------------------------------
 using namespace std;
-using namespace rdma;
 //---------------------------------------------------------------------------
-namespace {
-uint32_t getNodeCount(int argc, char **argv)
+namespace util {
+//---------------------------------------------------------------------------
+std::string getHostname()
 {
-   if (argc != 2) {
-      cerr << "usage: " << argv[0] << " [nodeCount]" << endl;
-      exit(EXIT_FAILURE);
-   }
-   uint32_t nodeCount;
-   istringstream in(argv[1]);
-   in >> nodeCount;
-   return nodeCount;
-}
+   char hostname[1024];
+   hostname[1023] = '\0';
+   gethostname(hostname, 1023);
+   return string(hostname);
 }
 //---------------------------------------------------------------------------
-int main(int argc, char **argv)
-{
-   uint32_t nodeCount = getNodeCount(argc, argv);
-   zmq::context_t context(1);
-   util::SetupSupport setupSupport(context);
-
-   while (1) {
-      cout << "> Creating FullyConnectedNetworkCreation" << endl;
-      setupSupport.supportFullyConnectedNetworkCreation(nodeCount);
-      cout << "> Done" << endl;
-
-      cout << "> Publish RemoteAddress" << endl;
-      setupSupport.supportRemoteMemoryAddressPublishing();
-      cout << "> Done" << endl;
-
-      //      cout << "[PRESS ENTER TO CONTINUE]" << endl;
-      //   cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-      //      cin.get();
-   }
-}
+} // End of namespace util
 //---------------------------------------------------------------------------

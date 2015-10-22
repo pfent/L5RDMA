@@ -54,4 +54,5 @@ $(TARGET_DIR)/%.o: %.cpp
 ## Clean up the hole mess
 clean:
 	rm -rf $(TARGET_DIR)
+	rm -f coordinator perf tester
 ## -------------------------------------------------------------------------------------------------
