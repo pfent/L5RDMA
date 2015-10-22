@@ -34,6 +34,11 @@ using namespace std;
 //---------------------------------------------------------------------------
 namespace rdma {
 //---------------------------------------------------------------------------
+ostream &operator<<(ostream &os, const Address &address)
+{
+   return os << "lid=" << address.lid << ", qpn=" << address.qpn;
+}
+//---------------------------------------------------------------------------
 ibv_qp *Network::createQueuePair(ibv_cq *cqSend, ibv_cq *cqRecv)
    /// Create queue pair
 {

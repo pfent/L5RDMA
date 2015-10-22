@@ -28,6 +28,19 @@
 //---------------------------------------------------------------------------
 namespace util {
 //---------------------------------------------------------------------------
+/// Info about each client in the network.
+/// Some ordering as the qp in the network class.
+struct PeerInfo {
+   static const int MAX_HOSTNAME_SIZE = 32;
+
+   PeerInfo(const rdma::Address &address, const std::string &hostname);
+
+   rdma::Address address;
+   char hostname[MAX_HOSTNAME_SIZE]; // Needed to connect via tcp to request more info ..
+};
+std::ostream &operator<<(std::ostream &os, const PeerInfo &peerInfo);
+//---------------------------------------------------------------------------
+/// This guy has all the code for the clients to setup a fully connected rdma network
 struct TestHarness {
    zmq::context_t &context;
 
@@ -40,7 +53,9 @@ struct TestHarness {
    std::string coordinatorHostName;
    bool verbose;
 
-   TestHarness(zmq::context_t &context, uint32_t nodeCount, const std::string& coordinatorHostName);
+   std::vector <PeerInfo> peerInfos;
+
+   TestHarness(zmq::context_t &context, uint32_t nodeCount, const std::string &coordinatorHostName);
 
    // requires a coordinator on [HOSTNAME] running "supportFullyConnectedNetworkCreation"
    void createFullyConnectedNetwork();
@@ -52,6 +67,7 @@ struct TestHarness {
    rdma::RemoteMemoryRegion retrieveAddress();
 };
 //---------------------------------------------------------------------------
+/// This guy has all the code for a coordinator to setup a fully connected rdma network
 struct SetupSupport {
    zmq::context_t &context;
 

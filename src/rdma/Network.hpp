@@ -55,6 +55,7 @@ struct Address {
    uint16_t lid;
    uint32_t qpn;
 };
+std::ostream &operator<<(std::ostream &os, const Address &address);
 //---------------------------------------------------------------------------
 /// A network of nodes connected via RDMA
 class Network

@@ -32,6 +32,18 @@ using namespace std;
 //---------------------------------------------------------------------------
 namespace util {
 //---------------------------------------------------------------------------
+PeerInfo::PeerInfo(const rdma::Address &address, const std::string &hostname) : address(address)
+{
+   assert(hostname.size()<PeerInfo::MAX_HOSTNAME_SIZE);
+   auto length = hostname.copy(this->hostname, hostname.size());
+   this->hostname[length] = '\0';
+}
+//---------------------------------------------------------------------------
+ostream &operator<<(ostream &os, const PeerInfo &peerInfo)
+{
+   return os << "hostname='" << peerInfo.hostname << "', address={" << peerInfo.address << "}";
+};
+//---------------------------------------------------------------------------
 TestHarness::TestHarness(zmq::context_t &context, uint32_t nodeCount, const string &coordinatorHostName) : context(context), network(nodeCount), localId(-1), nodeCount(nodeCount), coordinatorHostName(coordinatorHostName), verbose(getenv("VERBOSE"))
 {
    // Request reply socket
@@ -50,18 +62,19 @@ TestHarness::TestHarness(zmq::context_t &context, uint32_t nodeCount, const stri
 // requires a coordinator on [HOSTNAME] running "supportFullyConnectedNetworkCreation"
 void TestHarness::createFullyConnectedNetwork()
 {
-   // Create RDMA QPs
-   vector <rdma::Address> localAddresses;
+   // Create vector with QPs and hostname for each other client
+   vector <PeerInfo> localQPInfos;
    for (uint32_t i = 0; i<nodeCount; ++i) {
-      localAddresses.push_back(rdma::Address{network.getLID(), network.getQPN(i)});
+      PeerInfo peerInfo(rdma::Address{network.getLID(), network.getQPN(i)}, util::getHostname());
+      localQPInfos.push_back(peerInfo);
+      cout << peerInfo << endl;
    }
    if (verbose)
       cout << "> Created RDMA Network" << endl;
 
-   // Send address
-   zmq::message_t request(nodeCount * sizeof(rdma::Address));
-   assert(localAddresses.size() * sizeof(rdma::Address) == request.size());
-   memcpy(request.data(), localAddresses.data(), request.size());
+   // Send the content of the created vector to the coordinator
+   zmq::message_t request(nodeCount * sizeof(PeerInfo));
+   memcpy(request.data(), localQPInfos.data(), request.size());
    masterSocket->send(request);
    if (verbose)
       cout << "> Sent qp addresses" << endl;
@@ -75,14 +88,17 @@ void TestHarness::createFullyConnectedNetwork()
       cout << "> Local id: " << localId << endl;
 
    // Receive addresses of other clients
-   zmq::message_t allAddresses(nodeCount * nodeCount * sizeof(rdma::Address));
+   zmq::message_t allAddresses(nodeCount * nodeCount * sizeof(PeerInfo));
    broadcastSocket->recv(&allAddresses);
+   assert(allAddresses.size() == sizeof(PeerInfo) * nodeCount * nodeCount);
    vector <rdma::Address> remoteAddresses(nodeCount);
-   rdma::Address *addressPtr = reinterpret_cast<rdma::Address *>(allAddresses.data());
+   PeerInfo *peerInfoPtr = reinterpret_cast<PeerInfo *>(allAddresses.data());
    for (uint32_t i = 0; i<nodeCount; i++) {
-      remoteAddresses[i] = addressPtr[i * nodeCount + localId];
-      cout << "connecting: " << remoteAddresses[i].lid << " " << remoteAddresses[i].qpn << endl;
+      peerInfos.push_back(peerInfoPtr[i * nodeCount + localId]);
+      remoteAddresses[i] = peerInfos[i].address;
    }
+
+   // Connect the rdma network
    network.connect(remoteAddresses);
    if (verbose)
       cout << ">> Done" << endl;
@@ -141,11 +157,12 @@ SetupSupport::~SetupSupport()
 void SetupSupport::supportFullyConnectedNetworkCreation(uint32_t nodeCount)
 {
    // Connect to all nodes
-   zmq::message_t allAddresses(nodeCount * nodeCount * sizeof(rdma::Address));
-   rdma::Address *target = reinterpret_cast<rdma::Address *>(allAddresses.data());
+   zmq::message_t allAddresses(nodeCount * nodeCount * sizeof(PeerInfo));
+   PeerInfo *target = reinterpret_cast<PeerInfo *>(allAddresses.data());
    for (uint32_t i = 0; i<nodeCount; ++i) {
       zmq::message_t request;
       masterSocket->recv(&request);
+      assert(request.size() == sizeof(PeerInfo) * nodeCount);
       memcpy(target + nodeCount * i, request.data(), request.size());
 
       zmq::message_t reply(sizeof(uint32_t));
