@@ -20,36 +20,52 @@
 //---------------------------------------------------------------------------
 #pragma once
 //---------------------------------------------------------------------------
-#include <string>
-#include <sstream>
+#include <memory>
+#include <array>
+#include <vector>
+#include <zmq.hpp>
 //---------------------------------------------------------------------------
-namespace util {
+#include "rdma/Network.hpp"
+#include "util/NotAssignable.hpp"
+#include "dht/Common.hpp"
 //---------------------------------------------------------------------------
-std::string getHostname();
+struct ibv_send_wr;
 //---------------------------------------------------------------------------
-/// The exception which gets thrown when parsing a number/string fails
-struct NoNumberOrNoStringDependingOnWhatYouCalled {
+namespace dht { // Distributed Hash Table
+//---------------------------------------------------------------------------
+struct RemoteMemoryRegion;
+struct MemoryRegion;
+//---------------------------------------------------------------------------
+/// Gathers and stores information about remote shared hash tables (locals are treated as remote, because of atomicity (ask alex))
+struct HashTableNetworkLayout : public util::NotAssignable {
+
+   HashTableNetworkLayout();
+   void retrieveRemoteMemoryRegions(zmq::context_t &context, const std::vector <HashTableLocation> &tableLocations);
+   void dump();
+
+   struct RemoteHashTableInfo {
+      HashTableLocation location;
+
+      rdma::RemoteMemoryRegion htRmr;
+      rdma::RemoteMemoryRegion bucketsRmr;
+      rdma::RemoteMemoryRegion nextFreeOffsetRmr;
+   };
+
+   std::vector <RemoteHashTableInfo> remoteHashTables;
 };
 //---------------------------------------------------------------------------
-template<class Number> std::string to_string(const Number &num)
-{
-   std::ostringstream stream;
-   stream << num;
-   if (!stream.good())
-      throw NoNumberOrNoStringDependingOnWhatYouCalled();
-   return stream.str();
-}
+class HashTableClient : public util::NotAssignable {
+public:
+   HashTableClient(rdma::Network &network, HashTableNetworkLayout &remoteTables);
+   ~HashTableClient();
+
+   void insert(const Entry &entry);
+   uint32_t count(uint64_t key);
+
+private:
+   rdma::Network &network;
+   HashTableNetworkLayout &remoteTables;
+};
 //---------------------------------------------------------------------------
-/// string --> number
-template<class Number> Number to_number(const std::string &str)
-{
-   Number num;
-   std::istringstream stream(str);
-   stream >> num;
-   if (!stream.good() && !stream.eof())
-      throw NoNumberOrNoStringDependingOnWhatYouCalled();
-   return num;
-}
-//---------------------------------------------------------------------------
-} // End of namespace util
+} // End of namespace dht
 //---------------------------------------------------------------------------

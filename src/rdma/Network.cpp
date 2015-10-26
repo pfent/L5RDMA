@@ -34,13 +34,18 @@ using namespace std;
 //---------------------------------------------------------------------------
 namespace rdma {
 //---------------------------------------------------------------------------
+ostream &operator<<(ostream &os, const RemoteMemoryRegion &remoteMemoryRegion)
+{
+   return os << "address=" << (void*)remoteMemoryRegion.address << " key=" << remoteMemoryRegion.key;
+}
+//---------------------------------------------------------------------------
 ostream &operator<<(ostream &os, const Address &address)
 {
    return os << "lid=" << address.lid << ", qpn=" << address.qpn;
 }
 //---------------------------------------------------------------------------
 ibv_qp *Network::createQueuePair(ibv_cq *cqSend, ibv_cq *cqRecv)
-   /// Create queue pair
+/// Create queue pair
 {
    ibv_qp_init_attr queuePairAttributes;
    memset(&queuePairAttributes, 0, sizeof(queuePairAttributes));
@@ -67,40 +72,40 @@ ibv_qp *Network::createQueuePair(ibv_cq *cqSend, ibv_cq *cqRecv)
 }
 //---------------------------------------------------------------------------
 string stringForCompletionCode(int opcode)
-   /// Lookup the type of the completion event
+/// Lookup the type of the completion event
 {
    string description;
    switch (opcode) {
       case IBV_WC_RECV:
-      description = "IBV_WC_RECV";
-      break;
+         description = "IBV_WC_RECV";
+         break;
       case IBV_WC_SEND:
-      description = "IBV_WC_SEND";
-      break;
+         description = "IBV_WC_SEND";
+         break;
       case IBV_WC_RDMA_WRITE:
-      description = "IBV_WC_RDMA_WRITE";
-      break;
+         description = "IBV_WC_RDMA_WRITE";
+         break;
       case IBV_WC_RDMA_READ:
-      description = "IBV_WC_RDMA_READ";
-      break;
+         description = "IBV_WC_RDMA_READ";
+         break;
       case IBV_WC_COMP_SWAP:
-      description = "IBV_WC_COMP_SWAP";
-      break;
+         description = "IBV_WC_COMP_SWAP";
+         break;
       case IBV_WC_FETCH_ADD:
-      description = "IBV_WC_FETCH_ADD";
-      break;
+         description = "IBV_WC_FETCH_ADD";
+         break;
       case IBV_WC_BIND_MW:
-      description = "IBV_WC_BIND_MW";
-      break;
+         description = "IBV_WC_BIND_MW";
+         break;
       case IBV_WC_RECV_RDMA_WITH_IMM:
-      description = "IBV_WC_RECV_RDMA_WITH_IMM";
-      break;
+         description = "IBV_WC_RECV_RDMA_WITH_IMM";
+         break;
    }
    return description;
 }
 //---------------------------------------------------------------------------
 uint64_t Network::pollCompletionQueue(ibv_cq *completionQueue, int type)
-   /// Poll a completion queue
+/// Poll a completion queue
 {
    int status;
 
@@ -128,9 +133,9 @@ uint64_t Network::pollCompletionQueue(ibv_cq *completionQueue, int type)
 }
 //---------------------------------------------------------------------------
 pair<bool, uint64_t> Network::waitForCompletion(bool restrict, bool onlySend)
-   /// Wait for a work completion
+/// Wait for a work completion
 {
-   unique_lock<mutex> lock(completionMutex);
+   unique_lock <mutex> lock(completionMutex);
    int status;
 
    // We have to empty the completion queue and cache additional completions
@@ -140,7 +145,8 @@ pair<bool, uint64_t> Network::waitForCompletion(bool restrict, bool onlySend)
    bool found = false;
 
    for (unsigned c = 0; c != cachedCompletions.size(); ++c) {
-      if (!restrict || cachedCompletions[c].first == onlySend) {
+      if (
+         !restrict || cachedCompletions[c].first == onlySend) {
          workCompletion = cachedCompletions[c];
          cachedCompletions.erase(cachedCompletions.begin() + c);
          found = true;
@@ -150,8 +156,8 @@ pair<bool, uint64_t> Network::waitForCompletion(bool restrict, bool onlySend)
 
    while (!found) {
       // Wait for completion queue event
-      ibv_cq* event;
-      void* ctx;
+      ibv_cq *event;
+      void *ctx;
       status = ::ibv_get_cq_event(completionChannel, &event, &ctx);
       if (status != 0) {
          string reason = "receiving the completion queue event failed with error " + to_string(errno) + ": " + strerror(errno);
@@ -174,7 +180,7 @@ pair<bool, uint64_t> Network::waitForCompletion(bool restrict, bool onlySend)
       do {
          status = ::ibv_poll_cq(event, 1, &completion);
 
-         if (status < 0) {
+         if (status<0) {
             string reason = "failed to poll completions";
             cerr << reason << endl;
             throw NetworkException(reason);
@@ -190,7 +196,8 @@ pair<bool, uint64_t> Network::waitForCompletion(bool restrict, bool onlySend)
          }
 
          // Add completion
-         if (!found && (!restrict || isSendCompletion == onlySend)) {
+         if (
+            !found && (!restrict || isSendCompletion == onlySend)) {
             workCompletion = make_pair(isSendCompletion, completion.wr_id);
             found = true;
          } else {
@@ -203,8 +210,9 @@ pair<bool, uint64_t> Network::waitForCompletion(bool restrict, bool onlySend)
    return workCompletion;
 }
 //---------------------------------------------------------------------------
-Network::Network(unsigned queuePairCount) : queuePairCount(queuePairCount), ibport(1)
-   /// Constructor
+Network::Network(unsigned queuePairCount)
+        : queuePairCount(queuePairCount), ibport(1)
+/// Constructor
 {
    // Get the device list
    int deviceCount;
@@ -274,7 +282,7 @@ Network::Network(unsigned queuePairCount) : queuePairCount(queuePairCount), ibpo
    // Create shared receive queue
    struct ibv_srq_init_attr srq_init_attr;
    memset(&srq_init_attr, 0, sizeof(srq_init_attr));
-   srq_init_attr.attr.max_wr  = 16351;
+   srq_init_attr.attr.max_wr = 16351;
    srq_init_attr.attr.max_sge = 1;
    srq = ibv_create_srq(protectionDomain, &srq_init_attr);
    if (!srq) {
@@ -290,7 +298,7 @@ Network::Network(unsigned queuePairCount) : queuePairCount(queuePairCount), ibpo
 }
 //---------------------------------------------------------------------------
 Network::~Network()
-   /// Destructor
+/// Destructor
 {
    int status;
 
@@ -356,7 +364,7 @@ Network::~Network()
 }
 //---------------------------------------------------------------------------
 uint16_t Network::getLID()
-   /// Get the LID
+/// Get the LID
 {
    struct ibv_port_attr attributes;
    int status = ::ibv_query_port(context, ibport, &attributes);
@@ -369,13 +377,13 @@ uint16_t Network::getLID()
 }
 //---------------------------------------------------------------------------
 uint32_t Network::getQPN(unsigned index)
-   /// Get the queue pair number for a queue pair
+/// Get the queue pair number for a queue pair
 {
    return queuePairs[index]->qp_num;
 }
 //---------------------------------------------------------------------------
-void Network::connect(vector<Address> addresses, unsigned retryCount)
-   /// Connect the network
+void Network::connect(vector <Address> addresses, unsigned retryCount)
+/// Connect the network
 {
    uint32_t remotePSN = 0;
    uint32_t localPSN = 0;
@@ -429,8 +437,8 @@ void Network::connect(vector<Address> addresses, unsigned retryCount)
    }
 }
 //---------------------------------------------------------------------------
-void Network::postSend(unsigned target, const MemoryRegion& mr, bool completion, uint64_t context, int flags)
-   /// Post a send work request
+void Network::postSend(unsigned target, const MemoryRegion &mr, bool completion, uint64_t context, int flags)
+/// Post a send work request
 {
    // Add the memory region to the scatter/gather list
    ibv_sge sge;
@@ -461,8 +469,8 @@ void Network::postSend(unsigned target, const MemoryRegion& mr, bool completion,
    }
 }
 //---------------------------------------------------------------------------
-void Network::postWrite(unsigned target, const RemoteMemoryRegion& t_mr, const MemoryRegion& s_mr, bool completion, uint64_t context, int flags)
-   /// Post a write work request
+void Network::postWrite(unsigned target, const RemoteMemoryRegion &t_mr, const MemoryRegion &s_mr, bool completion, uint64_t context, int flags)
+/// Post a write work request
 {
    // Add the memory region to the scatter/gather list
    ibv_sge sge;
@@ -495,8 +503,8 @@ void Network::postWrite(unsigned target, const RemoteMemoryRegion& t_mr, const M
    }
 }
 //---------------------------------------------------------------------------
-void Network::postRecv(const MemoryRegion& mr, uint64_t context)
-   /// Post a receive request
+void Network::postRecv(const MemoryRegion &mr, uint64_t context)
+/// Post a receive request
 {
    // Add the memory region to the scatter/gather list
    ibv_sge sge;
@@ -523,42 +531,42 @@ void Network::postRecv(const MemoryRegion& mr, uint64_t context)
    }
 }
 //---------------------------------------------------------------------------
-void Network::postRead(unsigned target, const MemoryRegion& t_mr, const RemoteMemoryRegion& s_mr, bool completion, uint64_t context, int flags)
-   /// Post a read work request
-   {
-      // Add the memory region to the scatter/gather list
-      ibv_sge sge;
-      memset(&sge, 0, sizeof(sge));
-      sge.addr = reinterpret_cast<uintptr_t>(t_mr.address);   // Start address of the local memory buffer
-      sge.length = t_mr.size;                                 // Length of the buffer
-      if (!(flags & IBV_SEND_INLINE)) {
-         sge.lkey = t_mr.key->lkey;                           // Key of the local Memory Region
-      }
-
-      // Create the work request
-      ibv_send_wr workRequest;
-      memset(&workRequest, 0, sizeof(workRequest));
-      workRequest.wr_id = context;                                   // User defined WR ID
-      workRequest.next = nullptr;                                    // Pointer to next WR in list, NULL if last WR
-      workRequest.sg_list = &sge;                                    // Pointer to the s/g array
-      workRequest.num_sge = 1;                                       // Size of the s/g array
-      workRequest.opcode = IBV_WR_RDMA_READ;                         // Operation type
-      workRequest.send_flags = flags | (completion ? IBV_SEND_SIGNALED : 0); // Request completion notification
-      workRequest.wr.rdma.remote_addr = s_mr.address;
-      workRequest.wr.rdma.rkey = s_mr.key;
-
-      // Post work request
-      ibv_send_wr *badWorkRequest = nullptr;
-      int status = ::ibv_post_send(queuePairs[target], &workRequest, &badWorkRequest);
-      if (status != 0) {
-         string reason = "posting the work request failed with error " + to_string(status) + ": " + strerror(status);
-         cerr << reason << endl;
-         throw NetworkException(reason);
-      }
+void Network::postRead(unsigned target, const MemoryRegion &t_mr, const RemoteMemoryRegion &s_mr, bool completion, uint64_t context, int flags)
+/// Post a read work request
+{
+   // Add the memory region to the scatter/gather list
+   ibv_sge sge;
+   memset(&sge, 0, sizeof(sge));
+   sge.addr = reinterpret_cast<uintptr_t>(t_mr.address);   // Start address of the local memory buffer
+   sge.length = t_mr.size;                                 // Length of the buffer
+   if (!(flags & IBV_SEND_INLINE)) {
+      sge.lkey = t_mr.key->lkey;                           // Key of the local Memory Region
    }
+
+   // Create the work request
+   ibv_send_wr workRequest;
+   memset(&workRequest, 0, sizeof(workRequest));
+   workRequest.wr_id = context;                                   // User defined WR ID
+   workRequest.next = nullptr;                                    // Pointer to next WR in list, NULL if last WR
+   workRequest.sg_list = &sge;                                    // Pointer to the s/g array
+   workRequest.num_sge = 1;                                       // Size of the s/g array
+   workRequest.opcode = IBV_WR_RDMA_READ;                         // Operation type
+   workRequest.send_flags = flags | (completion ? IBV_SEND_SIGNALED : 0); // Request completion notification
+   workRequest.wr.rdma.remote_addr = s_mr.address;
+   workRequest.wr.rdma.rkey = s_mr.key;
+
+   // Post work request
+   ibv_send_wr *badWorkRequest = nullptr;
+   int status = ::ibv_post_send(queuePairs[target], &workRequest, &badWorkRequest);
+   if (status != 0) {
+      string reason = "posting the work request failed with error " + to_string(status) + ": " + strerror(status);
+      cerr << reason << endl;
+      throw NetworkException(reason);
+   }
+}
 //---------------------------------------------------------------------------
-void Network::postFetchAdd(unsigned target, const MemoryRegion& beforeValue, const RemoteMemoryRegion& remoteAddress, uint64_t add, bool completion, uint64_t context, int flags)
-   /// Post an atomic fetch/add request
+void Network::postFetchAdd(unsigned target, const MemoryRegion &beforeValue, const RemoteMemoryRegion &remoteAddress, uint64_t add, bool completion, uint64_t context, int flags)
+/// Post an atomic fetch/add request
 {
    // Add the memory region to the scatter/gather list
    ibv_sge sge;
@@ -590,8 +598,8 @@ void Network::postFetchAdd(unsigned target, const MemoryRegion& beforeValue, con
    }
 }
 //---------------------------------------------------------------------------
-void Network::postCompareSwap(unsigned target, const MemoryRegion& beforeValue, const RemoteMemoryRegion& remoteAddress, uint64_t compare, uint64_t swap, bool completion, uint64_t context, int flags)
-   /// Post an atomic compare/swap request
+void Network::postCompareSwap(unsigned target, const MemoryRegion &beforeValue, const RemoteMemoryRegion &remoteAddress, uint64_t compare, uint64_t swap, bool completion, uint64_t context, int flags)
+/// Post an atomic compare/swap request
 {
    // Add the memory region to the scatter/gather list
    ibv_sge sge;
@@ -624,8 +632,8 @@ void Network::postCompareSwap(unsigned target, const MemoryRegion& beforeValue, 
    }
 }
 //---------------------------------------------------------------------------
-void Network::postWorkRequest(unsigned target, const WorkRequest& workRequest)
-   /// Post a generic work request
+void Network::postWorkRequest(unsigned target, const WorkRequest &workRequest)
+/// Post a generic work request
 {
    // Post work request
    ibv_send_wr *badWorkRequest = nullptr;
@@ -638,19 +646,19 @@ void Network::postWorkRequest(unsigned target, const WorkRequest& workRequest)
 }
 //---------------------------------------------------------------------------
 uint64_t Network::pollSendCompletionQueue()
-   /// Poll the send completion queue
+/// Poll the send completion queue
 {
    return pollCompletionQueue(completionQueueSend, IBV_WC_SEND);
 }
 //---------------------------------------------------------------------------
 uint64_t Network::pollRecvCompletionQueue()
-   /// Poll the receive completion queue
+/// Poll the receive completion queue
 {
    return pollCompletionQueue(completionQueueRecv, IBV_WC_RECV);
 }
 //---------------------------------------------------------------------------
 uint64_t Network::pollCompletionQueueBlocking(ibv_cq *completionQueue, int type)
-   /// Poll a completion queue blocking
+/// Poll a completion queue blocking
 {
    int status;
 
@@ -678,250 +686,263 @@ uint64_t Network::pollCompletionQueueBlocking(ibv_cq *completionQueue, int type)
 }
 //---------------------------------------------------------------------------
 uint64_t Network::pollSendCompletionQueueBlocking()
-   /// Poll the send completion queue blocking
+/// Poll the send completion queue blocking
 {
    return pollCompletionQueueBlocking(completionQueueSend, IBV_WC_SEND);
 }
 //---------------------------------------------------------------------------
 uint64_t Network::pollRecvCompletionQueueBlocking()
-   /// Poll the receive completion queue blocking
+/// Poll the receive completion queue blocking
 {
    return pollCompletionQueueBlocking(completionQueueRecv, IBV_WC_RECV);
 }
 //---------------------------------------------------------------------------
 pair<bool, uint64_t> Network::waitForCompletion()
-   /// Wait for a work completion
+/// Wait for a work completion
 {
    return waitForCompletion(false, false);
 }
 //---------------------------------------------------------------------------
 uint64_t Network::waitForCompletionSend()
-   /// Wait for a work completion
+/// Wait for a work completion
 {
    return waitForCompletion(true, true).second;
 }
 //---------------------------------------------------------------------------
 uint64_t Network::waitForCompletionReceive()
-   /// Wait for a work completion
+/// Wait for a work completion
 {
    return waitForCompletion(true, false).second;
 }
 //---------------------------------------------------------------------------
 void Network::printCapabilities()
-   /// Print the capabilities of the RDMA host channel adapter
+/// Print the capabilities of the RDMA host channel adapter
 {
-	// Get a list of all devices
-	int num_devices;
-	struct ibv_device **device_list = ibv_get_device_list(&num_devices);
-	if (!device_list) {
-		std::cerr << "Error, querying the list of InfiniBand devices failed";
-	} else {
-		std::cout << num_devices << " InfiniBand device/s found";
-	}
+   // Get a list of all devices
+   int num_devices;
+   struct ibv_device **device_list = ibv_get_device_list(&num_devices);
+   if (!device_list) {
+      std::cerr << "Error, querying the list of InfiniBand devices failed";
+   } else {
+      std::cout << num_devices << " InfiniBand device/s found";
+   }
 
-	// Open the first device
-	struct ibv_context *context = ibv_open_device(device_list[0]);
-	if (!context) {
-		std::cerr << "Error, opening device " << ibv_get_device_name(device_list[0]) << " failed";
-	} else {
-		std::cout << "Opened the device " << ibv_get_device_name(context->device);
-	}
+   // Open the first device
+   struct ibv_context *context = ibv_open_device(device_list[0]);
+   if (!context) {
+      std::cerr << "Error, opening device " << ibv_get_device_name(device_list[0]) << " failed";
+   } else {
+      std::cout << "Opened the device " << ibv_get_device_name(context->device);
+   }
 
-	// Query device attributes
-	struct ibv_device_attr device_attr;
-	int status = ibv_query_device(context, &device_attr);
-	if (status) {
-		std::cerr << "Error, quering the attributes of device " << ibv_get_device_name(context->device) << " failed";
-	}
+   // Query device attributes
+   struct ibv_device_attr device_attr;
+   int status = ibv_query_device(context, &device_attr);
+   if (status) {
+      std::cerr << "Error, quering the attributes of device " << ibv_get_device_name(context->device) << " failed";
+   }
 
-	// Print attributes
-	std::cout << "[Device Information]" << std::endl;
-	std::cout << std::left << std::setw(44) << "  Device Name: " << ibv_get_device_name(context->device) << std::endl;
-	std::cout << std::left << std::setw(44) << "  GUID: " << ibv_get_device_guid(context->device) << std::endl;
-	std::cout << std::left << std::setw(44) << "  Vendor ID: " << device_attr.vendor_id << std::endl;
-	std::cout << std::left << std::setw(44) << "  Vendor Part ID: " << device_attr.vendor_part_id << std::endl;
-	std::cout << std::left << std::setw(44) << "  Hardware Version: " << device_attr.hw_ver << std::endl;
-	std::cout << std::left << std::setw(44) << "  Firmware Version: " << device_attr.fw_ver << std::endl;
-	std::cout << std::left << std::setw(44) << "  Physical Ports: " << device_attr.phys_port_cnt << std::endl;
-	std::cout << std::left << std::setw(44) << "  CA ACK Delay: " << device_attr.local_ca_ack_delay << std::endl;
+   // Print attributes
+   std::cout << "[Device Information]" << std::endl;
+   std::cout << std::left << std::setw(44) << "  Device Name: " << ibv_get_device_name(context->device) << std::endl;
+   std::cout << std::left << std::setw(44) << "  GUID: " << ibv_get_device_guid(context->device) << std::endl;
+   std::cout << std::left << std::setw(44) << "  Vendor ID: " << device_attr.vendor_id << std::endl;
+   std::cout << std::left << std::setw(44) << "  Vendor Part ID: " << device_attr.vendor_part_id << std::endl;
+   std::cout << std::left << std::setw(44) << "  Hardware Version: " << device_attr.hw_ver << std::endl;
+   std::cout << std::left << std::setw(44) << "  Firmware Version: " << device_attr.fw_ver << std::endl;
+   std::cout << std::left << std::setw(44) << "  Physical Ports: " << device_attr.phys_port_cnt << std::endl;
+   std::cout << std::left << std::setw(44) << "  CA ACK Delay: " << device_attr.local_ca_ack_delay << std::endl;
 
-	std::cout << "[Memory]" << std::endl;
-	std::cout << std::left << std::setw(44) << "  Max MR size: " << device_attr.max_mr_size << std::endl;
-	std::cout << std::left << std::setw(44) << "  Max page size: " << device_attr.page_size_cap << std::endl;
+   std::cout << "[Memory]" << std::endl;
+   std::cout << std::left << std::setw(44) << "  Max MR size: " << device_attr.max_mr_size << std::endl;
+   std::cout << std::left << std::setw(44) << "  Max page size: " << device_attr.page_size_cap << std::endl;
 
-	std::cout << "[Capabilities]" << std::endl;
-	if (device_attr.device_cap_flags & IBV_DEVICE_RESIZE_MAX_WR) {
-		std::cout << "  The device supports modifying the maximum number of outstanding Work Requests of a QP" << std::endl;
-	}
-	if (device_attr.device_cap_flags & IBV_DEVICE_BAD_PKEY_CNTR) {
-		std::cout << "  The device supports bad P_Key counting for each port" << std::endl;
-	}
-	if (device_attr.device_cap_flags & IBV_DEVICE_BAD_QKEY_CNTR) {
-		std::cout << "  The device supports P_Key violations counting for each port" << std::endl;
-	}
-	if (device_attr.device_cap_flags & IBV_DEVICE_RAW_MULTI) {
-		std::cout << "  The device supports raw packet multicast" << std::endl;
-	}
-	if (device_attr.device_cap_flags & IBV_DEVICE_AUTO_PATH_MIG) {
-		std::cout << "  The device supports automatic path migration" << std::endl;
-	}
-	if (device_attr.device_cap_flags & IBV_DEVICE_CHANGE_PHY_PORT) {
-		std::cout << "  The device supports changing the primary port number of a QP when transitioning from SQD to SQD state" << std::endl;
-	}
-	if (device_attr.device_cap_flags & IBV_DEVICE_UD_AV_PORT_ENFORCE) {
-		std::cout << "  The device supports AH port number enforcement" << std::endl;
-	}
-	if (device_attr.device_cap_flags & IBV_DEVICE_CURR_QP_STATE_MOD) {
-		std::cout << "  The device supports the Current QP state modifier when calling ibv_modify_qp()" << std::endl;
-	}
-	if (device_attr.device_cap_flags & IBV_DEVICE_SHUTDOWN_PORT) {
-		std::cout << "  The device supports shutdown port" << std::endl;
-	}
-	if (device_attr.device_cap_flags & IBV_DEVICE_INIT_TYPE) {
-		std::cout << "  The device supports setting InitType and InitTypeReply" << std::endl;
-	}
-	if (device_attr.device_cap_flags & IBV_DEVICE_PORT_ACTIVE_EVENT) {
-		std::cout << "  The device supports the IBV_EVENT_PORT_ACTIVE event generation" << std::endl;
-	}
-	if (device_attr.device_cap_flags & IBV_DEVICE_SYS_IMAGE_GUID) {
-		std::cout << "  The device supports System Image GUID" << std::endl;
-	}
-	if (device_attr.device_cap_flags & IBV_DEVICE_RC_RNR_NAK_GEN) {
-		std::cout << "  The device supports RNR-NAK generation for RC QPs" << std::endl;
-	}
-	if (device_attr.device_cap_flags & IBV_DEVICE_SRQ_RESIZE) {
-		std::cout << "  The device supports modifying the maximum number of outstanding Work Requests in an SRQ" << std::endl;
-	}
-	if (device_attr.device_cap_flags & IBV_DEVICE_N_NOTIFY_CQ) {
-		std::cout << "  The device supports Requesting Completion notification when N completions were added (and not only one) to a CQ" << std::endl;
-	}
+   std::cout << "[Capabilities]" << std::endl;
+   if (device_attr.device_cap_flags & IBV_DEVICE_RESIZE_MAX_WR) {
+      std::cout << "  The device supports modifying the maximum number of outstanding Work Requests of a QP" << std::endl;
+   }
+   if (device_attr.device_cap_flags & IBV_DEVICE_BAD_PKEY_CNTR) {
+      std::cout << "  The device supports bad P_Key counting for each port" << std::endl;
+   }
+   if (device_attr.device_cap_flags & IBV_DEVICE_BAD_QKEY_CNTR) {
+      std::cout << "  The device supports P_Key violations counting for each port" << std::endl;
+   }
+   if (device_attr.device_cap_flags & IBV_DEVICE_RAW_MULTI) {
+      std::cout << "  The device supports raw packet multicast" << std::endl;
+   }
+   if (device_attr.device_cap_flags & IBV_DEVICE_AUTO_PATH_MIG) {
+      std::cout << "  The device supports automatic path migration" << std::endl;
+   }
+   if (device_attr.device_cap_flags & IBV_DEVICE_CHANGE_PHY_PORT) {
+      std::cout << "  The device supports changing the primary port number of a QP when transitioning from SQD to SQD state" << std::endl;
+   }
+   if (device_attr.device_cap_flags & IBV_DEVICE_UD_AV_PORT_ENFORCE) {
+      std::cout << "  The device supports AH port number enforcement" << std::endl;
+   }
+   if (device_attr.device_cap_flags & IBV_DEVICE_CURR_QP_STATE_MOD) {
+      std::cout << "  The device supports the Current QP state modifier when calling ibv_modify_qp()" << std::endl;
+   }
+   if (device_attr.device_cap_flags & IBV_DEVICE_SHUTDOWN_PORT) {
+      std::cout << "  The device supports shutdown port" << std::endl;
+   }
+   if (device_attr.device_cap_flags & IBV_DEVICE_INIT_TYPE) {
+      std::cout << "  The device supports setting InitType and InitTypeReply" << std::endl;
+   }
+   if (device_attr.device_cap_flags & IBV_DEVICE_PORT_ACTIVE_EVENT) {
+      std::cout << "  The device supports the IBV_EVENT_PORT_ACTIVE event generation" << std::endl;
+   }
+   if (device_attr.device_cap_flags & IBV_DEVICE_SYS_IMAGE_GUID) {
+      std::cout << "  The device supports System Image GUID" << std::endl;
+   }
+   if (device_attr.device_cap_flags & IBV_DEVICE_RC_RNR_NAK_GEN) {
+      std::cout << "  The device supports RNR-NAK generation for RC QPs" << std::endl;
+   }
+   if (device_attr.device_cap_flags & IBV_DEVICE_SRQ_RESIZE) {
+      std::cout << "  The device supports modifying the maximum number of outstanding Work Requests in an SRQ" << std::endl;
+   }
+   if (device_attr.device_cap_flags & IBV_DEVICE_N_NOTIFY_CQ) {
+      std::cout << "  The device supports Requesting Completion notification when N completions were added (and not only one) to a CQ" << std::endl;
+   }
 
-	std::cout << "[Resources]" << std::endl;
-	std::cout << std::setw(44) << "  Max number of QPs: " << device_attr.max_qp << std::endl;
-	std::cout << std::setw(44) << "  Max number of WRs per Queue: " << device_attr.max_qp_wr << std::endl;
-	std::cout << std::setw(44) << "  Max number of SGE per WR: " << device_attr.max_sge << std::endl;
-	std::cout << std::setw(44) << "  Max number of CQs: " << device_attr.max_cq << std::endl;
-	std::cout << std::setw(44) << "  Max number of CQEs per CQ: " << device_attr.max_cqe << std::endl;
-	std::cout << std::setw(44) << "  Max number of PDs: " << device_attr.max_pd << std::endl;
-	std::cout << std::setw(44) << "  Max number of MRs: " << device_attr.max_mr << std::endl;
-	std::cout << std::setw(44) << "  Max number of AHs: " << device_attr.max_ah << std::endl;
-	std::cout << std::setw(44) << "  Max number of partitions: " << device_attr.max_pkeys << std::endl;
+   std::cout << "[Resources]" << std::endl;
+   std::cout << std::setw(44) << "  Max number of QPs: " << device_attr.max_qp << std::endl;
+   std::cout << std::setw(44) << "  Max number of WRs per Queue: " << device_attr.max_qp_wr << std::endl;
+   std::cout << std::setw(44) << "  Max number of SGE per WR: " << device_attr.max_sge << std::endl;
+   std::cout << std::setw(44) << "  Max number of CQs: " << device_attr.max_cq << std::endl;
+   std::cout << std::setw(44) << "  Max number of CQEs per CQ: " << device_attr.max_cqe << std::endl;
+   std::cout << std::setw(44) << "  Max number of PDs: " << device_attr.max_pd << std::endl;
+   std::cout << std::setw(44) << "  Max number of MRs: " << device_attr.max_mr << std::endl;
+   std::cout << std::setw(44) << "  Max number of AHs: " << device_attr.max_ah << std::endl;
+   std::cout << std::setw(44) << "  Max number of partitions: " << device_attr.max_pkeys << std::endl;
 
-	std::cout << "[Multicast]" << std::endl;
-	std::cout << std::setw(44) << "  Max multicast groups: " << device_attr.max_mcast_grp << std::endl;
-	std::cout << std::setw(44) << "  Max QPs per multicast group: " << device_attr.max_mcast_qp_attach << std::endl;
-	std::cout << std::setw(44) << "  Max total multicast QPs: " << device_attr.max_total_mcast_qp_attach << std::endl;
+   std::cout << "[Multicast]" << std::endl;
+   std::cout << std::setw(44) << "  Max multicast groups: " << device_attr.max_mcast_grp << std::endl;
+   std::cout << std::setw(44) << "  Max QPs per multicast group: " << device_attr.max_mcast_qp_attach << std::endl;
+   std::cout << std::setw(44) << "  Max total multicast QPs: " << device_attr.max_total_mcast_qp_attach << std::endl;
 
-	std::cout << "[Atomics]" << std::endl;
-	switch (device_attr.atomic_cap) {
-		case(IBV_ATOMIC_NONE):
-		std::cout << "  Atomic operations aren’t supported at all" << std::endl;
-		break;
-		case(IBV_ATOMIC_HCA):
-		std::cout << "  Atomicity is guaranteed between QPs on this device only" << std::endl;
-		break;
-		case(IBV_ATOMIC_GLOB):
-		std::cout << "  Atomicity is guaranteed between this device and any other component, such as CPUs and other devices" << std::endl;
-		break;
-	}
-	std::cout << std::setw(44) << "  Max outstanding reads/atomics per QP: " <<  device_attr.max_qp_rd_atom << std::endl;
-	std::cout << std::setw(44) << "  Resources for reads/atomics: " <<  device_attr.max_res_rd_atom << std::endl;
-	std::cout << std::setw(44) << "  Max depth per QP read/atomic initiation: " <<  device_attr.max_qp_init_rd_atom << std::endl;
+   std::cout << "[Atomics]" << std::endl;
+   switch (device_attr.atomic_cap) {
+      case (IBV_ATOMIC_NONE):
+         std::cout << "  Atomic operations aren’t supported at all" << std::endl;
+         break;
+      case (IBV_ATOMIC_HCA):
+         std::cout << "  Atomicity is guaranteed between QPs on this device only" << std::endl;
+         break;
+      case (IBV_ATOMIC_GLOB):
+         std::cout << "  Atomicity is guaranteed between this device and any other component, such as CPUs and other devices" << std::endl;
+         break;
+   }
+   std::cout << std::setw(44) << "  Max outstanding reads/atomics per QP: " << device_attr.max_qp_rd_atom << std::endl;
+   std::cout << std::setw(44) << "  Resources for reads/atomics: " << device_attr.max_res_rd_atom << std::endl;
+   std::cout << std::setw(44) << "  Max depth per QP read/atomic initiation: " << device_attr.max_qp_init_rd_atom << std::endl;
 
-	std::cout << "[Reliable Datagram]" << std::endl;
-	std::cout << std::setw(44) << "  Max number of SGEs per QP: " << device_attr.max_sge_rd << std::endl;
-	std::cout << std::setw(44) << "  Max number of EECs: " << device_attr.max_ee << std::endl;
-	std::cout << std::setw(44) << "  Max number of RDDs: " << device_attr.max_rdd << std::endl;
-	std::cout << std::setw(44) << "  Max outstanding reads/atomics per EEC: " <<  device_attr.max_ee_rd_atom << std::endl;
-	std::cout << std::setw(44) << "  Max depth per EEC read/atomic initiation: " <<  device_attr.max_ee_init_rd_atom << std::endl;
+   std::cout << "[Reliable Datagram]" << std::endl;
+   std::cout << std::setw(44) << "  Max number of SGEs per QP: " << device_attr.max_sge_rd << std::endl;
+   std::cout << std::setw(44) << "  Max number of EECs: " << device_attr.max_ee << std::endl;
+   std::cout << std::setw(44) << "  Max number of RDDs: " << device_attr.max_rdd << std::endl;
+   std::cout << std::setw(44) << "  Max outstanding reads/atomics per EEC: " << device_attr.max_ee_rd_atom << std::endl;
+   std::cout << std::setw(44) << "  Max depth per EEC read/atomic initiation: " << device_attr.max_ee_init_rd_atom << std::endl;
 
-	std::cout << "[Memory Windows]" << std::endl;
-	std::cout << std::setw(44) << "  Max number of MWs: " << device_attr.max_mw << std::endl;
+   std::cout << "[Memory Windows]" << std::endl;
+   std::cout << std::setw(44) << "  Max number of MWs: " << device_attr.max_mw << std::endl;
 
-	std::cout << "[Fast Memory Registration]" << std::endl;
-	std::cout << std::setw(44) << "  Max number of FMRs: " << device_attr.max_fmr << std::endl;
-	std::cout << std::setw(44) << "  Max number of maps per FMR: " << device_attr.max_map_per_fmr << std::endl;
+   std::cout << "[Fast Memory Registration]" << std::endl;
+   std::cout << std::setw(44) << "  Max number of FMRs: " << device_attr.max_fmr << std::endl;
+   std::cout << std::setw(44) << "  Max number of maps per FMR: " << device_attr.max_map_per_fmr << std::endl;
 
-	std::cout << "[Shared Receive Queues]" << std::endl;
-	std::cout << std::setw(44) << "  Max number of SRQs: " << device_attr.max_srq << std::endl;
-	std::cout << std::setw(44) << "  Max number of WR per SRQ: " << device_attr.max_srq_wr << std::endl;
-	std::cout << std::setw(44) << "  Max number of SGEs per WR: " << device_attr.max_srq_sge << std::endl;
+   std::cout << "[Shared Receive Queues]" << std::endl;
+   std::cout << std::setw(44) << "  Max number of SRQs: " << device_attr.max_srq << std::endl;
+   std::cout << std::setw(44) << "  Max number of WR per SRQ: " << device_attr.max_srq_wr << std::endl;
+   std::cout << std::setw(44) << "  Max number of SGEs per WR: " << device_attr.max_srq_sge << std::endl;
 
-	std::cout << "[Raw]" << std::endl;
-	std::cout << std::setw(44) << "  Max number of IPv6 QPs: " << device_attr.max_raw_ipv6_qp << std::endl;
-	std::cout << std::setw(44) << "  Max number of Ethertype QPs: " << device_attr.max_raw_ethy_qp << std::endl;
+   std::cout << "[Raw]" << std::endl;
+   std::cout << std::setw(44) << "  Max number of IPv6 QPs: " << device_attr.max_raw_ipv6_qp << std::endl;
+   std::cout << std::setw(44) << "  Max number of Ethertype QPs: " << device_attr.max_raw_ethy_qp << std::endl;
 
-	// Close the device
-	status = ibv_close_device(context);
-	if (status) {
-		std::cerr << "Error, closing the device " << ibv_get_device_name(context->device) << " failed";
-	}
-}
-// -------------------------------------------------------------------------
-string queuePairStateToString(ibv_qp_state qp_state) {
-   switch(qp_state) {
-      case IBV_QPS_RESET: return "IBV_QPS_RESET";
-      case IBV_QPS_INIT: return "IBV_QPS_INIT";
-      case IBV_QPS_RTR: return "IBV_QPS_RTR";
-      case IBV_QPS_RTS: return "IBV_QPS_RTS";
-      case IBV_QPS_SQD: return "IBV_QPS_SQD";
-      case IBV_QPS_SQE: return "IBV_QPS_SQE";
-      case IBV_QPS_ERR: return "IBV_QPS_ERR";
-      default: throw;
+   // Close the device
+   status = ibv_close_device(context);
+   if (status) {
+      std::cerr << "Error, closing the device " << ibv_get_device_name(context->device) << " failed";
    }
 }
 // -------------------------------------------------------------------------
-string queuePairAccessFlagsToString(int qp_access_flags) {
+string queuePairStateToString(ibv_qp_state qp_state)
+{
+   switch (qp_state) {
+      case IBV_QPS_RESET:
+         return "IBV_QPS_RESET";
+      case IBV_QPS_INIT:
+         return "IBV_QPS_INIT";
+      case IBV_QPS_RTR:
+         return "IBV_QPS_RTR";
+      case IBV_QPS_RTS:
+         return "IBV_QPS_RTS";
+      case IBV_QPS_SQD:
+         return "IBV_QPS_SQD";
+      case IBV_QPS_SQE:
+         return "IBV_QPS_SQE";
+      case IBV_QPS_ERR:
+         return "IBV_QPS_ERR";
+      default:
+         throw;
+   }
+}
+// -------------------------------------------------------------------------
+string queuePairAccessFlagsToString(int qp_access_flags)
+{
    string result = "";
-   if(qp_access_flags & IBV_ACCESS_REMOTE_WRITE) result += "IBV_ACCESS_REMOTE_WRITE, ";
-   if(qp_access_flags & IBV_ACCESS_REMOTE_READ)  result += "IBV_ACCESS_REMOTE_READ, ";
-   if(qp_access_flags & IBV_ACCESS_REMOTE_ATOMIC)  result += "IBV_ACCESS_REMOTE_ATOMIC, ";
+   if (qp_access_flags & IBV_ACCESS_REMOTE_WRITE)
+      result += "IBV_ACCESS_REMOTE_WRITE, ";
+   if (qp_access_flags & IBV_ACCESS_REMOTE_READ)
+      result += "IBV_ACCESS_REMOTE_READ, ";
+   if (qp_access_flags & IBV_ACCESS_REMOTE_ATOMIC)
+      result += "IBV_ACCESS_REMOTE_ATOMIC, ";
    return result;
 }
 // -------------------------------------------------------------------------
 void Network::printQueuePairDetails(unsigned qpid)
-   /// Print details of t he queue pair
-   {
-      struct ibv_qp_attr attr;
-      struct ibv_qp_init_attr init_attr;
-      memset(&attr, 0, sizeof(attr));
-      memset(&init_attr, 0, sizeof(init_attr));
+/// Print details of t he queue pair
+{
+   struct ibv_qp_attr attr;
+   struct ibv_qp_init_attr init_attr;
+   memset(&attr, 0, sizeof(attr));
+   memset(&init_attr, 0, sizeof(init_attr));
 
-      const int allFlags = IBV_QP_STATE | IBV_QP_CUR_STATE | IBV_QP_EN_SQD_ASYNC_NOTIFY | IBV_QP_ACCESS_FLAGS | IBV_QP_PKEY_INDEX | IBV_QP_PORT | IBV_QP_QKEY | IBV_QP_AV | IBV_QP_PATH_MTU | IBV_QP_TIMEOUT | IBV_QP_RETRY_CNT | IBV_QP_RNR_RETRY | IBV_QP_RQ_PSN | IBV_QP_MAX_QP_RD_ATOMIC | IBV_QP_ALT_PATH | IBV_QP_MIN_RNR_TIMER | IBV_QP_SQ_PSN | IBV_QP_MAX_DEST_RD_ATOMIC | IBV_QP_PATH_MIG_STATE | IBV_QP_CAP | IBV_QP_DEST_QPN;
-      if(::ibv_query_qp(queuePairs[qpid], &attr, allFlags, &init_attr)) {
-         string reason = "Error, querying the queue pair details.";
-         cerr << reason << endl;
-         throw NetworkException(reason);
-      }
-
-      cout << "[State of QP " << qpid << "]" << endl;
-      cout << endl;
-      cout << left << setw(44) << "qp_state:" << queuePairStateToString(attr.qp_state) << endl;
-      cout << left << setw(44) << "cur_qp_state:" << queuePairStateToString(attr.cur_qp_state) << endl;
-      cout << left << setw(44) << "path_mtu:" << attr.path_mtu << endl;
-      cout << left << setw(44) << "path_mig_state:" << attr.path_mig_state << endl;
-      cout << left << setw(44) << "qkey:" << attr.qkey << endl;
-      cout << left << setw(44) << "rq_psn:" << attr.rq_psn << endl;
-      cout << left << setw(44) << "sq_psn:" << attr.sq_psn << endl;
-      cout << left << setw(44) << "dest_qp_num:" << attr.dest_qp_num << endl;
-      cout << left << setw(44) << "qp_access_flags:" << queuePairAccessFlagsToString(attr.qp_access_flags) << endl;
-      cout << left << setw(44) << "cap:" << "<not impl>" << endl;
-      cout << left << setw(44) << "ah_attr:" << "<not impl>" << endl;
-      cout << left << setw(44) << "alt_ah_attr:" << "<not impl>" << endl;
-      cout << left << setw(44) << "pkey_index:" << attr.pkey_index << endl;
-      cout << left << setw(44) << "alt_pkey_index:" << attr.alt_pkey_index << endl;
-      cout << left << setw(44) << "en_sqd_async_notify:" << static_cast<int>(attr.en_sqd_async_notify) << endl;
-      cout << left << setw(44) << "sq_draining:" << static_cast<int>(attr.sq_draining) << endl;
-      cout << left << setw(44) << "max_rd_atomic:" << static_cast<int>(attr.max_rd_atomic) << endl;
-      cout << left << setw(44) << "max_dest_rd_atomic:" << static_cast<int>(attr.max_dest_rd_atomic) << endl;
-      cout << left << setw(44) << "min_rnr_timer:" << static_cast<int>(attr.min_rnr_timer) << endl;
-      cout << left << setw(44) << "port_num:" << static_cast<int>(attr.port_num) << endl;
-      cout << left << setw(44) << "timeout:" << static_cast<int>(attr.timeout) << endl;
-      cout << left << setw(44) << "retry_cnt:" << static_cast<int>(attr.retry_cnt) << endl;
-      cout << left << setw(44) << "rnr_retry:" << static_cast<int>(attr.rnr_retry) << endl;
-      cout << left << setw(44) << "alt_port_num:" << static_cast<int>(attr.alt_port_num) << endl;
-      cout << left << setw(44) << "alt_timeout:" << static_cast<int>(attr.alt_timeout) << endl;
+   const int allFlags = IBV_QP_STATE | IBV_QP_CUR_STATE | IBV_QP_EN_SQD_ASYNC_NOTIFY | IBV_QP_ACCESS_FLAGS | IBV_QP_PKEY_INDEX | IBV_QP_PORT | IBV_QP_QKEY | IBV_QP_AV | IBV_QP_PATH_MTU | IBV_QP_TIMEOUT | IBV_QP_RETRY_CNT | IBV_QP_RNR_RETRY | IBV_QP_RQ_PSN | IBV_QP_MAX_QP_RD_ATOMIC | IBV_QP_ALT_PATH | IBV_QP_MIN_RNR_TIMER | IBV_QP_SQ_PSN | IBV_QP_MAX_DEST_RD_ATOMIC | IBV_QP_PATH_MIG_STATE | IBV_QP_CAP | IBV_QP_DEST_QPN;
+   if (::ibv_query_qp(queuePairs[qpid], &attr, allFlags, &init_attr)) {
+      string reason = "Error, querying the queue pair details.";
+      cerr << reason << endl;
+      throw NetworkException(reason);
    }
+
+   cout << "[State of QP " << qpid << "]" << endl;
+   cout << endl;
+   cout << left << setw(44) << "qp_state:" << queuePairStateToString(attr.qp_state) << endl;
+   cout << left << setw(44) << "cur_qp_state:" << queuePairStateToString(attr.cur_qp_state) << endl;
+   cout << left << setw(44) << "path_mtu:" << attr.path_mtu << endl;
+   cout << left << setw(44) << "path_mig_state:" << attr.path_mig_state << endl;
+   cout << left << setw(44) << "qkey:" << attr.qkey << endl;
+   cout << left << setw(44) << "rq_psn:" << attr.rq_psn << endl;
+   cout << left << setw(44) << "sq_psn:" << attr.sq_psn << endl;
+   cout << left << setw(44) << "dest_qp_num:" << attr.dest_qp_num << endl;
+   cout << left << setw(44) << "qp_access_flags:" << queuePairAccessFlagsToString(attr.qp_access_flags) << endl;
+   cout << left << setw(44) << "cap:" << "<not impl>" << endl;
+   cout << left << setw(44) << "ah_attr:" << "<not impl>" << endl;
+   cout << left << setw(44) << "alt_ah_attr:" << "<not impl>" << endl;
+   cout << left << setw(44) << "pkey_index:" << attr.pkey_index << endl;
+   cout << left << setw(44) << "alt_pkey_index:" << attr.alt_pkey_index << endl;
+   cout << left << setw(44) << "en_sqd_async_notify:" << static_cast<int>(attr.en_sqd_async_notify) << endl;
+   cout << left << setw(44) << "sq_draining:" << static_cast<int>(attr.sq_draining) << endl;
+   cout << left << setw(44) << "max_rd_atomic:" << static_cast<int>(attr.max_rd_atomic) << endl;
+   cout << left << setw(44) << "max_dest_rd_atomic:" << static_cast<int>(attr.max_dest_rd_atomic) << endl;
+   cout << left << setw(44) << "min_rnr_timer:" << static_cast<int>(attr.min_rnr_timer) << endl;
+   cout << left << setw(44) << "port_num:" << static_cast<int>(attr.port_num) << endl;
+   cout << left << setw(44) << "timeout:" << static_cast<int>(attr.timeout) << endl;
+   cout << left << setw(44) << "retry_cnt:" << static_cast<int>(attr.retry_cnt) << endl;
+   cout << left << setw(44) << "rnr_retry:" << static_cast<int>(attr.rnr_retry) << endl;
+   cout << left << setw(44) << "alt_port_num:" << static_cast<int>(attr.alt_port_num) << endl;
+   cout << left << setw(44) << "alt_timeout:" << static_cast<int>(attr.alt_timeout) << endl;
+}
 //---------------------------------------------------------------------------
 }
 //---------------------------------------------------------------------------

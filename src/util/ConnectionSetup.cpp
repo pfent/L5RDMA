@@ -67,7 +67,6 @@ void TestHarness::createFullyConnectedNetwork()
    for (uint32_t i = 0; i<nodeCount; ++i) {
       PeerInfo peerInfo(rdma::Address{network.getLID(), network.getQPN(i)}, util::getHostname());
       localQPInfos.push_back(peerInfo);
-      cout << peerInfo << endl;
    }
    if (verbose)
       cout << "> Created RDMA Network" << endl;

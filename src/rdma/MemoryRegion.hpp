@@ -23,6 +23,7 @@
 #include <stdint.h>
 #include <cstdlib>
 #include <type_traits>
+#include <ostream>
 //---------------------------------------------------------------------------
 struct ibv_mr;
 struct ibv_pd;
@@ -63,6 +64,8 @@ inline MemoryRegion::Permission operator|(MemoryRegion::Permission a, MemoryRegi
 inline MemoryRegion::Permission operator&(MemoryRegion::Permission a, MemoryRegion::Permission b) {
    return static_cast<MemoryRegion::Permission>(static_cast<std::underlying_type<MemoryRegion::Permission>::type>(a) & static_cast<std::underlying_type<MemoryRegion::Permission>::type>(b));
 }
+//---------------------------------------------------------------------------
+std::ostream &operator<<(std::ostream& os, const MemoryRegion& memoryRegion);
 //---------------------------------------------------------------------------
 } // End of namespace rdma
 //---------------------------------------------------------------------------

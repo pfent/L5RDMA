@@ -66,5 +66,10 @@ MemoryRegion::~MemoryRegion() {
    }
 }
 //---------------------------------------------------------------------------
+ostream &operator<<(ostream& os, const MemoryRegion& memoryRegion)
+{
+   return os << "ptr=" << memoryRegion.address << " size=" << memoryRegion.size << " key={..}";
+}
+//---------------------------------------------------------------------------
 } // End of namepsace rdma
 //---------------------------------------------------------------------------

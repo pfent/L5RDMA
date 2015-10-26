@@ -18,54 +18,52 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //---------------------------------------------------------------------------
-#include "rdma/Network.hpp"
-#include "rdma/MemoryRegion.hpp"
-#include "rdma/WorkRequest.hpp"
-#include "util/ConnectionSetup.hpp"
+#pragma once
 //---------------------------------------------------------------------------
-#include <iomanip>
-#include <iostream>
 #include <memory>
-#include <algorithm>
-#include <cassert>
-#include <unistd.h>
+#include <array>
+#include <vector>
 #include <zmq.hpp>
+#include <thread>
 //---------------------------------------------------------------------------
-using namespace std;
-using namespace rdma;
+#include "rdma/Network.hpp"
+#include "util/ConnectionSetup.hpp"
+#include "util/NotAssignable.hpp"
+#include "dht/Common.hpp"
 //---------------------------------------------------------------------------
-namespace {
-uint32_t getNodeCount(int argc, char **argv)
-{
-   if (argc != 2) {
-      cerr << "usage: " << argv[0] << " [nodeCount]" << endl;
-      exit(EXIT_FAILURE);
-   }
-   uint32_t nodeCount;
-   istringstream in(argv[1]);
-   in >> nodeCount;
-   return nodeCount;
-}
-}
+struct ibv_send_wr;
 //---------------------------------------------------------------------------
-int main(int argc, char **argv)
-{
-   uint32_t nodeCount = getNodeCount(argc, argv);
-   zmq::context_t context(1);
-   util::SetupSupport setupSupport(context);
+namespace dht { // Distributed Hash Table
+//---------------------------------------------------------------------------
+struct RemoteMemoryRegion;
+struct MemoryRegion;
+//---------------------------------------------------------------------------
+struct HashTableServer : public util::NotAssignable {
 
-   while (1) {
-      cout << "> Creating FullyConnectedNetworkCreation" << endl;
-      setupSupport.supportFullyConnectedNetworkCreation(nodeCount);
-      cout << "> Done" << endl;
+   HashTableServer(rdma::Network &network, uint32_t htSize, uint32_t maxBucketCount);
 
-//      cout << "> Publish RemoteAddress" << endl;
-//      setupSupport.supportRemoteMemoryAddressPublishing();
-//      cout << "> Done" << endl;
+   void startAddressServiceAsync(zmq::context_t &context, std::string hostname, int port);
 
-      //      cout << "[PRESS ENTER TO CONTINUE]" << endl;
-      //   cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-      //      cin.get();
-   }
-}
+   void dumpMemoryRegions();
+   void dumpHashTableContent();
+
+private:
+   // Memory itself
+   std::vector <uint64_t> htMemory;
+   std::vector <Bucket> bucketMemory;
+   uint64_t nextFreeOffset;
+
+   // Pinned memory (underlying memory is declared above)
+   std::unique_ptr <rdma::MemoryRegion> htMr;
+   std::unique_ptr <rdma::MemoryRegion> bucketsMr;
+   std::unique_ptr <rdma::MemoryRegion> nextFreeOffsetMr;
+
+   // A socket to distribute the addresses of the pinned memory regions
+   std::unique_ptr <zmq::socket_t> socket;
+   std::string hostname;
+   int port;
+   std::unique_ptr <std::thread> thread;
+};
+//---------------------------------------------------------------------------
+} // End of namespace dht
 //---------------------------------------------------------------------------

@@ -20,36 +20,16 @@
 //---------------------------------------------------------------------------
 #pragma once
 //---------------------------------------------------------------------------
-#include <string>
-#include <sstream>
-//---------------------------------------------------------------------------
 namespace util {
 //---------------------------------------------------------------------------
-std::string getHostname();
-//---------------------------------------------------------------------------
-/// The exception which gets thrown when parsing a number/string fails
-struct NoNumberOrNoStringDependingOnWhatYouCalled {
+/// Inherit from this class to prevent someone from copying your class
+class NotAssignable {
+private:
+   NotAssignable(NotAssignable const &) = delete;
+   NotAssignable &operator=(NotAssignable const &) = delete;
+public:
+   NotAssignable() { }
 };
-//---------------------------------------------------------------------------
-template<class Number> std::string to_string(const Number &num)
-{
-   std::ostringstream stream;
-   stream << num;
-   if (!stream.good())
-      throw NoNumberOrNoStringDependingOnWhatYouCalled();
-   return stream.str();
-}
-//---------------------------------------------------------------------------
-/// string --> number
-template<class Number> Number to_number(const std::string &str)
-{
-   Number num;
-   std::istringstream stream(str);
-   stream >> num;
-   if (!stream.good() && !stream.eof())
-      throw NoNumberOrNoStringDependingOnWhatYouCalled();
-   return num;
-}
 //---------------------------------------------------------------------------
 } // End of namespace util
 //---------------------------------------------------------------------------

@@ -49,6 +49,7 @@ struct RemoteMemoryRegion {
    uintptr_t address;
    uint32_t key;
 };
+std::ostream &operator<<(std::ostream &os, const RemoteMemoryRegion &remoteMemoryRegion);
 //---------------------------------------------------------------------------
 /// The LID and QPN uniquely address a queue pair
 struct Address {

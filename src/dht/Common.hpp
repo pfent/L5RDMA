@@ -20,36 +20,37 @@
 //---------------------------------------------------------------------------
 #pragma once
 //---------------------------------------------------------------------------
-#include <string>
-#include <sstream>
+#include <memory>
+#include <array>
+#include <vector>
+#include <zmq.hpp>
 //---------------------------------------------------------------------------
-namespace util {
+#include "rdma/Network.hpp"
+#include "util/NotAssignable.hpp"
 //---------------------------------------------------------------------------
-std::string getHostname();
+struct ibv_send_wr;
 //---------------------------------------------------------------------------
-/// The exception which gets thrown when parsing a number/string fails
-struct NoNumberOrNoStringDependingOnWhatYouCalled {
+namespace dht { // Distributed Hash Table
+//---------------------------------------------------------------------------
+struct RemoteMemoryRegion;
+struct MemoryRegion;
+//---------------------------------------------------------------------------
+/// Identifies the host of a hash table
+struct HashTableLocation {
+   int qpIndex; // Should be the same position as in the vector in the network class ?
+   std::string hostname;
+   int port;
 };
 //---------------------------------------------------------------------------
-template<class Number> std::string to_string(const Number &num)
-{
-   std::ostringstream stream;
-   stream << num;
-   if (!stream.good())
-      throw NoNumberOrNoStringDependingOnWhatYouCalled();
-   return stream.str();
-}
+struct Entry {
+   uint64_t key;
+   std::array<uint64_t, 1> payload;
+};
 //---------------------------------------------------------------------------
-/// string --> number
-template<class Number> Number to_number(const std::string &str)
-{
-   Number num;
-   std::istringstream stream(str);
-   stream >> num;
-   if (!stream.good() && !stream.eof())
-      throw NoNumberOrNoStringDependingOnWhatYouCalled();
-   return num;
-}
+struct Bucket {
+   Entry entry;
+   uint64_t next;
+};
 //---------------------------------------------------------------------------
-} // End of namespace util
+} // End of namespace dht
 //---------------------------------------------------------------------------
