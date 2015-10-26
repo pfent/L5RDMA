@@ -79,13 +79,14 @@ void HashTableServer::startAddressServiceAsync(zmq::context_t &context, string h
 //---------------------------------------------------------------------------
 void HashTableServer::dumpMemoryRegions()
 {
-   cout << "htMr= {" << *htMr << "}" << endl;
-   cout << "bucketsMr= {" << *bucketsMr << "}" << endl;
-   cout << "nextFreeOffsetMr= {" << *nextFreeOffsetMr << "}" << endl;
+   cout << "> Created HT Server" << endl;
+   cout << ">   htMr= {" << *htMr << "}" << endl;
+   cout << ">   bucketsMr= {" << *bucketsMr << "}" << endl;
+   cout << ">   nextFreeOffsetMr= {" << *nextFreeOffsetMr << "}" << endl;
    if (socket == nullptr) {
-      cout << "address distribution service NOT started." << endl;
+      cout << ">   address distribution service NOT started." << endl;
    } else {
-      cout << "listenting on: {hostname=" << hostname << " port=" << port << "}" << endl;
+      cout << ">   listenting on: {hostname=" << hostname << " port=" << port << "}" << endl;
    }
 }
 //---------------------------------------------------------------------------

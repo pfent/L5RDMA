@@ -56,7 +56,7 @@ struct HashTableNetworkLayout : public util::NotAssignable {
 //---------------------------------------------------------------------------
 class HashTableClient : public util::NotAssignable {
 public:
-   HashTableClient(rdma::Network &network, HashTableNetworkLayout &remoteTables);
+   HashTableClient(rdma::Network &network, HashTableNetworkLayout &remoteTables, uint64_t entryCountPerHost);
    ~HashTableClient();
 
    void insert(const Entry &entry);
@@ -65,6 +65,10 @@ public:
 private:
    rdma::Network &network;
    HashTableNetworkLayout &remoteTables;
+
+   uint64_t maskForHostSelection; // key & maskForHostSelection >> shiftForHostSelection = the id of the host where the ht resides
+   uint64_t shiftForHostSelection; // key & maskForHostSelection >> shiftForHostSelection = the id of the host where the ht resides
+   uint64_t maskForPositionSelection; // key & maskForPositionSelection = the index in the ht
 };
 //---------------------------------------------------------------------------
 } // End of namespace dht

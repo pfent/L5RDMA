@@ -74,5 +74,16 @@ public:
    void setLocalAddress(const MemoryRegion &localAddress);
 };
 //---------------------------------------------------------------------------
+class WriteWorkRequest : public WorkRequest {
+public:
+   WriteWorkRequest();
+
+   /// Remote memory address (location to be written to)
+   void setRemoteAddress(const RemoteMemoryRegion &remoteAddress);
+
+   /// Local memory address (location to be read from)
+   void setLocalAddress(const MemoryRegion &localAddress);
+};
+//---------------------------------------------------------------------------
 } // End of namespace rdma
 //---------------------------------------------------------------------------

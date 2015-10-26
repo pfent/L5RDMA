@@ -69,8 +69,12 @@ void runClientCode(util::TestHarness &testHarness)
    hashTableNetworkLayout.dump();
 
    // Create a hash table client
-   dht::HashTableClient distributedHashTableClient(testHarness.network, hashTableNetworkLayout);
-   distributedHashTableClient.insert(dht::Entry{42, {0xdeadbeef}});
+   hashTableNetworkLayout.remoteHashTables.push_back(hashTableNetworkLayout.remoteHashTables.back());
+   hashTableNetworkLayout.remoteHashTables.push_back(hashTableNetworkLayout.remoteHashTables.back());
+   hashTableNetworkLayout.remoteHashTables.push_back(hashTableNetworkLayout.remoteHashTables.back());
+
+   dht::HashTableClient distributedHashTableClient(testHarness.network, hashTableNetworkLayout, 32);
+//   distributedHashTableClient.insert(dht::Entry{42, {0xdeadbeef}});
 }
 //---------------------------------------------------------------------------
 int main(int argc, char **argv)

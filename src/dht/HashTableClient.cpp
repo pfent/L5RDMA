@@ -60,33 +60,51 @@ void HashTableNetworkLayout::retrieveRemoteMemoryRegions(zmq::context_t &context
 //---------------------------------------------------------------------------
 void HashTableNetworkLayout::dump()
 {
+   cout << "> Network Info (" << remoteHashTables.size() << ")" << endl;
    for (size_t i = 0; i<remoteHashTables.size(); ++i) {
-      cout << "Remote Hash Table (" << i << ")" << endl;
-      cout << "   location= {qpIndex=" << remoteHashTables[i].location.qpIndex << " hostname=" << remoteHashTables[i].location.hostname << " port=" << remoteHashTables[i].location.port << "}" << endl;
-      cout << "   htRmr= {" << remoteHashTables[i].htRmr << "}" << endl;
-      cout << "   bucketsRmr= {" << remoteHashTables[i].bucketsRmr << "}" << endl;
-      cout << "   nextFreeOffsetRmr= {" << remoteHashTables[i].nextFreeOffsetRmr << "}" << endl;
+      cout << ">   Remote Hash Table (" << i << ")" << endl;
+      cout << ">     location= {qpIndex=" << remoteHashTables[i].location.qpIndex << " hostname=" << remoteHashTables[i].location.hostname << " port=" << remoteHashTables[i].location.port << "}" << endl;
+      cout << ">     htRmr= {" << remoteHashTables[i].htRmr << "}" << endl;
+      cout << ">     bucketsRmr= {" << remoteHashTables[i].bucketsRmr << "}" << endl;
+      cout << ">     nextFreeOffsetRmr= {" << remoteHashTables[i].nextFreeOffsetRmr << "}" << endl;
    }
 }
 //---------------------------------------------------------------------------
-HashTableClient::HashTableClient(rdma::Network &network, HashTableNetworkLayout &remoteTables)
+HashTableClient::HashTableClient(rdma::Network &network, HashTableNetworkLayout &remoteTables, uint64_t entryCountPerHost)
         : network(network), remoteTables(remoteTables)
 {
+   uint64_t hostCount = remoteTables.remoteHashTables.size();
+   uint64_t entryCount = hostCount * entryCountPerHost;
 
+   assert(util::isPowerOfTwo(hostCount));
+   assert(util::isPowerOfTwo(entryCountPerHost));
+   assert(util::isPowerOfTwo(entryCount)); // (is implied, except overflow)
+
+   maskForPositionSelection = entryCountPerHost - 1;
+   maskForHostSelection = (entryCount - 1) xor maskForPositionSelection;
+   shiftForHostSelection = util::getNumberOfSetBits(maskForPositionSelection);
+
+   if (getenv("VERBOSE")) {
+      cout << "> Created HT Client" << endl;
+      cout << ">   hostCount= " << hostCount << endl;
+      cout << ">   entryCountPerHost= " << entryCountPerHost << endl;
+      cout << ">   maskForPositionSelection= " << maskForPositionSelection << endl;
+      cout << ">   maskForHostSelection= " << maskForHostSelection << endl;
+      cout << ">   shiftForHostSelection= " << shiftForHostSelection << endl;
+   }
 }
 //---------------------------------------------------------------------------
 HashTableClient::~HashTableClient()
 {
-
 }
 //---------------------------------------------------------------------------
 void HashTableClient::insert(const Entry &entry)
 {
-   // TODO
-   int id = 0;
+   uint64_t targetHost = (entry.key & maskForHostSelection) >> shiftForHostSelection;
+   uint64_t targetHtIndex = (entry.key & maskForPositionSelection);
 
    // Obtain memory for the bucket
-   uint32_t next;
+   uint64_t next;
    {
       // Pin local memory
       vector <uint64_t> shared(1);
@@ -100,7 +118,7 @@ void HashTableClient::insert(const Entry &entry)
       workRequest.setAddValue(1);
       workRequest.setCompletion(true);
 
-      network.postWorkRequest(id, workRequest);
+      network.postWorkRequest(targetHost, workRequest);
       network.waitForCompletionSend();
       next = shared[0];
    }
@@ -109,14 +127,47 @@ void HashTableClient::insert(const Entry &entry)
 
    // Write into the bucket
    {
+      // Pin local memory
+      vector <Bucket> bucket(1, {entry, 0});
+      rdma::MemoryRegion bucketMR(bucket.data(), sizeof(Bucket) * bucket.size(), network.getProtectionDomain(), rdma::MemoryRegion::Permission::All);
 
+      // Create work request
+      rdma::WriteWorkRequest workRequest;
+      workRequest.setId(8029);
+      workRequest.setLocalAddress(bucketMR);
+      rdma::RemoteMemoryRegion bucketsRmr = remoteTables.remoteHashTables[targetHost].bucketsRmr;
+      workRequest.setRemoteAddress(rdma::RemoteMemoryRegion{bucketsRmr.address + next * sizeof(Bucket), bucketsRmr.key});
+      workRequest.setCompletion(true);
+
+      network.postWorkRequest(targetHost, workRequest);
+      network.waitForCompletionSend();
    }
 
+   cout << "bucket has been written" << endl;
+
+   // Compare and swap the new value in
+   {
+      // Pin local memory
+      vector <uint64_t> oldValue(1);
+      oldValue[0] = 0;
+      rdma::MemoryRegion oldValueMR(oldValue.data(), sizeof(uint64_t) * oldValue.size(), network.getProtectionDomain(), rdma::MemoryRegion::Permission::All);
+
+      // Create work request
+      rdma::WriteWorkRequest workRequest;
+      workRequest.setId(8029);
+      workRequest.setLocalAddress(oldValueMR);
+      rdma::RemoteMemoryRegion htRmr = remoteTables.remoteHashTables[targetHost].htRmr;
+      workRequest.setRemoteAddress(rdma::RemoteMemoryRegion{htRmr.address + targetHtIndex * sizeof(uint64_t), htRmr.key});
+      workRequest.setCompletion(true);
+
+      while (1) {
+      }
+   }
 }
 //---------------------------------------------------------------------------
 uint32_t HashTableClient::count(uint64_t)
 {
-   return 0;
+   return -1;
 }
 //---------------------------------------------------------------------------
 } // End of namespace dht

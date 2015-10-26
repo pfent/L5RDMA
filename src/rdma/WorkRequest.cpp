@@ -115,5 +115,22 @@ void AtomicFetchAndAddWorkRequest::setLocalAddress(const MemoryRegion &localAddr
    wr->sg_list->lkey = localAddress.key->lkey;
 }
 //---------------------------------------------------------------------------
+WriteWorkRequest::WriteWorkRequest()
+{
+}
+//---------------------------------------------------------------------------
+void WriteWorkRequest::setLocalAddress(const MemoryRegion &localAddress)
+{
+   wr->sg_list->addr = reinterpret_cast<uintptr_t>(localAddress.address);
+   wr->sg_list->length = localAddress.size;
+   wr->sg_list->lkey = localAddress.key->lkey;
+}
+//---------------------------------------------------------------------------
+void WriteWorkRequest::setRemoteAddress(const RemoteMemoryRegion &remoteAddress)
+{
+   wr->wr.rdma.remote_addr = remoteAddress.address;
+   wr->wr.rdma.rkey = remoteAddress.key;
+}
+//---------------------------------------------------------------------------
 } // End of namespace rdma
 //---------------------------------------------------------------------------
