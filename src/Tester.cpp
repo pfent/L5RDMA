@@ -25,6 +25,7 @@
 #include "util/Utility.hpp"
 #include "dht/HashTableClient.hpp"
 #include "dht/HashTableServer.hpp"
+#include "dht/HashTableNetworkLayout.hpp"
 //---------------------------------------------------------------------------
 #include <infiniband/verbs.h>
 #include <iomanip>
@@ -44,9 +45,10 @@ void runCode(util::TestHarness &testHarness)
    // 1. Start Server
    // Allocate and pin rdma enabled remote memory regions
    // Start zmq socket (REP), which can be used by the clients to retrieve information about memory regions
-   dht::HashTableServer hashTableServer(testHarness.network, 32, 1024 * 1024);
-   hashTableServer.startAddressServiceAsync(testHarness.context, util::getHostname(), 8222);
-   hashTableServer.dumpMemoryRegions();
+   dht::HashTableServer localHashTableServer(testHarness.network, 32, 1024 * 1024);
+   localHashTableServer.startAddressServiceAsync(testHarness.context, util::getHostname(), 8222);
+   if (getenv("VERBOSE"))
+      localHashTableServer.dumpMemoryRegions();
 
    // 2. Network info
    // Create vector with containing node identifiers for all nodes, which host a part of the distributed hash table
@@ -60,10 +62,14 @@ void runCode(util::TestHarness &testHarness)
    // Connect zmq (REQ) socket to each node and retrieve shared memory regions
    dht::HashTableNetworkLayout hashTableNetworkLayout;
    hashTableNetworkLayout.retrieveRemoteMemoryRegions(testHarness.context, hashTableLocations);
-   hashTableNetworkLayout.dump();
-   dht::HashTableClient distributedHashTableClient(testHarness.network, hashTableNetworkLayout, hashTableServer, 32);
+   if (getenv("VERBOSE"))
+      hashTableNetworkLayout.dump();
+   dht::HashTableClient distributedHashTableClient(testHarness.network, hashTableNetworkLayout, localHashTableServer, 32);
+   if (getenv("VERBOSE"))
+      distributedHashTableClient.dump();
 
    // 4. Test
+   srand(0);
    for (int j = 0; j<10; ++j) {
       distributedHashTableClient.insert(dht::Entry{rand() % 100ull, {0xdeadbeef}});
    }
@@ -71,7 +77,8 @@ void runCode(util::TestHarness &testHarness)
    // 5. Done
    cout << "[PRESS ENTER TO CONTINUE]" << endl;
    cin.get();
-   hashTableServer.dumpHashTableContent();
+   if (getenv("VERBOSE"))
+      localHashTableServer.dumpHashTableContent();
 }
 //---------------------------------------------------------------------------
 int main(int argc, char **argv)

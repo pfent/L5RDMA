@@ -28,36 +28,31 @@
 #include "rdma/Network.hpp"
 #include "util/NotAssignable.hpp"
 #include "dht/Common.hpp"
+#include "dht/HashTableServer.hpp"
 //---------------------------------------------------------------------------
 struct ibv_send_wr;
 //---------------------------------------------------------------------------
 namespace dht { // Distributed Hash Table
 //---------------------------------------------------------------------------
-struct HashTableNetworkLayout;
-struct HashTableServer;
+struct RemoteMemoryRegion;
+struct MemoryRegion;
 //---------------------------------------------------------------------------
-class HashTableClient : public util::NotAssignable {
-public:
-   HashTableClient(rdma::Network &network, HashTableNetworkLayout &remoteTables, HashTableServer &localServer, uint64_t entryCountPerHost);
-   ~HashTableClient();
+/// Gathers and stores information about remote shared hash tables (locals are treated as remote, because of atomicity (ask alex))
+struct HashTableNetworkLayout : public util::NotAssignable {
 
-   void insert(const Entry &entry);
-   uint32_t count(uint64_t key) const;
+   HashTableNetworkLayout();
+   void retrieveRemoteMemoryRegions(zmq::context_t &context, const std::vector <HashTableLocation> &tableLocations);
+   void dump();
 
-   void dump() const;
+   struct RemoteHashTableInfo {
+      HashTableLocation location;
 
-private:
-   rdma::Network &network;
-   HashTableNetworkLayout &remoteTables;
-   HashTableServer &localServer;
+      rdma::RemoteMemoryRegion htRmr;
+      rdma::RemoteMemoryRegion bucketsRmr;
+      rdma::RemoteMemoryRegion nextFreeOffsetRmr;
+   };
 
-   const uint64_t hostCount;
-   const uint64_t entryCountPerHost;
-   const uint64_t totalEntryCount;
-
-   const uint64_t maskForPositionSelection; // key & maskForPositionSelection = the index in the ht
-   const uint64_t maskForHostSelection; // key & maskForHostSelection >> shiftForHostSelection = the id of the host where the ht resides
-   const uint64_t shiftForHostSelection; // key & maskForHostSelection >> shiftForHostSelection = the id of the host where the ht resides
+   std::vector <RemoteHashTableInfo> remoteHashTables;
 };
 //---------------------------------------------------------------------------
 } // End of namespace dht

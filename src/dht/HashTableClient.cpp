@@ -23,6 +23,8 @@
 #include "rdma/Network.hpp"
 #include "rdma/WorkRequest.hpp"
 #include "util/Utility.hpp"
+#include "dht/HashTableNetworkLayout.hpp"
+#include "dht/HashTableServer.hpp"
 //---------------------------------------------------------------------------
 #include <cstring>
 #include <iostream>
@@ -31,67 +33,20 @@ using namespace std;
 //---------------------------------------------------------------------------
 namespace dht {
 //---------------------------------------------------------------------------
-HashTableNetworkLayout::HashTableNetworkLayout()
+HashTableClient::HashTableClient(rdma::Network &network, HashTableNetworkLayout &remoteTables, HashTableServer &localServer, uint64_t entryCountPerHost)
+        : network(network)
+          , remoteTables(remoteTables)
+          , localServer(localServer)
+          , hostCount(remoteTables.remoteHashTables.size())
+          , entryCountPerHost(entryCountPerHost)
+          , totalEntryCount(hostCount * entryCountPerHost)
+          , maskForPositionSelection(entryCountPerHost - 1)
+          , maskForHostSelection((totalEntryCount - 1) xor maskForPositionSelection) // MATH !!!
+          , shiftForHostSelection(util::getNumberOfSetBits(maskForPositionSelection))
 {
-}
-//---------------------------------------------------------------------------
-void HashTableNetworkLayout::retrieveRemoteMemoryRegions(zmq::context_t &context, const vector <HashTableLocation> &hashTableLocations)
-{
-   remoteHashTables.resize(hashTableLocations.size());
-
-   for (size_t i = 0; i<hashTableLocations.size(); ++i) {
-      zmq::socket_t socket(context, ZMQ_REQ);
-      socket.connect(("tcp://" + hashTableLocations[i].hostname + ":" + util::to_string(hashTableLocations[i].port)).c_str());
-
-      zmq::message_t request(0);
-      socket.send(request);
-
-      zmq::message_t response(sizeof(rdma::RemoteMemoryRegion) * 3);
-      socket.recv(&response);
-
-      remoteHashTables[i].location = hashTableLocations[i];
-      remoteHashTables[i].htRmr = reinterpret_cast<rdma::RemoteMemoryRegion *>(response.data())[0];
-      remoteHashTables[i].bucketsRmr = reinterpret_cast<rdma::RemoteMemoryRegion *>(response.data())[1];
-      remoteHashTables[i].nextFreeOffsetRmr = reinterpret_cast<rdma::RemoteMemoryRegion *>(response.data())[2];
-
-      socket.close();
-   }
-}
-//---------------------------------------------------------------------------
-void HashTableNetworkLayout::dump()
-{
-   cout << "> Network Info (" << remoteHashTables.size() << ")" << endl;
-   for (size_t i = 0; i<remoteHashTables.size(); ++i) {
-      cout << ">   Remote Hash Table (" << i << ")" << endl;
-      cout << ">     location= {qpIndex=" << remoteHashTables[i].location.qpIndex << " hostname=" << remoteHashTables[i].location.hostname << " port=" << remoteHashTables[i].location.port << "}" << endl;
-      cout << ">     htRmr= {" << remoteHashTables[i].htRmr << "}" << endl;
-      cout << ">     bucketsRmr= {" << remoteHashTables[i].bucketsRmr << "}" << endl;
-      cout << ">     nextFreeOffsetRmr= {" << remoteHashTables[i].nextFreeOffsetRmr << "}" << endl;
-   }
-}
-//---------------------------------------------------------------------------
-HashTableClient::HashTableClient(rdma::Network &network, HashTableNetworkLayout &remoteTables, HashTableServer& localServer, uint64_t entryCountPerHost)
-        : network(network), remoteTables(remoteTables), localServer(localServer)
-{
-   uint64_t hostCount = remoteTables.remoteHashTables.size();
-   uint64_t entryCount = hostCount * entryCountPerHost;
-
    assert(util::isPowerOfTwo(hostCount));
    assert(util::isPowerOfTwo(entryCountPerHost));
-   assert(util::isPowerOfTwo(entryCount)); // (is implied, except overflow)
-
-   maskForPositionSelection = entryCountPerHost - 1;
-   maskForHostSelection = (entryCount - 1) xor maskForPositionSelection;
-   shiftForHostSelection = util::getNumberOfSetBits(maskForPositionSelection);
-
-   if (getenv("VERBOSE")) {
-      cout << "> Created HT Client" << endl;
-      cout << ">   hostCount= " << hostCount << endl;
-      cout << ">   entryCountPerHost= " << entryCountPerHost << endl;
-      cout << ">   maskForPositionSelection= " << maskForPositionSelection << endl;
-      cout << ">   maskForHostSelection= " << maskForHostSelection << endl;
-      cout << ">   shiftForHostSelection= " << shiftForHostSelection << endl;
-   }
+   assert(util::isPowerOfTwo(totalEntryCount)); // (is implied, except overflow)
 }
 //---------------------------------------------------------------------------
 HashTableClient::~HashTableClient()
@@ -100,7 +55,7 @@ HashTableClient::~HashTableClient()
 //---------------------------------------------------------------------------
 void HashTableClient::insert(const Entry &entry)
 {
-   cout << "starting insert " << endl;
+   cout << "insert: " << entry.key << endl;
 
    uint64_t targetHost = (entry.key & maskForHostSelection) >> shiftForHostSelection;
    uint64_t targetHtIndex = (entry.key & maskForPositionSelection);
@@ -124,7 +79,6 @@ void HashTableClient::insert(const Entry &entry)
       network.waitForCompletionSend();
       newBucketOffset = shared[0];
    }
-   cout << "newBucketOffset = " << newBucketOffset << endl;
 
    // Compare and swap the new value in
    uint64_t oldNextOffset;
@@ -151,7 +105,6 @@ void HashTableClient::insert(const Entry &entry)
       } while (oldValue[0] != workRequest.getCompareValue());
       oldNextOffset = oldValue[0];
    }
-   cout << "swapped in new value, oldNextOffset=" << oldNextOffset << endl;
 
    // Write into the bucket
    {
@@ -170,13 +123,21 @@ void HashTableClient::insert(const Entry &entry)
       network.postWorkRequest(targetHost, workRequest);
       network.waitForCompletionSend();
    }
-
-   cout << "bucket has been written" << endl;
 }
 //---------------------------------------------------------------------------
-uint32_t HashTableClient::count(uint64_t)
+uint32_t HashTableClient::count(uint64_t) const
 {
-   return -1;
+   throw;
+}
+//---------------------------------------------------------------------------
+void HashTableClient::dump() const
+{
+   cout << "> HashTableClient" << endl;
+   cout << ">   hostCount= " << hostCount << endl;
+   cout << ">   entryCountPerHost= " << entryCountPerHost << endl;
+   cout << ">   maskForPositionSelection= " << maskForPositionSelection << endl;
+   cout << ">   maskForHostSelection= " << maskForHostSelection << endl;
+   cout << ">   shiftForHostSelection= " << shiftForHostSelection << endl;
 }
 //---------------------------------------------------------------------------
 } // End of namespace dht
