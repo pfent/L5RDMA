@@ -87,22 +87,31 @@ const WorkRequest *WorkRequest::getNextWorkRequest()
    return next;
 }
 //---------------------------------------------------------------------------
-WriteWorkRequest::WriteWorkRequest()
+RDMAWorkRequest::RDMAWorkRequest()
 {
-   wr->opcode = IBV_WR_RDMA_WRITE;
 }
 //---------------------------------------------------------------------------
-void WriteWorkRequest::setLocalAddress(const MemoryRegion &localAddress)
+void RDMAWorkRequest::setLocalAddress(const MemoryRegion &localAddress)
 {
    wr->sg_list->addr = reinterpret_cast<uintptr_t>(localAddress.address);
    wr->sg_list->length = localAddress.size;
    wr->sg_list->lkey = localAddress.key->lkey;
 }
 //---------------------------------------------------------------------------
-void WriteWorkRequest::setRemoteAddress(const RemoteMemoryRegion &remoteAddress)
+void RDMAWorkRequest::setRemoteAddress(const RemoteMemoryRegion &remoteAddress)
 {
    wr->wr.rdma.remote_addr = remoteAddress.address;
    wr->wr.rdma.rkey = remoteAddress.key;
+}
+//---------------------------------------------------------------------------
+WriteWorkRequest::WriteWorkRequest()
+{
+   wr->opcode = IBV_WR_RDMA_WRITE;
+}
+//---------------------------------------------------------------------------
+ReadWorkRequest::ReadWorkRequest()
+{
+   wr->opcode = IBV_WR_RDMA_READ;
 }
 //---------------------------------------------------------------------------
 AtomicWorkRequest::AtomicWorkRequest()

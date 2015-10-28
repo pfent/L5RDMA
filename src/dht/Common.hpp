@@ -47,9 +47,26 @@ struct Entry {
    std::array<uint64_t, 1> payload;
 };
 //---------------------------------------------------------------------------
+struct BucketLocator {
+   BucketLocator(uint64_t host, uint64_t offset)
+           : data((host << 48) | offset)
+   {
+      assert(host<(1ull << 16));
+      assert(offset<(1ull << 48));
+   }
+   BucketLocator()
+           : data(-1) { }
+
+   uint64_t getHost() const { return data >> 48; } // Upper 16 bit
+   uint64_t getOffset() const { return data & ((1ull << 48) - 1); } // Lower 48 bit
+
+   uint64_t data;
+};
+static_assert(sizeof(BucketLocator) == sizeof(uint64_t), ""); // TODO: is sizeof(uint64_t) stupid ?
+//---------------------------------------------------------------------------
 struct Bucket {
    Entry entry;
-   uint64_t next;
+   BucketLocator next;
 };
 //---------------------------------------------------------------------------
 } // End of namespace dht

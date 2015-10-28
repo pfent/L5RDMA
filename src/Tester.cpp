@@ -36,16 +36,19 @@
 #include <cassert>
 #include <unistd.h>
 #include <zmq.hpp>
+#include <unordered_map>
 //---------------------------------------------------------------------------
 using namespace std;
 using namespace rdma;
 //---------------------------------------------------------------------------
 void runCode(util::TestHarness &testHarness)
 {
+   const uint64_t kEntriesPerHost = 32;
+
    // 1. Start Server
    // Allocate and pin rdma enabled remote memory regions
    // Start zmq socket (REP), which can be used by the clients to retrieve information about memory regions
-   dht::HashTableServer localHashTableServer(testHarness.network, 32, 1024 * 1024);
+   dht::HashTableServer localHashTableServer(testHarness.network, kEntriesPerHost, 1024 * 1024);
    localHashTableServer.startAddressServiceAsync(testHarness.context, util::getHostname(), 8222);
    if (getenv("VERBOSE"))
       localHashTableServer.dumpMemoryRegions();
@@ -57,28 +60,38 @@ void runCode(util::TestHarness &testHarness)
       dht::HashTableLocation hashTableLocation = {(int) i, testHarness.peerInfos[i].hostname, 8222};
       hashTableLocations.push_back(hashTableLocation);
    }
-
-   // 3. Client
-   // Connect zmq (REQ) socket to each node and retrieve shared memory regions
    dht::HashTableNetworkLayout hashTableNetworkLayout;
    hashTableNetworkLayout.retrieveRemoteMemoryRegions(testHarness.context, hashTableLocations);
    if (getenv("VERBOSE"))
       hashTableNetworkLayout.dump();
-   dht::HashTableClient distributedHashTableClient(testHarness.network, hashTableNetworkLayout, localHashTableServer, 32);
+
+   // 3. Client
+   // Connect zmq (REQ) socket to each node and retrieve shared memory regions
+   dht::HashTableClient distributedHashTableClient(testHarness.network, hashTableNetworkLayout, localHashTableServer, testHarness.localId, kEntriesPerHost);
    if (getenv("VERBOSE"))
       distributedHashTableClient.dump();
 
    // 4. Test
    srand(0);
+   unordered_multimap <uint64_t, uint64_t> reference;
    for (int j = 0; j<10; ++j) {
-      distributedHashTableClient.insert(dht::Entry{rand() % 100ull, {0xdeadbeef}});
+      uint64_t key = rand();
+      distributedHashTableClient.insert({key, {0xdeadbeef}});
+      reference.insert(make_pair(key, 0xdeadbeef));
    }
 
    // 5. Done
-   cout << "[PRESS ENTER TO CONTINUE]" << endl;
+   cout << "[PRESS ENTER TO PRINT HT]" << endl;
    cin.get();
    if (getenv("VERBOSE"))
-      localHashTableServer.dumpHashTableContent();
+      localHashTableServer.dumpHashTableContent(hashTableNetworkLayout);
+   for (auto iter: reference) {
+      uint32_t my_result = distributedHashTableClient.count(iter.first);
+      uint32_t ref_result = reference.count(iter.first);
+      assert(my_result == 2 * ref_result);
+   }
+   cout << "[PRESS ENTER TO CONTINUE]" << endl;
+   cin.get();
 }
 //---------------------------------------------------------------------------
 int main(int argc, char **argv)

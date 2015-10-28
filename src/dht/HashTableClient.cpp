@@ -33,10 +33,11 @@ using namespace std;
 //---------------------------------------------------------------------------
 namespace dht {
 //---------------------------------------------------------------------------
-HashTableClient::HashTableClient(rdma::Network &network, HashTableNetworkLayout &remoteTables, HashTableServer &localServer, uint64_t entryCountPerHost)
+HashTableClient::HashTableClient(rdma::Network &network, HashTableNetworkLayout &remoteTables, HashTableServer &localServer, uint64_t localHostId, uint64_t entryCountPerHost)
         : network(network)
           , remoteTables(remoteTables)
           , localServer(localServer)
+          , localHostId(localHostId)
           , hostCount(remoteTables.remoteHashTables.size())
           , entryCountPerHost(entryCountPerHost)
           , totalEntryCount(hostCount * entryCountPerHost)
@@ -55,84 +56,103 @@ HashTableClient::~HashTableClient()
 //---------------------------------------------------------------------------
 void HashTableClient::insert(const Entry &entry)
 {
-   cout << "insert: " << entry.key << endl;
-
    uint64_t targetHost = (entry.key & maskForHostSelection) >> shiftForHostSelection;
    uint64_t targetHtIndex = (entry.key & maskForPositionSelection);
 
    // Obtain memory for the bucket
-   uint64_t newBucketOffset;
-   {
-      // Pin local memory
-      vector <uint64_t> shared(1);
-      rdma::MemoryRegion sharedMR(shared.data(), sizeof(uint64_t) * shared.size(), network.getProtectionDomain(), rdma::MemoryRegion::Permission::All);
-
-      // Create work request
-      rdma::AtomicFetchAndAddWorkRequest workRequest;
-      workRequest.setId(8028);
-      workRequest.setLocalAddress(sharedMR);
-      workRequest.setRemoteAddress(remoteTables.remoteHashTables[targetHost].nextFreeOffsetRmr);
-      workRequest.setAddValue(1);
-      workRequest.setCompletion(true);
-
-      network.postWorkRequest(targetHost, workRequest);
-      network.waitForCompletionSend();
-      newBucketOffset = shared[0];
-   }
+   uint64_t bucketOffset = localServer.nextFreeOffset++;
+   BucketLocator bucketLocator(localHostId, bucketOffset);
 
    // Compare and swap the new value in
-   uint64_t oldNextOffset;
+   BucketLocator oldNextIdentifier;
    {
-      // Pin local memory
-      vector <uint64_t> oldValue(1);
-      oldValue[0] = 0;
-      rdma::MemoryRegion oldValueMR(oldValue.data(), sizeof(uint64_t) * oldValue.size(), network.getProtectionDomain(), rdma::MemoryRegion::Permission::All);
+      // TODO OPT: Pin local memory
+      vector <BucketLocator> oldBucketLocator(1);
+      rdma::MemoryRegion oldBucketLocatorMR(oldBucketLocator.data(), sizeof(uint64_t) * oldBucketLocator.size(), network.getProtectionDomain(), rdma::MemoryRegion::Permission::All);
 
       // Create work request
       rdma::AtomicCompareAndSwapWorkRequest workRequest;
       workRequest.setId(8029);
-      workRequest.setLocalAddress(oldValueMR);
+      workRequest.setLocalAddress(oldBucketLocatorMR);
       rdma::RemoteMemoryRegion htRmr = remoteTables.remoteHashTables[targetHost].htRmr;
-      workRequest.setRemoteAddress(rdma::RemoteMemoryRegion{htRmr.address + targetHtIndex * sizeof(uint64_t), htRmr.key});
+      workRequest.setRemoteAddress(rdma::RemoteMemoryRegion{htRmr.address + targetHtIndex * sizeof(BucketLocator), htRmr.key});
       workRequest.setCompletion(true);
-      workRequest.setSwapValue(newBucketOffset);
+      workRequest.setSwapValue(bucketLocator.data);
 
       // Try swapping until it works
       do {
-         workRequest.setCompareValue(oldValue[0]);
+         workRequest.setCompareValue(oldBucketLocator[0].data);
          network.postWorkRequest(targetHost, workRequest);
          network.waitForCompletionSend();
-      } while (oldValue[0] != workRequest.getCompareValue());
-      oldNextOffset = oldValue[0];
+      } while (oldBucketLocator[0].data != workRequest.getCompareValue());
+      oldNextIdentifier = oldBucketLocator[0];
    }
 
    // Write into the bucket
    {
-      // Pin local memory
-      vector <Bucket> bucket(1, {entry, oldNextOffset});
-      rdma::MemoryRegion bucketMR(bucket.data(), sizeof(Bucket) * bucket.size(), network.getProtectionDomain(), rdma::MemoryRegion::Permission::All);
-
-      // Create work request
-      rdma::WriteWorkRequest workRequest;
-      workRequest.setId(8029);
-      workRequest.setLocalAddress(bucketMR);
-      rdma::RemoteMemoryRegion bucketsRmr = remoteTables.remoteHashTables[targetHost].bucketsRmr;
-      workRequest.setRemoteAddress(rdma::RemoteMemoryRegion{bucketsRmr.address + newBucketOffset * sizeof(Bucket), bucketsRmr.key});
-      workRequest.setCompletion(true);
-
-      network.postWorkRequest(targetHost, workRequest);
-      network.waitForCompletionSend();
+      localServer.bucketMemory[bucketOffset].entry = entry;
+      localServer.bucketMemory[bucketOffset].next = oldNextIdentifier;
    }
 }
 //---------------------------------------------------------------------------
-uint32_t HashTableClient::count(uint64_t) const
+uint32_t HashTableClient::count(uint64_t key) const
 {
-   throw;
+   uint64_t targetHost = (key & maskForHostSelection) >> shiftForHostSelection;
+   uint64_t targetHtIndex = (key & maskForPositionSelection);
+   uint32_t result = 0;
+
+   // Read from ht
+   // TODO OPT: read directly if local
+   BucketLocator next;
+   {
+      // TODO OPT: Pin local memory
+      vector <BucketLocator> bucketLocator(1);
+      rdma::MemoryRegion bucketLocatorMR(bucketLocator.data(), sizeof(bucketLocator[0]) * bucketLocator.size(), network.getProtectionDomain(), rdma::MemoryRegion::Permission::All);
+
+      rdma::ReadWorkRequest workRequest;
+      workRequest.setId(8029);
+      workRequest.setLocalAddress(bucketLocatorMR);
+      rdma::RemoteMemoryRegion htRmr = remoteTables.remoteHashTables[targetHost].htRmr;
+      workRequest.setRemoteAddress(rdma::RemoteMemoryRegion{htRmr.address + targetHtIndex * sizeof(BucketLocator), htRmr.key});
+      workRequest.setCompletion(true);
+      network.postWorkRequest(targetHost, workRequest);
+      network.waitForCompletionSend();
+      next = bucketLocator[0];
+   }
+
+   // Follow ptr chain
+   // TODO OPT: Pin local memory
+   vector <Bucket> bucket(1);
+   rdma::MemoryRegion bucketMR(bucket.data(), sizeof(Bucket) * bucket.size(), network.getProtectionDomain(), rdma::MemoryRegion::Permission::All);
+   {
+      while (next.data) {
+         // Read from remote host
+         Bucket b;
+         {
+            rdma::ReadWorkRequest workRequest;
+            workRequest.setId(8029);
+            workRequest.setLocalAddress(bucketMR);
+            rdma::RemoteMemoryRegion bucketRmr = remoteTables.remoteHashTables[next.getHost()].bucketsRmr;
+            workRequest.setRemoteAddress(rdma::RemoteMemoryRegion{bucketRmr.address + next.getOffset() * sizeof(Bucket), bucketRmr.key});
+            workRequest.setCompletion(true);
+            network.postWorkRequest(next.getHost(), workRequest);
+            network.waitForCompletionSend();
+            b = bucket[0];
+         }
+
+         if (b.entry.key == key)
+            result++;
+         next = b.next;
+      }
+   }
+
+   return result;
 }
 //---------------------------------------------------------------------------
 void HashTableClient::dump() const
 {
    cout << "> HashTableClient" << endl;
+   cout << ">   localHostId= " << localHostId << endl;
    cout << ">   hostCount= " << hostCount << endl;
    cout << ">   entryCountPerHost= " << entryCountPerHost << endl;
    cout << ">   maskForPositionSelection= " << maskForPositionSelection << endl;

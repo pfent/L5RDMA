@@ -38,7 +38,7 @@ struct HashTableServer;
 //---------------------------------------------------------------------------
 class HashTableClient : public util::NotAssignable {
 public:
-   HashTableClient(rdma::Network &network, HashTableNetworkLayout &remoteTables, HashTableServer &localServer, uint64_t entryCountPerHost);
+   HashTableClient(rdma::Network &network, HashTableNetworkLayout &remoteTables, HashTableServer &localServer, uint64_t localHostId, uint64_t entryCountPerHost);
    ~HashTableClient();
 
    void insert(const Entry &entry);
@@ -50,6 +50,8 @@ private:
    rdma::Network &network;
    HashTableNetworkLayout &remoteTables;
    HashTableServer &localServer;
+
+   const uint64_t localHostId;
 
    const uint64_t hostCount;
    const uint64_t entryCountPerHost;

@@ -59,18 +59,32 @@ public:
    const WorkRequest *getNextWorkRequest();
 };
 //---------------------------------------------------------------------------
-class WriteWorkRequest : public WorkRequest {
+class RDMAWorkRequest : public WorkRequest { // Read & Write
 public:
-   WriteWorkRequest();
+   RDMAWorkRequest();
 
-   /// Remote memory address (location to be written to)
+   /// Remote memory address
+   /// For READ: location to be read from
+   /// For WRITE: location to be written to
    void setRemoteAddress(const RemoteMemoryRegion &remoteAddress);
 
-   /// Local memory address (location to be read from)
+   /// Local memory address
+   /// For READ: location to be written to
+   /// For WRITE: location to be read from
    void setLocalAddress(const MemoryRegion &localAddress);
 };
 //---------------------------------------------------------------------------
-class AtomicWorkRequest : public WorkRequest {
+class ReadWorkRequest : public RDMAWorkRequest {
+public:
+   ReadWorkRequest();
+};
+//---------------------------------------------------------------------------
+class WriteWorkRequest : public RDMAWorkRequest {
+public:
+   WriteWorkRequest();
+};
+//---------------------------------------------------------------------------
+class AtomicWorkRequest : public WorkRequest { // Fetch_Add & Compare_Swap
 public:
    AtomicWorkRequest();
 

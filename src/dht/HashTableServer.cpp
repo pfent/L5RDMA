@@ -19,8 +19,10 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 // ---------------------------------------------------------------------------
 #include "HashTableServer.hpp"
+#include "HashTableNetworkLayout.hpp"
 #include "rdma/MemoryRegion.hpp"
 #include "rdma/Network.hpp"
+#include "rdma/WorkRequest.hpp"
 #include "util/Utility.hpp"
 //---------------------------------------------------------------------------
 #include <cstring>
@@ -33,7 +35,10 @@ using namespace std;
 namespace dht {
 //---------------------------------------------------------------------------
 HashTableServer::HashTableServer(rdma::Network &network, uint32_t htSize, uint32_t maxBucketCount)
-        : htMemory(htSize, {0}), bucketMemory(maxBucketCount), nextFreeOffset(1) // First bucket is the "invalid bucket"
+        : htMemory(htSize, BucketLocator(0, 0))
+          , bucketMemory(maxBucketCount)
+          , nextFreeOffset(1) // First bucket is the "invalid bucket"
+          , network(network)
 {
    // Pin memory regions
    htMr = make_unique<rdma::MemoryRegion>(htMemory.data(), sizeof(htMemory[0]) * htSize, network.getProtectionDomain(), rdma::MemoryRegion::Permission::All); // All - because who cares, it's research :)
@@ -90,15 +95,33 @@ void HashTableServer::dumpMemoryRegions()
    }
 }
 //---------------------------------------------------------------------------
-void HashTableServer::dumpHashTableContent()
+void HashTableServer::dumpHashTableContent(HashTableNetworkLayout &hashTableNetworkLayout)
 {
+   // Pin local memory
+   vector <Bucket> bucket(1);
+   rdma::MemoryRegion bucketMR(bucket.data(), sizeof(Bucket) * bucket.size(), network.getProtectionDomain(), rdma::MemoryRegion::Permission::All);
+
    for (uint i = 0; i<htMemory.size(); ++i) {
       cout << "[" << i << "]";
-      uint64_t next = htMemory[i];
-      while (next) {
-         Bucket &bucket = bucketMemory[next];
-         cout << " -> " << bucket.entry.key;
-         next = bucket.next;
+      BucketLocator next = htMemory[i];
+      while (next.data) {
+         // Read from remote host
+         Bucket b;
+         {
+            rdma::ReadWorkRequest workRequest;
+            workRequest.setId(8029);
+            workRequest.setLocalAddress(bucketMR);
+            rdma::RemoteMemoryRegion bucketRmr = hashTableNetworkLayout.remoteHashTables[next.getHost()].bucketsRmr;
+            workRequest.setRemoteAddress(rdma::RemoteMemoryRegion{bucketRmr.address + next.getOffset() * sizeof(Bucket), bucketRmr.key});
+            workRequest.setCompletion(true);
+            network.postWorkRequest(next.getHost(), workRequest);
+            network.waitForCompletionSend();
+            b = bucket[0];
+         }
+
+         cout << " -> " << next.getHost() << ":" << next.getOffset() << flush;
+         cout << " [key=" << b.entry.key << "]" << flush;
+         next = b.next;
       }
       cout << " -> ∅" << endl;
    }

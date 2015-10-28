@@ -35,8 +35,7 @@ struct ibv_send_wr;
 //---------------------------------------------------------------------------
 namespace dht { // Distributed Hash Table
 //---------------------------------------------------------------------------
-struct RemoteMemoryRegion;
-struct MemoryRegion;
+struct HashTableNetworkLayout;
 //---------------------------------------------------------------------------
 struct HashTableServer : public util::NotAssignable {
 
@@ -45,13 +44,15 @@ struct HashTableServer : public util::NotAssignable {
    void startAddressServiceAsync(zmq::context_t &context, std::string hostname, int port);
 
    void dumpMemoryRegions();
-   void dumpHashTableContent();
+   void dumpHashTableContent(HashTableNetworkLayout &hashTableNetworkLayout);
 
-private:
    // Memory itself
-   std::vector <uint64_t> htMemory;
+   std::vector <BucketLocator> htMemory;
    std::vector <Bucket> bucketMemory;
    uint64_t nextFreeOffset;
+
+private:
+   rdma::Network &network;
 
    // Pinned memory (underlying memory is declared above)
    std::unique_ptr <rdma::MemoryRegion> htMr;
