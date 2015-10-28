@@ -87,6 +87,41 @@ const WorkRequest *WorkRequest::getNextWorkRequest()
    return next;
 }
 //---------------------------------------------------------------------------
+WriteWorkRequest::WriteWorkRequest()
+{
+   wr->opcode = IBV_WR_RDMA_WRITE;
+}
+//---------------------------------------------------------------------------
+void WriteWorkRequest::setLocalAddress(const MemoryRegion &localAddress)
+{
+   wr->sg_list->addr = reinterpret_cast<uintptr_t>(localAddress.address);
+   wr->sg_list->length = localAddress.size;
+   wr->sg_list->lkey = localAddress.key->lkey;
+}
+//---------------------------------------------------------------------------
+void WriteWorkRequest::setRemoteAddress(const RemoteMemoryRegion &remoteAddress)
+{
+   wr->wr.rdma.remote_addr = remoteAddress.address;
+   wr->wr.rdma.rkey = remoteAddress.key;
+}
+//---------------------------------------------------------------------------
+AtomicWorkRequest::AtomicWorkRequest()
+{
+}
+//---------------------------------------------------------------------------
+void AtomicWorkRequest::setRemoteAddress(const RemoteMemoryRegion &remoteAddress)
+{
+   wr->wr.atomic.remote_addr = remoteAddress.address;
+   wr->wr.atomic.rkey = remoteAddress.key;
+}
+//---------------------------------------------------------------------------
+void AtomicWorkRequest::setLocalAddress(const MemoryRegion &localAddress)
+{
+   wr->sg_list->addr = reinterpret_cast<uintptr_t>(localAddress.address);
+   wr->sg_list->length = localAddress.size;
+   wr->sg_list->lkey = localAddress.key->lkey;
+}
+//---------------------------------------------------------------------------
 AtomicFetchAndAddWorkRequest::AtomicFetchAndAddWorkRequest()
 {
    wr->opcode = IBV_WR_ATOMIC_FETCH_AND_ADD;
@@ -102,34 +137,29 @@ uint64_t AtomicFetchAndAddWorkRequest::getAddValue() const
    return wr->wr.atomic.compare_add;
 }
 //---------------------------------------------------------------------------
-void AtomicFetchAndAddWorkRequest::setRemoteAddress(const RemoteMemoryRegion &remoteAddress)
+AtomicCompareAndSwapWorkRequest::AtomicCompareAndSwapWorkRequest()
 {
-   wr->wr.atomic.remote_addr = remoteAddress.address;
-   wr->wr.atomic.rkey = remoteAddress.key;
+   wr->opcode = IBV_WR_ATOMIC_CMP_AND_SWP;
 }
 //---------------------------------------------------------------------------
-void AtomicFetchAndAddWorkRequest::setLocalAddress(const MemoryRegion &localAddress)
+void AtomicCompareAndSwapWorkRequest::setCompareValue(uint64_t value)
 {
-   wr->sg_list->addr = reinterpret_cast<uintptr_t>(localAddress.address);
-   wr->sg_list->length = localAddress.size;
-   wr->sg_list->lkey = localAddress.key->lkey;
+   wr->wr.atomic.compare_add = value;
 }
 //---------------------------------------------------------------------------
-WriteWorkRequest::WriteWorkRequest()
+uint64_t AtomicCompareAndSwapWorkRequest::getCompareValue() const
 {
+   return wr->wr.atomic.compare_add;
 }
 //---------------------------------------------------------------------------
-void WriteWorkRequest::setLocalAddress(const MemoryRegion &localAddress)
+void AtomicCompareAndSwapWorkRequest::setSwapValue(uint64_t value)
 {
-   wr->sg_list->addr = reinterpret_cast<uintptr_t>(localAddress.address);
-   wr->sg_list->length = localAddress.size;
-   wr->sg_list->lkey = localAddress.key->lkey;
+   wr->wr.atomic.swap = value;
 }
 //---------------------------------------------------------------------------
-void WriteWorkRequest::setRemoteAddress(const RemoteMemoryRegion &remoteAddress)
+uint64_t AtomicCompareAndSwapWorkRequest::getSwapValue() const
 {
-   wr->wr.rdma.remote_addr = remoteAddress.address;
-   wr->wr.rdma.rkey = remoteAddress.key;
+   return wr->wr.atomic.swap;
 }
 //---------------------------------------------------------------------------
 } // End of namespace rdma

@@ -39,42 +39,39 @@
 using namespace std;
 using namespace rdma;
 //---------------------------------------------------------------------------
-void runServerCode(util::TestHarness &testHarness)
+void runCode(util::TestHarness &testHarness)
 {
+   // 1. Start Server
    // Allocate and pin rdma enabled remote memory regions
-   dht::HashTableServer hashTableServer(testHarness.network, 32, 1024 * 1024);
-
    // Start zmq socket (REP), which can be used by the clients to retrieve information about memory regions
+   dht::HashTableServer hashTableServer(testHarness.network, 32, 1024 * 1024);
    hashTableServer.startAddressServiceAsync(testHarness.context, util::getHostname(), 8222);
    hashTableServer.dumpMemoryRegions();
 
-   // Done
-   cout << "[PRESS ENTER TO CONTINUE]" << endl;
-   cin.get();
-
-   // Dump
-   hashTableServer.dumpHashTableContent();
-}
-//---------------------------------------------------------------------------
-void runClientCode(util::TestHarness &testHarness)
-{
+   // 2. Network info
    // Create vector with containing node identifiers for all nodes, which host a part of the distributed hash table
-   int hashTableHostQPId = 0;
-   dht::HashTableLocation hashTableLocation = {hashTableHostQPId, testHarness.peerInfos[0].hostname, 8222};
-   vector <dht::HashTableLocation> hashTableLocations = {hashTableLocation};
+   vector <dht::HashTableLocation> hashTableLocations;
+   for (uint i = 0; i<testHarness.peerInfos.size(); ++i) {
+      dht::HashTableLocation hashTableLocation = {(int) i, testHarness.peerInfos[i].hostname, 8222};
+      hashTableLocations.push_back(hashTableLocation);
+   }
 
+   // 3. Client
    // Connect zmq (REQ) socket to each node and retrieve shared memory regions
    dht::HashTableNetworkLayout hashTableNetworkLayout;
    hashTableNetworkLayout.retrieveRemoteMemoryRegions(testHarness.context, hashTableLocations);
    hashTableNetworkLayout.dump();
+   dht::HashTableClient distributedHashTableClient(testHarness.network, hashTableNetworkLayout, hashTableServer, 32);
 
-   // Create a hash table client
-   hashTableNetworkLayout.remoteHashTables.push_back(hashTableNetworkLayout.remoteHashTables.back());
-   hashTableNetworkLayout.remoteHashTables.push_back(hashTableNetworkLayout.remoteHashTables.back());
-   hashTableNetworkLayout.remoteHashTables.push_back(hashTableNetworkLayout.remoteHashTables.back());
+   // 4. Test
+   for (int j = 0; j<10; ++j) {
+      distributedHashTableClient.insert(dht::Entry{rand() % 100ull, {0xdeadbeef}});
+   }
 
-   dht::HashTableClient distributedHashTableClient(testHarness.network, hashTableNetworkLayout, 32);
-//   distributedHashTableClient.insert(dht::Entry{42, {0xdeadbeef}});
+   // 5. Done
+   cout << "[PRESS ENTER TO CONTINUE]" << endl;
+   cin.get();
+   hashTableServer.dumpHashTableContent();
 }
 //---------------------------------------------------------------------------
 int main(int argc, char **argv)
@@ -87,16 +84,12 @@ int main(int argc, char **argv)
    uint32_t nodeCount = atoi(argv[1]);
    string coordinatorName = argv[2];
 
-   // Create Network
+   // Create Network/**/
    zmq::context_t context(1);
    util::TestHarness testHarness(context, nodeCount, coordinatorName);
    testHarness.createFullyConnectedNetwork();
 
    // Run performance tests
-   if (testHarness.localId == 0) {
-      runServerCode(testHarness);
-   } else {
-      runClientCode(testHarness);
-   }
+   runCode(testHarness);
 }
 //---------------------------------------------------------------------------

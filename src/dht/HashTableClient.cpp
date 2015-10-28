@@ -70,8 +70,8 @@ void HashTableNetworkLayout::dump()
    }
 }
 //---------------------------------------------------------------------------
-HashTableClient::HashTableClient(rdma::Network &network, HashTableNetworkLayout &remoteTables, uint64_t entryCountPerHost)
-        : network(network), remoteTables(remoteTables)
+HashTableClient::HashTableClient(rdma::Network &network, HashTableNetworkLayout &remoteTables, HashTableServer& localServer, uint64_t entryCountPerHost)
+        : network(network), remoteTables(remoteTables), localServer(localServer)
 {
    uint64_t hostCount = remoteTables.remoteHashTables.size();
    uint64_t entryCount = hostCount * entryCountPerHost;
@@ -100,11 +100,13 @@ HashTableClient::~HashTableClient()
 //---------------------------------------------------------------------------
 void HashTableClient::insert(const Entry &entry)
 {
+   cout << "starting insert " << endl;
+
    uint64_t targetHost = (entry.key & maskForHostSelection) >> shiftForHostSelection;
    uint64_t targetHtIndex = (entry.key & maskForPositionSelection);
 
    // Obtain memory for the bucket
-   uint64_t next;
+   uint64_t newBucketOffset;
    {
       // Pin local memory
       vector <uint64_t> shared(1);
@@ -114,38 +116,18 @@ void HashTableClient::insert(const Entry &entry)
       rdma::AtomicFetchAndAddWorkRequest workRequest;
       workRequest.setId(8028);
       workRequest.setLocalAddress(sharedMR);
-      workRequest.setRemoteAddress(remoteTables.remoteHashTables[0].nextFreeOffsetRmr);
+      workRequest.setRemoteAddress(remoteTables.remoteHashTables[targetHost].nextFreeOffsetRmr);
       workRequest.setAddValue(1);
       workRequest.setCompletion(true);
 
       network.postWorkRequest(targetHost, workRequest);
       network.waitForCompletionSend();
-      next = shared[0];
+      newBucketOffset = shared[0];
    }
-
-   cout << "next = " << next << endl;
-
-   // Write into the bucket
-   {
-      // Pin local memory
-      vector <Bucket> bucket(1, {entry, 0});
-      rdma::MemoryRegion bucketMR(bucket.data(), sizeof(Bucket) * bucket.size(), network.getProtectionDomain(), rdma::MemoryRegion::Permission::All);
-
-      // Create work request
-      rdma::WriteWorkRequest workRequest;
-      workRequest.setId(8029);
-      workRequest.setLocalAddress(bucketMR);
-      rdma::RemoteMemoryRegion bucketsRmr = remoteTables.remoteHashTables[targetHost].bucketsRmr;
-      workRequest.setRemoteAddress(rdma::RemoteMemoryRegion{bucketsRmr.address + next * sizeof(Bucket), bucketsRmr.key});
-      workRequest.setCompletion(true);
-
-      network.postWorkRequest(targetHost, workRequest);
-      network.waitForCompletionSend();
-   }
-
-   cout << "bucket has been written" << endl;
+   cout << "newBucketOffset = " << newBucketOffset << endl;
 
    // Compare and swap the new value in
+   uint64_t oldNextOffset;
    {
       // Pin local memory
       vector <uint64_t> oldValue(1);
@@ -153,16 +135,43 @@ void HashTableClient::insert(const Entry &entry)
       rdma::MemoryRegion oldValueMR(oldValue.data(), sizeof(uint64_t) * oldValue.size(), network.getProtectionDomain(), rdma::MemoryRegion::Permission::All);
 
       // Create work request
-      rdma::WriteWorkRequest workRequest;
+      rdma::AtomicCompareAndSwapWorkRequest workRequest;
       workRequest.setId(8029);
       workRequest.setLocalAddress(oldValueMR);
       rdma::RemoteMemoryRegion htRmr = remoteTables.remoteHashTables[targetHost].htRmr;
       workRequest.setRemoteAddress(rdma::RemoteMemoryRegion{htRmr.address + targetHtIndex * sizeof(uint64_t), htRmr.key});
       workRequest.setCompletion(true);
+      workRequest.setSwapValue(newBucketOffset);
 
-      while (1) {
-      }
+      // Try swapping until it works
+      do {
+         workRequest.setCompareValue(oldValue[0]);
+         network.postWorkRequest(targetHost, workRequest);
+         network.waitForCompletionSend();
+      } while (oldValue[0] != workRequest.getCompareValue());
+      oldNextOffset = oldValue[0];
    }
+   cout << "swapped in new value, oldNextOffset=" << oldNextOffset << endl;
+
+   // Write into the bucket
+   {
+      // Pin local memory
+      vector <Bucket> bucket(1, {entry, oldNextOffset});
+      rdma::MemoryRegion bucketMR(bucket.data(), sizeof(Bucket) * bucket.size(), network.getProtectionDomain(), rdma::MemoryRegion::Permission::All);
+
+      // Create work request
+      rdma::WriteWorkRequest workRequest;
+      workRequest.setId(8029);
+      workRequest.setLocalAddress(bucketMR);
+      rdma::RemoteMemoryRegion bucketsRmr = remoteTables.remoteHashTables[targetHost].bucketsRmr;
+      workRequest.setRemoteAddress(rdma::RemoteMemoryRegion{bucketsRmr.address + newBucketOffset * sizeof(Bucket), bucketsRmr.key});
+      workRequest.setCompletion(true);
+
+      network.postWorkRequest(targetHost, workRequest);
+      network.waitForCompletionSend();
+   }
+
+   cout << "bucket has been written" << endl;
 }
 //---------------------------------------------------------------------------
 uint32_t HashTableClient::count(uint64_t)

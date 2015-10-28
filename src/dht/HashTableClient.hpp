@@ -28,6 +28,7 @@
 #include "rdma/Network.hpp"
 #include "util/NotAssignable.hpp"
 #include "dht/Common.hpp"
+#include "dht/HashTableServer.hpp"
 //---------------------------------------------------------------------------
 struct ibv_send_wr;
 //---------------------------------------------------------------------------
@@ -56,7 +57,7 @@ struct HashTableNetworkLayout : public util::NotAssignable {
 //---------------------------------------------------------------------------
 class HashTableClient : public util::NotAssignable {
 public:
-   HashTableClient(rdma::Network &network, HashTableNetworkLayout &remoteTables, uint64_t entryCountPerHost);
+   HashTableClient(rdma::Network &network, HashTableNetworkLayout &remoteTables, HashTableServer& localServer, uint64_t entryCountPerHost);
    ~HashTableClient();
 
    void insert(const Entry &entry);
@@ -65,6 +66,7 @@ public:
 private:
    rdma::Network &network;
    HashTableNetworkLayout &remoteTables;
+   HashTableServer& localServer;
 
    uint64_t maskForHostSelection; // key & maskForHostSelection >> shiftForHostSelection = the id of the host where the ht resides
    uint64_t shiftForHostSelection; // key & maskForHostSelection >> shiftForHostSelection = the id of the host where the ht resides

@@ -59,21 +59,6 @@ public:
    const WorkRequest *getNextWorkRequest();
 };
 //---------------------------------------------------------------------------
-class AtomicFetchAndAddWorkRequest : public WorkRequest {
-public:
-   AtomicFetchAndAddWorkRequest();
-
-   /// The number to be added to the remote address
-   void setAddValue(uint64_t value);
-   uint64_t getAddValue() const;
-
-   /// Remote memory address (location of the add value)
-   void setRemoteAddress(const RemoteMemoryRegion &remoteAddress);
-
-   /// Local memory address (location to write what was at the remote )
-   void setLocalAddress(const MemoryRegion &localAddress);
-};
-//---------------------------------------------------------------------------
 class WriteWorkRequest : public WorkRequest {
 public:
    WriteWorkRequest();
@@ -83,6 +68,39 @@ public:
 
    /// Local memory address (location to be read from)
    void setLocalAddress(const MemoryRegion &localAddress);
+};
+//---------------------------------------------------------------------------
+class AtomicWorkRequest : public WorkRequest {
+public:
+   AtomicWorkRequest();
+
+   /// Remote memory address (location of the add value)
+   void setRemoteAddress(const RemoteMemoryRegion &remoteAddress);
+
+   /// Local memory address (location to write what was at the remote )
+   void setLocalAddress(const MemoryRegion &localAddress);
+};
+//---------------------------------------------------------------------------
+class AtomicFetchAndAddWorkRequest : public AtomicWorkRequest {
+public:
+   AtomicFetchAndAddWorkRequest();
+
+   /// The number to be added to the remote address
+   void setAddValue(uint64_t value);
+   uint64_t getAddValue() const;
+};
+//---------------------------------------------------------------------------
+class AtomicCompareAndSwapWorkRequest : public AtomicWorkRequest {
+public:
+   AtomicCompareAndSwapWorkRequest();
+
+   /// The number to be compared against
+   void setCompareValue(uint64_t value);
+   uint64_t getCompareValue() const;
+
+   /// The number to be swapped in
+   void setSwapValue(uint64_t value);
+   uint64_t getSwapValue() const;
 };
 //---------------------------------------------------------------------------
 } // End of namespace rdma
