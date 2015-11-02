@@ -23,6 +23,7 @@
 #include "rdma/Network.hpp"
 #include "rdma/WorkRequest.hpp"
 #include "rdma/QueuePair.hpp"
+#include "rdma/CompletionQueuePair.hpp"
 #include "util/Utility.hpp"
 #include "dht/HashTableNetworkLayout.hpp"
 #include "dht/HashTableServer.hpp"
@@ -83,8 +84,8 @@ void HashTableClient::insert(const Entry &entry)
       // Try swapping until it works
       do {
          workRequest.setCompareValue(oldBucketLocator[0].data);
-         remoteTables.remoteHashTables[targetHost].location.queuePair->postWorkRequest(workRequest);
-         network.waitForCompletionSend();
+         remoteTables.getLocation(targetHost).queuePair->postWorkRequest(workRequest);
+         remoteTables.getLocation(targetHost).queuePair->getCompletionQueuePair().waitForCompletionSend();
       } while (oldBucketLocator[0].data != workRequest.getCompareValue());
       oldNextIdentifier = oldBucketLocator[0];
    }
@@ -118,7 +119,7 @@ uint32_t HashTableClient::count(uint64_t key) const
       workRequest.setRemoteAddress(rdma::RemoteMemoryRegion{remote.htRmr.address + targetHtIndex * sizeof(BucketLocator), remote.htRmr.key});
       workRequest.setCompletion(true);
       remote.location.queuePair->postWorkRequest(workRequest);
-      network.waitForCompletionSend();
+      remote.location.queuePair->getCompletionQueuePair().waitForCompletionSend();
       next = bucketLocator[0];
    }
 
@@ -139,7 +140,7 @@ uint32_t HashTableClient::count(uint64_t key) const
             workRequest.setRemoteAddress(rdma::RemoteMemoryRegion{remote.bucketsRmr.address + next.getOffset() * sizeof(Bucket), remote.bucketsRmr.key});
             workRequest.setCompletion(true);
             remote.location.queuePair->postWorkRequest(workRequest);
-            network.waitForCompletionSend();
+            remote.location.queuePair->getCompletionQueuePair().waitForCompletionSend();
             b = bucket[0];
          }
 

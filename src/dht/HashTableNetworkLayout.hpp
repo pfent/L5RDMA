@@ -44,10 +44,6 @@ struct MemoryRegion;
 /// Gathers and stores information about remote shared hash tables (locals are treated as remote, because of atomicity (ask alex))
 struct HashTableNetworkLayout : public util::NotAssignable {
 
-   HashTableNetworkLayout();
-   void retrieveRemoteMemoryRegions(zmq::context_t &context, const std::vector <HashTableLocation> &tableLocations);
-   void dump();
-
    struct RemoteHashTableInfo {
       HashTableLocation location;
 
@@ -57,6 +53,16 @@ struct HashTableNetworkLayout : public util::NotAssignable {
    };
 
    std::vector <RemoteHashTableInfo> remoteHashTables;
+
+   HashTableNetworkLayout();
+   void retrieveRemoteMemoryRegions(zmq::context_t &context, const std::vector <HashTableLocation> &tableLocations);
+   void dump();
+
+   // Helper for easy access
+   const HashTableLocation &getLocation(uint i) const { return remoteHashTables[i].location; }
+   const rdma::RemoteMemoryRegion &getHtRmr(uint i) const { return remoteHashTables[i].htRmr; }
+   const rdma::RemoteMemoryRegion &getBucketsRmr(uint i) const { return remoteHashTables[i].bucketsRmr; }
+   const rdma::RemoteMemoryRegion &getNextFreeOffsetRmr(uint i) const { return remoteHashTables[i].nextFreeOffsetRmr; }
 };
 //---------------------------------------------------------------------------
 } // End of namespace dht

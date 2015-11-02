@@ -21,6 +21,7 @@
 #include "Utility.hpp"
 #include "rdma/QueuePair.hpp"
 #include "ConnectionSetup.hpp"
+#include "rdma/Network.hpp"
 // ---------------------------------------------------------------------------
 #include <iostream>
 #include <iomanip>
@@ -55,7 +56,7 @@ TestHarness::TestHarness(zmq::context_t &context, uint32_t nodeCount, const stri
 {
    // Setup queue pairs
    for (uint i = 0; i<nodeCount; ++i) {
-      queuePairs.push_back(network.createSharedQueuePair());
+      queuePairs.push_back(make_unique<rdma::QueuePair>(network));
    }
 
    // Request reply socket
@@ -81,7 +82,7 @@ void TestHarness::createFullyConnectedNetwork()
    // Create vector with QPs and hostname for each other client
    vector <PeerInfo> localQPInfos;
    for (uint32_t i = 0; i<nodeCount; ++i) {
-      PeerInfo peerInfo(rdma::Address{network.getLID(), queuePairs[i]->getQPN()}, util::getHostname());
+      PeerInfo peerInfo(rdma::Address { network.getLID(), queuePairs[i]->getQPN() }, util::getHostname());
       localQPInfos.push_back(peerInfo);
    }
    if (verbose)

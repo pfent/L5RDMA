@@ -22,45 +22,57 @@
 //---------------------------------------------------------------------------
 #include "util/NotAssignable.hpp"
 //---------------------------------------------------------------------------
-#include <memory>
+#include <vector>
+#include <cstdint>
+#include <mutex>
 //---------------------------------------------------------------------------
-struct ibv_send_wr;
-//---------------------------------------------------------------------------
-struct ibv_qp;
+struct ibv_comp_channel;
+struct ibv_srq;
 struct ibv_cq;
 //---------------------------------------------------------------------------
 namespace rdma {
 //---------------------------------------------------------------------------
-struct WorkRequest;
-struct Address;
 class Network;
-class CompletionQueuePair;
-class ReceiveQueue;
 //---------------------------------------------------------------------------
-class QueuePair : public util::NotAssignable {
-   ibv_qp *qp;
+class CompletionQueuePair : public util::NotAssignable {
+   friend class QueuePair;
 
-   Network &network;
+   /// The send completion queue
+   ibv_cq *sendQueue;
+   /// The receive completion queue
+   ibv_cq *receiveQueue;
+   /// The completion channel
+   ibv_comp_channel *channel;
 
-   CompletionQueuePair &completionQueuePair;
+   /// The cached work completions
+   std::vector <std::pair<bool, uint64_t>> cachedCompletions;
+   /// Protect wait for events method from concurrent access
+   std::mutex guard;
+
+   uint64_t pollCompletionQueue(ibv_cq *completionQueue, int type);
+   std::pair<bool, uint64_t> waitForCompletion(bool restrict, bool onlySend);
 
 public:
-   QueuePair(Network &network); // Uses shared completion and receive Queue
-   QueuePair(Network &network, ReceiveQueue &receiveQueue); // Uses shared completion Queue
-   QueuePair(Network &network, CompletionQueuePair &completionQueuePair); // Uses shared receive Queue
-   QueuePair(Network &network, CompletionQueuePair &completionQueuePair, ReceiveQueue &receiveQueue);
-   ~QueuePair();
+   /// Ctor
+   CompletionQueuePair(Network &network);
+   ~CompletionQueuePair();
 
-   uint32_t getQPN();
+   /// Poll the send completion queue
+   uint64_t pollSendCompletionQueue();
+   /// Poll the receive completion queue
+   uint64_t pollRecvCompletionQueue();
 
-   void connect(const Address &address, unsigned retryCount = 0);
+   // Poll a completion queue blocking
+   uint64_t pollCompletionQueueBlocking(ibv_cq *completionQueue, int type);
+   /// Poll the send completion queue blocking
+   uint64_t pollSendCompletionQueueBlocking();
+   /// Poll the receive completion queue blocking
+   uint64_t pollRecvCompletionQueueBlocking();
 
-   void postWorkRequest(const WorkRequest &workRequest);
-
-   /// Print detailed information about this queue pair
-   void printQueuePairDetails();
-
-   CompletionQueuePair &getCompletionQueuePair() { return completionQueuePair; }
+   /// Wait for a work request completion
+   std::pair<bool, uint64_t> waitForCompletion();
+   uint64_t waitForCompletionSend();
+   uint64_t waitForCompletionReceive();
 };
 //---------------------------------------------------------------------------
 } // End of namespace rdma

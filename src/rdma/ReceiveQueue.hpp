@@ -22,45 +22,26 @@
 //---------------------------------------------------------------------------
 #include "util/NotAssignable.hpp"
 //---------------------------------------------------------------------------
-#include <memory>
+#include <vector>
+#include <cstdint>
+#include <mutex>
 //---------------------------------------------------------------------------
-struct ibv_send_wr;
-//---------------------------------------------------------------------------
-struct ibv_qp;
-struct ibv_cq;
+struct ibv_srq;
 //---------------------------------------------------------------------------
 namespace rdma {
 //---------------------------------------------------------------------------
-struct WorkRequest;
-struct Address;
 class Network;
-class CompletionQueuePair;
-class ReceiveQueue;
 //---------------------------------------------------------------------------
-class QueuePair : public util::NotAssignable {
-   ibv_qp *qp;
+class ReceiveQueue : public util::NotAssignable {
+   friend class QueuePair;
+   friend class CompletionQueuePair;
 
-   Network &network;
-
-   CompletionQueuePair &completionQueuePair;
-
+   /// The receive queue
+   ibv_srq *queue;
 public:
-   QueuePair(Network &network); // Uses shared completion and receive Queue
-   QueuePair(Network &network, ReceiveQueue &receiveQueue); // Uses shared completion Queue
-   QueuePair(Network &network, CompletionQueuePair &completionQueuePair); // Uses shared receive Queue
-   QueuePair(Network &network, CompletionQueuePair &completionQueuePair, ReceiveQueue &receiveQueue);
-   ~QueuePair();
-
-   uint32_t getQPN();
-
-   void connect(const Address &address, unsigned retryCount = 0);
-
-   void postWorkRequest(const WorkRequest &workRequest);
-
-   /// Print detailed information about this queue pair
-   void printQueuePairDetails();
-
-   CompletionQueuePair &getCompletionQueuePair() { return completionQueuePair; }
+   /// Ctor
+   ReceiveQueue(Network &network);
+   ~ReceiveQueue();
 };
 //---------------------------------------------------------------------------
 } // End of namespace rdma

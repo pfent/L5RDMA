@@ -38,7 +38,8 @@ namespace rdma {
 //---------------------------------------------------------------------------
 class WorkRequest;
 class MemoryRegion;
-class QueuePair;
+class CompletionQueuePair;
+class ReceiveQueue;
 //---------------------------------------------------------------------------
 /// A network exception
 class NetworkException : public std::runtime_error {
@@ -60,9 +61,12 @@ struct Address {
 };
 std::ostream &operator<<(std::ostream &os, const Address &address);
 //---------------------------------------------------------------------------
-/// A network of nodes connected via RDMA
+/// Abstracts a global rdma context
 class Network {
-protected:
+   friend class CompletionQueuePair;
+   friend class ReceiveQueue;
+   friend class QueuePair;
+
    /// The minimal number of entries for the completion queue
    static const int CQ_SIZE = 100;
 
@@ -76,29 +80,9 @@ protected:
    /// The global protection domain
    ibv_pd *protectionDomain;
 
-   /// The shared send completion queue
-   ibv_cq *sharedCompletionQueueSend;
-   /// The shared receive completion queue
-   ibv_cq *sharedCompletionQueueRecv;
-   /// The shared completion channel
-   ibv_comp_channel *sharedCompletionChannel;
-   /// The shared receive queue
-   ibv_srq *sharedReceiveQueue;
-
-   /// The cached work completions
-   std::vector <std::pair<bool, uint64_t>> cachedCompletions;
-   std::mutex completionMutex;
-
-   /// Create queue pair
-   ibv_qp *createQueuePair(ibv_cq *cqSend, ibv_cq *cqRecv);
-   /// Poll a completion queue
-   uint64_t pollCompletionQueue(ibv_cq *completionQueue, int type);
-
-   /// Wait for a work request completion
-   std::pair<bool, uint64_t> waitForCompletion(bool restrict, bool onlySend);
-
-   /// Helper function to create a completion queue pair
-   void createSharedCompletionQueues();
+   /// Shared Queues
+   std::unique_ptr <CompletionQueuePair> sharedCompletionQueuePair;
+   std::unique_ptr <ReceiveQueue> sharedReceiveQueue;
 
 public:
    /// Constructor
@@ -108,26 +92,6 @@ public:
 
    /// Get the LID
    uint16_t getLID();
-   /// Create a queue pair with shared receive queues
-   std::unique_ptr <QueuePair> createSharedQueuePair();
-   void connectQueuePair(QueuePair &queuePair, const Address &address, unsigned retryCount);
-
-   /// Poll the send completion queue
-   uint64_t pollSendCompletionQueue();
-   /// Poll the receive completion queue
-   uint64_t pollRecvCompletionQueue();
-
-   // Poll a completion queue blocking
-   uint64_t pollCompletionQueueBlocking(ibv_cq *completionQueue, int type);
-   /// Poll the send completion queue blocking
-   uint64_t pollSendCompletionQueueBlocking();
-   /// Poll the receive completion queue blocking
-   uint64_t pollRecvCompletionQueueBlocking();
-
-   /// Wait for a work request completion
-   std::pair<bool, uint64_t> waitForCompletion();
-   uint64_t waitForCompletionSend();
-   uint64_t waitForCompletionReceive();
 
    /// Get the protection domain
    ibv_pd *getProtectionDomain() { return protectionDomain; }

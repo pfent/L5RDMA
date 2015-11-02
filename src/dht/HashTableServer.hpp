@@ -31,7 +31,9 @@
 #include "util/NotAssignable.hpp"
 #include "dht/Common.hpp"
 //---------------------------------------------------------------------------
-struct ibv_send_wr;
+namespace rdma {
+class QueuePair;
+}
 //---------------------------------------------------------------------------
 namespace dht { // Distributed Hash Table
 //---------------------------------------------------------------------------

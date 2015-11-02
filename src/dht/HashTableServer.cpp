@@ -24,6 +24,7 @@
 #include "rdma/Network.hpp"
 #include "rdma/WorkRequest.hpp"
 #include "rdma/QueuePair.hpp"
+#include "rdma/CompletionQueuePair.hpp"
 #include "util/Utility.hpp"
 //---------------------------------------------------------------------------
 #include <cstring>
@@ -117,7 +118,7 @@ void HashTableServer::dumpHashTableContent(HashTableNetworkLayout &hashTableNetw
             workRequest.setRemoteAddress(rdma::RemoteMemoryRegion{remote.bucketsRmr.address + next.getOffset() * sizeof(Bucket), remote.bucketsRmr.key});
             workRequest.setCompletion(true);
             remote.location.queuePair->postWorkRequest(workRequest);
-            network.waitForCompletionSend();
+            remote.location.queuePair->getCompletionQueuePair().waitForCompletionSend();
             b = bucket[0];
          }
 

@@ -28,7 +28,9 @@
 #include "rdma/Network.hpp"
 #include "util/NotAssignable.hpp"
 //---------------------------------------------------------------------------
-struct ibv_send_wr;
+namespace rdma {
+   class QueuePair;
+}
 //---------------------------------------------------------------------------
 namespace dht { // Distributed Hash Table
 //---------------------------------------------------------------------------
