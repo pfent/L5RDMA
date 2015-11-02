@@ -31,6 +31,7 @@ struct MemoryRegion;
 //---------------------------------------------------------------------------
 class WorkRequest {
    friend class Network;
+   friend class QueuePair;
 
 protected:
    std::unique_ptr <ibv_send_wr> wr;

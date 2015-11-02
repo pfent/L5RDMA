@@ -28,36 +28,64 @@
 #include "rdma/Network.hpp"
 #include "util/NotAssignable.hpp"
 #include "dht/Common.hpp"
-#include "dht/HashTableServer.hpp"
 //---------------------------------------------------------------------------
 struct ibv_send_wr;
 //---------------------------------------------------------------------------
-namespace rdma {
-class QueuePair;
-}
+namespace util { // Utility
 //---------------------------------------------------------------------------
-namespace dht { // Distributed Hash Table
-//---------------------------------------------------------------------------
-struct RemoteMemoryRegion;
-struct MemoryRegion;
-//---------------------------------------------------------------------------
-/// Gathers and stores information about remote shared hash tables (locals are treated as remote, because of atomicity (ask alex))
-struct HashTableNetworkLayout : public util::NotAssignable {
+template<class T> class FreeListPolicy { // TODO: copied from other project .. did not read it
+public:
+   T *allocate()
+   {
+      if (nextFreeElement != NULL) {
+         void *result = nextFreeElement;
+         nextFreeElement = nextFreeElement->next;
+         return (T *) result;
+      }
 
-   HashTableNetworkLayout();
-   void retrieveRemoteMemoryRegions(zmq::context_t &context, const std::vector <HashTableLocation> &tableLocations);
-   void dump();
+      if (positionInCurrentChunk>=Chunk::chunkSize) {
+         Chunk *lastChunk = currentChunk;
+         currentChunk = new Chunk();
+         lastChunk->next = currentChunk;
+         positionInCurrentChunk = 0;
+      }
 
-   struct RemoteHashTableInfo {
-      HashTableLocation location;
+      return (T *) (currentChunk->mem + (positionInCurrentChunk++ * sizeof(T)));
+   }
 
-      rdma::RemoteMemoryRegion htRmr;
-      rdma::RemoteMemoryRegion bucketsRmr;
-      rdma::RemoteMemoryRegion nextFreeOffsetRmr;
+   void free(void *data)
+   {
+      static_cast<FreeElement *>(data)->next = nextFreeElement;
+      nextFreeElement = static_cast<FreeElement *>(data);
+   }
+
+private:
+   struct Chunk {
+      Chunk()
+      {
+         mem = new uint8_t[chunkSize * sizeof(T)];
+         next = NULL;
+      }
+      ~Chunk()
+      {
+         delete[] mem;
+         if (next != NULL)
+            delete next;
+      }
+      static const uint64_t chunkSize = 64;
+      uint8_t *mem;
+      Chunk *next;
    };
 
-   std::vector <RemoteHashTableInfo> remoteHashTables;
+   struct FreeElement {
+      FreeElement *next;
+   };
+
+   static FreeElement *nextFreeElement;
+   static Chunk firstChunk;
+   static Chunk *currentChunk;
+   static uint32_t positionInCurrentChunk;
 };
 //---------------------------------------------------------------------------
-} // End of namespace dht
+} // End of namespace util
 //---------------------------------------------------------------------------

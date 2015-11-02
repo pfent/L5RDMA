@@ -19,6 +19,7 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 // ---------------------------------------------------------------------------
 #include "Utility.hpp"
+#include "rdma/QueuePair.hpp"
 #include "ConnectionSetup.hpp"
 // ---------------------------------------------------------------------------
 #include <iostream>
@@ -32,7 +33,8 @@ using namespace std;
 //---------------------------------------------------------------------------
 namespace util {
 //---------------------------------------------------------------------------
-PeerInfo::PeerInfo(const rdma::Address &address, const std::string &hostname) : address(address)
+PeerInfo::PeerInfo(const rdma::Address &address, const std::string &hostname)
+        : address(address)
 {
    assert(hostname.size()<PeerInfo::MAX_HOSTNAME_SIZE);
    auto length = hostname.copy(this->hostname, hostname.size());
@@ -44,8 +46,18 @@ ostream &operator<<(ostream &os, const PeerInfo &peerInfo)
    return os << "hostname='" << peerInfo.hostname << "', address={" << peerInfo.address << "}";
 };
 //---------------------------------------------------------------------------
-TestHarness::TestHarness(zmq::context_t &context, uint32_t nodeCount, const string &coordinatorHostName) : context(context), network(nodeCount), localId(-1), nodeCount(nodeCount), coordinatorHostName(coordinatorHostName), verbose(getenv("VERBOSE"))
+TestHarness::TestHarness(zmq::context_t &context, uint32_t nodeCount, const string &coordinatorHostName)
+        : context(context)
+          , localId(-1)
+          , nodeCount(nodeCount)
+          , coordinatorHostName(coordinatorHostName)
+          , verbose(getenv("VERBOSE"))
 {
+   // Setup queue pairs
+   for (uint i = 0; i<nodeCount; ++i) {
+      queuePairs.push_back(network.createSharedQueuePair());
+   }
+
    // Request reply socket
    masterSocket = make_unique<zmq::socket_t>(context, ZMQ_REQ);
    masterSocket->connect(("tcp://" + coordinatorHostName + ":8028").c_str());
@@ -59,13 +71,17 @@ TestHarness::TestHarness(zmq::context_t &context, uint32_t nodeCount, const stri
    usleep(100000); // = 100ms
 }
 //---------------------------------------------------------------------------
+TestHarness::~TestHarness()
+{
+}
+//---------------------------------------------------------------------------
 // requires a coordinator on [HOSTNAME] running "supportFullyConnectedNetworkCreation"
 void TestHarness::createFullyConnectedNetwork()
 {
    // Create vector with QPs and hostname for each other client
    vector <PeerInfo> localQPInfos;
    for (uint32_t i = 0; i<nodeCount; ++i) {
-      PeerInfo peerInfo(rdma::Address{network.getLID(), network.getQPN(i)}, util::getHostname());
+      PeerInfo peerInfo(rdma::Address{network.getLID(), queuePairs[i]->getQPN()}, util::getHostname());
       localQPInfos.push_back(peerInfo);
    }
    if (verbose)
@@ -98,7 +114,10 @@ void TestHarness::createFullyConnectedNetwork()
    }
 
    // Connect the rdma network
-   network.connect(remoteAddresses);
+   for (uint i = 0; i<queuePairs.size(); ++i) {
+      queuePairs[i]->connect(remoteAddresses[i]);
+   }
+
    if (verbose)
       cout << ">> Done" << endl;
 }
@@ -136,7 +155,8 @@ rdma::RemoteMemoryRegion TestHarness::retrieveAddress()
    return remoteMemoryRegion;
 }
 //---------------------------------------------------------------------------
-SetupSupport::SetupSupport(zmq::context_t &context) : context(context)
+SetupSupport::SetupSupport(zmq::context_t &context)
+        : context(context)
 {
    // Create sign-up socket
    masterSocket = make_unique<zmq::socket_t>(context, ZMQ_REP);

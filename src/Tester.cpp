@@ -57,7 +57,7 @@ void runCode(util::TestHarness &testHarness)
    // Create vector with containing node identifiers for all nodes, which host a part of the distributed hash table
    vector <dht::HashTableLocation> hashTableLocations;
    for (uint i = 0; i<testHarness.peerInfos.size(); ++i) {
-      dht::HashTableLocation hashTableLocation = {(int) i, testHarness.peerInfos[i].hostname, 8222};
+      dht::HashTableLocation hashTableLocation = {(int) i, testHarness.queuePairs[i].get(), testHarness.peerInfos[i].hostname, 8222};
       hashTableLocations.push_back(hashTableLocation);
    }
    dht::HashTableNetworkLayout hashTableNetworkLayout;

@@ -17,47 +17,21 @@
 //
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
-//---------------------------------------------------------------------------
-#pragma once
-//---------------------------------------------------------------------------
-#include <memory>
-#include <array>
-#include <vector>
-#include <zmq.hpp>
-//---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+#include "dht/HashTableClient.hpp"
+#include "rdma/MemoryRegion.hpp"
 #include "rdma/Network.hpp"
-#include "util/NotAssignable.hpp"
-#include "dht/Common.hpp"
+#include "rdma/WorkRequest.hpp"
+#include "util/Utility.hpp"
+#include "dht/HashTableNetworkLayout.hpp"
 #include "dht/HashTableServer.hpp"
 //---------------------------------------------------------------------------
-struct ibv_send_wr;
+#include <cstring>
+#include <iostream>
 //---------------------------------------------------------------------------
-namespace rdma {
-class QueuePair;
-}
+using namespace std;
 //---------------------------------------------------------------------------
-namespace dht { // Distributed Hash Table
-//---------------------------------------------------------------------------
-struct RemoteMemoryRegion;
-struct MemoryRegion;
-//---------------------------------------------------------------------------
-/// Gathers and stores information about remote shared hash tables (locals are treated as remote, because of atomicity (ask alex))
-struct HashTableNetworkLayout : public util::NotAssignable {
-
-   HashTableNetworkLayout();
-   void retrieveRemoteMemoryRegions(zmq::context_t &context, const std::vector <HashTableLocation> &tableLocations);
-   void dump();
-
-   struct RemoteHashTableInfo {
-      HashTableLocation location;
-
-      rdma::RemoteMemoryRegion htRmr;
-      rdma::RemoteMemoryRegion bucketsRmr;
-      rdma::RemoteMemoryRegion nextFreeOffsetRmr;
-   };
-
-   std::vector <RemoteHashTableInfo> remoteHashTables;
-};
+namespace dht {
 //---------------------------------------------------------------------------
 } // End of namespace dht
 //---------------------------------------------------------------------------

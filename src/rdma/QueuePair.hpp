@@ -20,44 +20,46 @@
 //---------------------------------------------------------------------------
 #pragma once
 //---------------------------------------------------------------------------
-#include <memory>
-#include <array>
-#include <vector>
-#include <zmq.hpp>
-//---------------------------------------------------------------------------
-#include "rdma/Network.hpp"
 #include "util/NotAssignable.hpp"
-#include "dht/Common.hpp"
-#include "dht/HashTableServer.hpp"
+//---------------------------------------------------------------------------
+#include <memory>
 //---------------------------------------------------------------------------
 struct ibv_send_wr;
 //---------------------------------------------------------------------------
+struct ibv_qp;
+struct ibv_cq;
+//---------------------------------------------------------------------------
 namespace rdma {
-class QueuePair;
-}
 //---------------------------------------------------------------------------
-namespace dht { // Distributed Hash Table
+struct WorkRequest;
+struct Address;
+class Network;
 //---------------------------------------------------------------------------
-struct RemoteMemoryRegion;
-struct MemoryRegion;
-//---------------------------------------------------------------------------
-/// Gathers and stores information about remote shared hash tables (locals are treated as remote, because of atomicity (ask alex))
-struct HashTableNetworkLayout : public util::NotAssignable {
+class QueuePair : public util::NotAssignable {
+   friend class Network;
 
-   HashTableNetworkLayout();
-   void retrieveRemoteMemoryRegions(zmq::context_t &context, const std::vector <HashTableLocation> &tableLocations);
-   void dump();
+   ibv_qp *qp;
 
-   struct RemoteHashTableInfo {
-      HashTableLocation location;
+   Network &network;
 
-      rdma::RemoteMemoryRegion htRmr;
-      rdma::RemoteMemoryRegion bucketsRmr;
-      rdma::RemoteMemoryRegion nextFreeOffsetRmr;
-   };
+   ibv_cq *completionQueueSend;
 
-   std::vector <RemoteHashTableInfo> remoteHashTables;
+   ibv_cq *completionQueueRecv;
+
+   QueuePair(ibv_qp *qp, Network &network);
+
+public:
+   ~QueuePair();
+
+   uint32_t getQPN();
+
+   void connect(const Address &address, unsigned retryCount = 0);
+
+   void postWorkRequest(const WorkRequest &workRequest);
+
+   /// Print detailed information about this queue pair
+   void printQueuePairDetails();
 };
 //---------------------------------------------------------------------------
-} // End of namespace dht
+} // End of namespace rdma
 //---------------------------------------------------------------------------

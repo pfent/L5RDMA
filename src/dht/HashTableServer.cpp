@@ -23,6 +23,7 @@
 #include "rdma/MemoryRegion.hpp"
 #include "rdma/Network.hpp"
 #include "rdma/WorkRequest.hpp"
+#include "rdma/QueuePair.hpp"
 #include "util/Utility.hpp"
 //---------------------------------------------------------------------------
 #include <cstring>
@@ -108,13 +109,14 @@ void HashTableServer::dumpHashTableContent(HashTableNetworkLayout &hashTableNetw
          // Read from remote host
          Bucket b;
          {
+            auto& remote = hashTableNetworkLayout.remoteHashTables[next.getHost()];
+
             rdma::ReadWorkRequest workRequest;
             workRequest.setId(8029);
             workRequest.setLocalAddress(bucketMR);
-            rdma::RemoteMemoryRegion bucketRmr = hashTableNetworkLayout.remoteHashTables[next.getHost()].bucketsRmr;
-            workRequest.setRemoteAddress(rdma::RemoteMemoryRegion{bucketRmr.address + next.getOffset() * sizeof(Bucket), bucketRmr.key});
+            workRequest.setRemoteAddress(rdma::RemoteMemoryRegion{remote.bucketsRmr.address + next.getOffset() * sizeof(Bucket), remote.bucketsRmr.key});
             workRequest.setCompletion(true);
-            network.postWorkRequest(next.getHost(), workRequest);
+            remote.location.queuePair->postWorkRequest(workRequest);
             network.waitForCompletionSend();
             b = bucket[0];
          }

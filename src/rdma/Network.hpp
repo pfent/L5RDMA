@@ -23,6 +23,7 @@
 #include <mutex>
 #include <stdexcept>
 #include <vector>
+#include <memory>
 //---------------------------------------------------------------------------
 struct ibv_comp_channel;
 struct ibv_context;
@@ -37,12 +38,13 @@ namespace rdma {
 //---------------------------------------------------------------------------
 class WorkRequest;
 class MemoryRegion;
+class QueuePair;
 //---------------------------------------------------------------------------
 /// A network exception
-class NetworkException : public std::runtime_error
-{
+class NetworkException : public std::runtime_error {
 public:
-   NetworkException(const std::string& reason) : std::runtime_error(reason) {}
+   NetworkException(const std::string &reason)
+           : std::runtime_error(reason) { }
 };
 //---------------------------------------------------------------------------
 struct RemoteMemoryRegion {
@@ -59,14 +61,11 @@ struct Address {
 std::ostream &operator<<(std::ostream &os, const Address &address);
 //---------------------------------------------------------------------------
 /// A network of nodes connected via RDMA
-class Network
-{
+class Network {
 protected:
    /// The minimal number of entries for the completion queue
    static const int CQ_SIZE = 100;
 
-   /// The number of queue pairs
-   unsigned queuePairCount;
    /// The port of the Infiniband device
    uint8_t ibport;
 
@@ -76,19 +75,18 @@ protected:
    ibv_context *context;
    /// The global protection domain
    ibv_pd *protectionDomain;
+
    /// The shared send completion queue
-   ibv_cq *completionQueueSend;
+   ibv_cq *sharedCompletionQueueSend;
    /// The shared receive completion queue
-   ibv_cq *completionQueueRecv;
+   ibv_cq *sharedCompletionQueueRecv;
    /// The shared completion channel
-   ibv_comp_channel *completionChannel;
+   ibv_comp_channel *sharedCompletionChannel;
    /// The shared receive queue
-   ibv_srq* srq;
-   /// The queue pairs
-   std::vector<ibv_qp*> queuePairs;
+   ibv_srq *sharedReceiveQueue;
 
    /// The cached work completions
-   std::vector<std::pair<bool, uint64_t>> cachedCompletions;
+   std::vector <std::pair<bool, uint64_t>> cachedCompletions;
    std::mutex completionMutex;
 
    /// Create queue pair
@@ -99,34 +97,20 @@ protected:
    /// Wait for a work request completion
    std::pair<bool, uint64_t> waitForCompletion(bool restrict, bool onlySend);
 
+   /// Helper function to create a completion queue pair
+   void createSharedCompletionQueues();
+
 public:
    /// Constructor
-   Network(unsigned queuePairCount);
+   Network();
    /// Destructor
    ~Network();
 
    /// Get the LID
    uint16_t getLID();
-   /// Get the queue pair number for a queue pair
-   uint32_t getQPN(unsigned index);
-
-   /// Connect the network
-   void connect(std::vector<Address> addresses, unsigned retryCount = 0);
-
-   /// Post a send work request
-   void postSend(unsigned target, const MemoryRegion& mr, bool completion, uint64_t context, int flags = 0);
-   /// Post a write work request
-   void postWrite(unsigned target, const RemoteMemoryRegion& t_mr, const MemoryRegion& s_mr, bool completion, uint64_t context, int flags = 0);
-   /// Post a receive request
-   void postRecv(const MemoryRegion& mr, uint64_t context);
-   /// Post a read work request
-   void postRead(unsigned target, const MemoryRegion& t_mr, const RemoteMemoryRegion& s_mr, bool completion, uint64_t context, int flags = 0);
-   /// Post an atomic fetch/add request
-   void postFetchAdd(unsigned target, const MemoryRegion& beforeValue, const RemoteMemoryRegion& remoteAddress, uint64_t add, bool completion, uint64_t context, int flags = 0);
-   /// Post an atomic compare/swap request
-   void postCompareSwap(unsigned target, const MemoryRegion& beforeValue, const RemoteMemoryRegion& remoteAddress, uint64_t compare, uint64_t swap, bool completion, uint64_t context, int flags = 0);
-   /// Post a generic work request
-   void postWorkRequest(unsigned target, const WorkRequest& workRequest);
+   /// Create a queue pair with shared receive queues
+   std::unique_ptr <QueuePair> createSharedQueuePair();
+   void connectQueuePair(QueuePair &queuePair, const Address &address, unsigned retryCount);
 
    /// Poll the send completion queue
    uint64_t pollSendCompletionQueue();
@@ -146,14 +130,10 @@ public:
    uint64_t waitForCompletionReceive();
 
    /// Get the protection domain
-   ibv_pd *getProtectionDomain() {
-      return protectionDomain;
-   }
+   ibv_pd *getProtectionDomain() { return protectionDomain; }
 
    /// Print the capabilities of the RDMA host channel adapter
    void printCapabilities();
-   /// Print detailed information about the specified queue pair
-   void printQueuePairDetails(unsigned qpid);
 };
 //---------------------------------------------------------------------------
 }

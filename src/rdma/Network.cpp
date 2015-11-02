@@ -21,6 +21,7 @@
 #include "Network.hpp"
 //---------------------------------------------------------------------------
 #include "WorkRequest.hpp"
+#include "QueuePair.hpp"
 #include "MemoryRegion.hpp"
 //---------------------------------------------------------------------------
 #include <cstring>
@@ -36,39 +37,12 @@ namespace rdma {
 //---------------------------------------------------------------------------
 ostream &operator<<(ostream &os, const RemoteMemoryRegion &remoteMemoryRegion)
 {
-   return os << "address=" << (void*)remoteMemoryRegion.address << " key=" << remoteMemoryRegion.key;
+   return os << "address=" << (void *) remoteMemoryRegion.address << " key=" << remoteMemoryRegion.key;
 }
 //---------------------------------------------------------------------------
 ostream &operator<<(ostream &os, const Address &address)
 {
    return os << "lid=" << address.lid << ", qpn=" << address.qpn;
-}
-//---------------------------------------------------------------------------
-ibv_qp *Network::createQueuePair(ibv_cq *cqSend, ibv_cq *cqRecv)
-/// Create queue pair
-{
-   ibv_qp_init_attr queuePairAttributes;
-   memset(&queuePairAttributes, 0, sizeof(queuePairAttributes));
-   queuePairAttributes.qp_context = nullptr;          // Associated context of the QP
-   queuePairAttributes.send_cq = cqSend;              // CQ to be associated with the Send Queue (SQ)
-   queuePairAttributes.recv_cq = cqRecv;              // CQ to be associated with the Receive Queue (RQ)
-   queuePairAttributes.srq = srq;                     // SRQ handle if QP is to be associated with an SRQ, otherwise NULL
-   queuePairAttributes.cap.max_send_wr = 16351;       // Requested max number of outstanding WRs in the SQ
-   queuePairAttributes.cap.max_recv_wr = 16351;       // Requested max number of outstanding WRs in the RQ
-   queuePairAttributes.cap.max_send_sge = 1;          // Requested max number of scatter/gather elements in a WR in the SQ
-   queuePairAttributes.cap.max_recv_sge = 1;          // Requested max number of scatter/gather elements in a WR in the RQ
-   queuePairAttributes.cap.max_inline_data = 512;     // Requested max number of bytes that can be posted inline to the SQ, otherwise 0
-   queuePairAttributes.qp_type = IBV_QPT_RC;          // QP Transport Service Type: IBV_QPT_RC (reliable connection), IBV_QPT_UC (unreliable connection), or IBV_QPT_UD (unreliable datagram)
-   queuePairAttributes.sq_sig_all = 0;                // If set, each Work Request (WR) submitted to the SQ generates a completion entry
-
-   // Create queue pair
-   ibv_qp *queuePair = ::ibv_create_qp(protectionDomain, &queuePairAttributes);
-   if (!queuePair) {
-      string reason = "creating the queue pair failed with error " + to_string(errno) + ": " + strerror(errno);
-      cerr << reason << endl;
-      throw NetworkException(reason);
-   }
-   return queuePair;
 }
 //---------------------------------------------------------------------------
 string stringForCompletionCode(int opcode)
@@ -158,14 +132,14 @@ pair<bool, uint64_t> Network::waitForCompletion(bool restrict, bool onlySend)
       // Wait for completion queue event
       ibv_cq *event;
       void *ctx;
-      status = ::ibv_get_cq_event(completionChannel, &event, &ctx);
+      status = ::ibv_get_cq_event(sharedCompletionChannel, &event, &ctx);
       if (status != 0) {
          string reason = "receiving the completion queue event failed with error " + to_string(errno) + ": " + strerror(errno);
          cerr << reason << endl;
          throw NetworkException(reason);
       }
       ::ibv_ack_cq_events(event, 1);
-      bool isSendCompletion = (event == completionQueueSend);
+      bool isSendCompletion = (event == sharedCompletionQueueSend);
 
       // Request a completion queue event
       status = ::ibv_req_notify_cq(event, 0);
@@ -210,8 +184,8 @@ pair<bool, uint64_t> Network::waitForCompletion(bool restrict, bool onlySend)
    return workCompletion;
 }
 //---------------------------------------------------------------------------
-Network::Network(unsigned queuePairCount)
-        : queuePairCount(queuePairCount), ibport(1)
+Network::Network()
+        : ibport(1)
 /// Constructor
 {
    // Get the device list
@@ -223,6 +197,10 @@ Network::Network(unsigned queuePairCount)
       throw NetworkException(reason);
    } else if (deviceCount == 0) {
       string reason = "no Infiniband devices available";
+      cerr << reason << endl;
+      throw NetworkException(reason);
+   } else if (deviceCount>1) {
+      string reason = "more than 1 Infiniband devices available .. not handled right now";
       cerr << reason << endl;
       throw NetworkException(reason);
    }
@@ -243,36 +221,42 @@ Network::Network(unsigned queuePairCount)
       throw NetworkException(reason);
    }
 
+   // Create global shared completion queues
+   createSharedCompletionQueues();
+}
+//---------------------------------------------------------------------------
+void Network::createSharedCompletionQueues()
+{
    // Create event channel
-   completionChannel = ::ibv_create_comp_channel(context);
-   if (completionChannel == nullptr) {
+   sharedCompletionChannel = ::ibv_create_comp_channel(context);
+   if (sharedCompletionChannel == nullptr) {
       string reason = "creating the shared completion channel failed with error " + to_string(errno) + ": " + strerror(errno);
       cerr << reason << endl;
       throw NetworkException(reason);
    }
 
    // Create completion queues
-   completionQueueSend = ::ibv_create_cq(context, CQ_SIZE, nullptr, completionChannel, 0);
-   if (completionQueueSend == nullptr) {
+   sharedCompletionQueueSend = ::ibv_create_cq(context, CQ_SIZE, nullptr, sharedCompletionChannel, 0);
+   if (sharedCompletionQueueSend == nullptr) {
       string reason = "creating the send completion queue failed with error " + to_string(errno) + ": " + strerror(errno);
       cerr << reason << endl;
       throw NetworkException(reason);
    }
-   completionQueueRecv = ::ibv_create_cq(context, CQ_SIZE, nullptr, completionChannel, 0);
-   if (completionQueueRecv == nullptr) {
+   sharedCompletionQueueRecv = ::ibv_create_cq(context, CQ_SIZE, nullptr, sharedCompletionChannel, 0);
+   if (sharedCompletionQueueRecv == nullptr) {
       string reason = "creating the receive completion queue failed with error " + to_string(errno) + ": " + strerror(errno);
       cerr << reason << endl;
       throw NetworkException(reason);
    }
 
    // Request notifications
-   int status = ::ibv_req_notify_cq(completionQueueSend, 0);
+   int status = ::ibv_req_notify_cq(sharedCompletionQueueSend, 0);
    if (status != 0) {
       string reason = "requesting a completion queue event failed with error " + to_string(errno) + ": " + strerror(errno);
       cerr << reason << endl;
       throw NetworkException(reason);
    }
-   status = ::ibv_req_notify_cq(completionQueueRecv, 0);
+   status = ::ibv_req_notify_cq(sharedCompletionQueueRecv, 0);
    if (status != 0) {
       string reason = "requesting a completion queue event failed with error " + to_string(errno) + ": " + strerror(errno);
       cerr << reason << endl;
@@ -284,16 +268,11 @@ Network::Network(unsigned queuePairCount)
    memset(&srq_init_attr, 0, sizeof(srq_init_attr));
    srq_init_attr.attr.max_wr = 16351;
    srq_init_attr.attr.max_sge = 1;
-   srq = ibv_create_srq(protectionDomain, &srq_init_attr);
-   if (!srq) {
+   sharedReceiveQueue = ibv_create_srq(protectionDomain, &srq_init_attr);
+   if (!sharedReceiveQueue) {
       string reason = "could not create shared receive queue";
       cerr << reason << endl;
       throw NetworkException(reason);
-   }
-
-   // Create queue pairs
-   for (unsigned i = 0; i != queuePairCount; ++i) {
-      queuePairs.push_back(createQueuePair(completionQueueSend, completionQueueRecv));
    }
 }
 //---------------------------------------------------------------------------
@@ -302,19 +281,8 @@ Network::~Network()
 {
    int status;
 
-   // Destroy queue pairs
-   for (unsigned i = 0; i != queuePairCount; ++i) {
-      status = ::ibv_destroy_qp(queuePairs[i]);
-      if (status != 0) {
-         string reason = "destroying the queue pair failed with error " + to_string(errno) + ": " + strerror(errno);
-         cerr << reason << endl;
-         throw NetworkException(reason);
-      }
-   }
-   queuePairs.clear();
-
    // Destroy the shared receive queue
-   status = ::ibv_destroy_srq(srq);
+   status = ::ibv_destroy_srq(sharedReceiveQueue);
    if (status != 0) {
       string reason = "destroying the shared receive queue failed with error " + to_string(errno) + ": " + strerror(errno);
       cerr << reason << endl;
@@ -322,13 +290,13 @@ Network::~Network()
    }
 
    // Destroy the completion queues
-   status = ::ibv_destroy_cq(completionQueueSend);
+   status = ::ibv_destroy_cq(sharedCompletionQueueSend);
    if (status != 0) {
       string reason = "destroying the send completion queue failed with error " + to_string(errno) + ": " + strerror(errno);
       cerr << reason << endl;
       throw NetworkException(reason);
    }
-   status = ::ibv_destroy_cq(completionQueueRecv);
+   status = ::ibv_destroy_cq(sharedCompletionQueueRecv);
    if (status != 0) {
       string reason = "destroying the receive completion queue failed with error " + to_string(errno) + ": " + strerror(errno);
       cerr << reason << endl;
@@ -336,7 +304,7 @@ Network::~Network()
    }
 
    // Destroy the completion channel
-   status = ::ibv_destroy_comp_channel(completionChannel);
+   status = ::ibv_destroy_comp_channel(sharedCompletionChannel);
    if (status != 0) {
       string reason = "destroying the shared completion channel failed with error " + to_string(errno) + ": " + strerror(errno);
       cerr << reason << endl;
@@ -376,270 +344,83 @@ uint16_t Network::getLID()
    return attributes.lid;
 }
 //---------------------------------------------------------------------------
-uint32_t Network::getQPN(unsigned index)
-/// Get the queue pair number for a queue pair
+unique_ptr <QueuePair> Network::createSharedQueuePair()
+/// Create a queue pair with shared receive queues
 {
-   return queuePairs[index]->qp_num;
+   ibv_qp_init_attr queuePairAttributes;
+   memset(&queuePairAttributes, 0, sizeof(queuePairAttributes));
+   queuePairAttributes.qp_context = nullptr;                // Associated context of the QP
+   queuePairAttributes.send_cq = sharedCompletionQueueSend; // CQ to be associated with the Send Queue (SQ)
+   queuePairAttributes.recv_cq = sharedCompletionQueueRecv; // CQ to be associated with the Receive Queue (RQ)
+   queuePairAttributes.srq = sharedReceiveQueue;            // SRQ handle if QP is to be associated with an SRQ, otherwise NULL
+   queuePairAttributes.cap.max_send_wr = 16351;             // Requested max number of outstanding WRs in the SQ
+   queuePairAttributes.cap.max_recv_wr = 16351;             // Requested max number of outstanding WRs in the RQ
+   queuePairAttributes.cap.max_send_sge = 1;                // Requested max number of scatter/gather elements in a WR in the SQ
+   queuePairAttributes.cap.max_recv_sge = 1;                // Requested max number of scatter/gather elements in a WR in the RQ
+   queuePairAttributes.cap.max_inline_data = 512;           // Requested max number of bytes that can be posted inline to the SQ, otherwise 0
+   queuePairAttributes.qp_type = IBV_QPT_RC;                // QP Transport Service Type: IBV_QPT_RC (reliable connection), IBV_QPT_UC (unreliable connection), or IBV_QPT_UD (unreliable datagram)
+   queuePairAttributes.sq_sig_all = 0;                      // If set, each Work Request (WR) submitted to the SQ generates a completion entry
+
+   // Create queue pair
+   ibv_qp *qp = ::ibv_create_qp(protectionDomain, &queuePairAttributes);
+   if (!qp) {
+      string reason = "creating the queue pair failed with error " + to_string(errno) + ": " + strerror(errno);
+      cerr << reason << endl;
+      throw NetworkException(reason);
+   }
+
+   cout << "create qp: " << qp << endl;
+   return unique_ptr<QueuePair>(new QueuePair(qp, *this));
 }
 //---------------------------------------------------------------------------
-void Network::connect(vector <Address> addresses, unsigned retryCount)
-/// Connect the network
+void Network::connectQueuePair(QueuePair &queuePair, const Address &address, unsigned retryCount)
 {
    uint32_t remotePSN = 0;
    uint32_t localPSN = 0;
-   for (unsigned i = 0; i != queuePairCount; ++i) {
-      struct ibv_qp_attr attributes;
 
-      // INIT
-      memset(&attributes, 0, sizeof(attributes));
-      attributes.qp_state = IBV_QPS_INIT;
-      attributes.pkey_index = 0;       // Partition the queue pair belongs to
-      attributes.port_num = ibport;    // The local physical port
-      attributes.qp_access_flags = IBV_ACCESS_REMOTE_WRITE | IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_ATOMIC;  // Allowed access flags of the remote operations for incoming packets (i.e., none, RDMA read, RDMA write, or atomics)
-      if (::ibv_modify_qp(queuePairs[i], &attributes, IBV_QP_STATE | IBV_QP_PKEY_INDEX | IBV_QP_PORT | IBV_QP_ACCESS_FLAGS)) {
-         string reason = "failed to transition QP to INIT state";
-         cerr << reason << endl;
-         throw NetworkException(reason);
-      }
+   struct ibv_qp_attr attributes;
 
-      // RTR (ready to receive)
-      memset(&attributes, 0, sizeof(attributes));
-      attributes.qp_state = IBV_QPS_RTR;
-      attributes.path_mtu = IBV_MTU_4096;             // Maximum payload size
-      attributes.dest_qp_num = addresses[i].qpn;      // The remote QP number
-      attributes.rq_psn = remotePSN;                  // The packet sequence number of received packets
-      attributes.max_dest_rd_atomic = 16;             // The number of outstanding RDMA reads & atomic operations (destination)
-      attributes.min_rnr_timer = 12;                  // The time before a RNR NACK is sent
-      attributes.ah_attr.is_global = 0;               // Whether there is a global routing header
-      attributes.ah_attr.dlid = addresses[i].lid;     // The LID of the remote host
-      attributes.ah_attr.sl = 0;                      // The service level (which determines the virtual lane)
-      attributes.ah_attr.src_path_bits = 0;           // Use the port base LID
-      attributes.ah_attr.port_num = ibport;           // The local physical port
-      if (::ibv_modify_qp(queuePairs[i], &attributes, IBV_QP_STATE | IBV_QP_AV | IBV_QP_PATH_MTU | IBV_QP_DEST_QPN | IBV_QP_RQ_PSN | IBV_QP_MAX_DEST_RD_ATOMIC | IBV_QP_MIN_RNR_TIMER)) {
-         string reason = "failed to transition QP to RTR state";
-         cerr << reason << endl;
-         throw NetworkException(reason);
-      }
-
-      // RTS (ready to send)
-      memset(&attributes, 0, sizeof(attributes));
-      attributes.qp_state = IBV_QPS_RTS;
-      attributes.sq_psn = localPSN;       // The packet sequence number of sent packets
-      attributes.timeout = 0;             // The minimum timeout before retransmitting the packet (0 = infinite)
-      attributes.retry_cnt = retryCount;  // How often to retry sending (7 = infinite)
-      attributes.rnr_retry = retryCount;  // How often to retry sending when RNR NACK was received (7 = infinite)
-      attributes.max_rd_atomic = 128;     // The number of outstanding RDMA reads & atomic operations (initiator)
-      if (::ibv_modify_qp(queuePairs[i], &attributes, IBV_QP_STATE | IBV_QP_TIMEOUT | IBV_QP_RETRY_CNT | IBV_QP_RNR_RETRY | IBV_QP_SQ_PSN | IBV_QP_MAX_QP_RD_ATOMIC)) {
-         string reason = "failed to transition QP to RTS state";
-         cerr << reason << endl;
-         throw NetworkException(reason);
-      }
-   }
-}
-//---------------------------------------------------------------------------
-void Network::postSend(unsigned target, const MemoryRegion &mr, bool completion, uint64_t context, int flags)
-/// Post a send work request
-{
-   // Add the memory region to the scatter/gather list
-   ibv_sge sge;
-   memset(&sge, 0, sizeof(sge));
-   sge.addr = reinterpret_cast<uintptr_t>(mr.address);   // Start address of the local memory buffer
-   sge.length = mr.size;                                 // Length of the buffer
-   if (!(flags & IBV_SEND_INLINE)) {
-      sge.lkey = mr.key->lkey;                           // Key of the local Memory Region
-   }
-
-   // Create the work request
-   ibv_send_wr workRequest;
-   memset(&workRequest, 0, sizeof(workRequest));
-   workRequest.wr_id = context;                                   // User defined WR ID
-   workRequest.next = nullptr;                                    // Pointer to next WR in list, NULL if last WR
-   workRequest.sg_list = &sge;                                    // Pointer to the s/g array
-   workRequest.num_sge = 1;                                       // Size of the s/g array
-   workRequest.opcode = IBV_WR_SEND;                              // Operation type
-   workRequest.send_flags = flags | (completion ? IBV_SEND_SIGNALED : 0); // Request completion notification
-
-   // Post work request
-   ibv_send_wr *badWorkRequest = nullptr;
-   int status = ::ibv_post_send(queuePairs[target], &workRequest, &badWorkRequest);
-   if (status != 0) {
-      string reason = "posting the work request failed with error " + to_string(status) + ": " + strerror(status);
+   // INIT
+   memset(&attributes, 0, sizeof(attributes));
+   attributes.qp_state = IBV_QPS_INIT;
+   attributes.pkey_index = 0;       // Partition the queue pair belongs to
+   attributes.port_num = ibport;    // The local physical port
+   attributes.qp_access_flags = IBV_ACCESS_REMOTE_WRITE | IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_ATOMIC;  // Allowed access flags of the remote operations for incoming packets (i.e., none, RDMA read, RDMA write, or atomics)
+   if (::ibv_modify_qp(queuePair.qp, &attributes, IBV_QP_STATE | IBV_QP_PKEY_INDEX | IBV_QP_PORT | IBV_QP_ACCESS_FLAGS)) {
+      string reason = "failed to transition QP to INIT state";
       cerr << reason << endl;
       throw NetworkException(reason);
    }
-}
-//---------------------------------------------------------------------------
-void Network::postWrite(unsigned target, const RemoteMemoryRegion &t_mr, const MemoryRegion &s_mr, bool completion, uint64_t context, int flags)
-/// Post a write work request
-{
-   // Add the memory region to the scatter/gather list
-   ibv_sge sge;
-   memset(&sge, 0, sizeof(sge));
-   sge.addr = reinterpret_cast<uintptr_t>(s_mr.address);   // Start address of the local memory buffer
-   sge.length = s_mr.size;                                 // Length of the buffer
-   if (!(flags & IBV_SEND_INLINE)) {
-      sge.lkey = s_mr.key->lkey;                           // Key of the local Memory Region
-   }
 
-   // Create the work request
-   ibv_send_wr workRequest;
-   memset(&workRequest, 0, sizeof(workRequest));
-   workRequest.wr_id = context;                                   // User defined WR ID
-   workRequest.next = nullptr;                                    // Pointer to next WR in list, NULL if last WR
-   workRequest.sg_list = &sge;                                    // Pointer to the s/g array
-   workRequest.num_sge = 1;                                       // Size of the s/g array
-   workRequest.opcode = IBV_WR_RDMA_WRITE;                        // Operation type
-   workRequest.send_flags = flags | (completion ? IBV_SEND_SIGNALED : 0); // Request completion notification
-   workRequest.wr.rdma.remote_addr = t_mr.address;
-   workRequest.wr.rdma.rkey = t_mr.key;
-
-   // Post work request
-   ibv_send_wr *badWorkRequest = nullptr;
-   int status = ::ibv_post_send(queuePairs[target], &workRequest, &badWorkRequest);
-   if (status != 0) {
-      string reason = "posting the work request failed with error " + to_string(status) + ": " + strerror(status);
+   // RTR (ready to receive)
+   memset(&attributes, 0, sizeof(attributes));
+   attributes.qp_state = IBV_QPS_RTR;
+   attributes.path_mtu = IBV_MTU_4096;             // Maximum payload size
+   attributes.dest_qp_num = address.qpn;           // The remote QP number
+   attributes.rq_psn = remotePSN;                  // The packet sequence number of received packets
+   attributes.max_dest_rd_atomic = 16;             // The number of outstanding RDMA reads & atomic operations (destination)
+   attributes.min_rnr_timer = 12;                  // The time before a RNR NACK is sent
+   attributes.ah_attr.is_global = 0;               // Whether there is a global routing header
+   attributes.ah_attr.dlid = address.lid;          // The LID of the remote host
+   attributes.ah_attr.sl = 0;                      // The service level (which determines the virtual lane)
+   attributes.ah_attr.src_path_bits = 0;           // Use the port base LID
+   attributes.ah_attr.port_num = ibport;           // The local physical port
+   if (::ibv_modify_qp(queuePair.qp, &attributes, IBV_QP_STATE | IBV_QP_AV | IBV_QP_PATH_MTU | IBV_QP_DEST_QPN | IBV_QP_RQ_PSN | IBV_QP_MAX_DEST_RD_ATOMIC | IBV_QP_MIN_RNR_TIMER)) {
+      string reason = "failed to transition QP to RTR state";
       cerr << reason << endl;
       throw NetworkException(reason);
    }
-}
-//---------------------------------------------------------------------------
-void Network::postRecv(const MemoryRegion &mr, uint64_t context)
-/// Post a receive request
-{
-   // Add the memory region to the scatter/gather list
-   ibv_sge sge;
-   memset(&sge, 0, sizeof(sge));
-   sge.addr = reinterpret_cast<uintptr_t>(mr.address);  // Start address of the local memory buffer
-   sge.length = mr.size;                                // Length of the buffer
-   sge.lkey = mr.key->lkey;                             // Key of the local Memory Region
 
-   // Create the receive request
-   ibv_recv_wr workRequest;
-   memset(&workRequest, 0, sizeof(workRequest));
-   workRequest.wr_id = context;                         // User defined WR ID
-   workRequest.next = nullptr;                          // Pointer to next WR in list, NULL if last WR
-   workRequest.sg_list = &sge;                          // Pointer to the s/g array
-   workRequest.num_sge = 1;                             // Size of the s/g array
-
-   // Post work request
-   ibv_recv_wr *badWorkRequest = nullptr;
-   int status = ::ibv_post_srq_recv(srq, &workRequest, &badWorkRequest);
-   if (status != 0) {
-      string reason = "posting the receive work request failed with error " + to_string(errno) + ": " + strerror(errno);
-      cerr << reason << endl;
-      throw NetworkException(reason);
-   }
-}
-//---------------------------------------------------------------------------
-void Network::postRead(unsigned target, const MemoryRegion &t_mr, const RemoteMemoryRegion &s_mr, bool completion, uint64_t context, int flags)
-/// Post a read work request
-{
-   // Add the memory region to the scatter/gather list
-   ibv_sge sge;
-   memset(&sge, 0, sizeof(sge));
-   sge.addr = reinterpret_cast<uintptr_t>(t_mr.address);   // Start address of the local memory buffer
-   sge.length = t_mr.size;                                 // Length of the buffer
-   if (!(flags & IBV_SEND_INLINE)) {
-      sge.lkey = t_mr.key->lkey;                           // Key of the local Memory Region
-   }
-
-   // Create the work request
-   ibv_send_wr workRequest;
-   memset(&workRequest, 0, sizeof(workRequest));
-   workRequest.wr_id = context;                                   // User defined WR ID
-   workRequest.next = nullptr;                                    // Pointer to next WR in list, NULL if last WR
-   workRequest.sg_list = &sge;                                    // Pointer to the s/g array
-   workRequest.num_sge = 1;                                       // Size of the s/g array
-   workRequest.opcode = IBV_WR_RDMA_READ;                         // Operation type
-   workRequest.send_flags = flags | (completion ? IBV_SEND_SIGNALED : 0); // Request completion notification
-   workRequest.wr.rdma.remote_addr = s_mr.address;
-   workRequest.wr.rdma.rkey = s_mr.key;
-
-   // Post work request
-   ibv_send_wr *badWorkRequest = nullptr;
-   int status = ::ibv_post_send(queuePairs[target], &workRequest, &badWorkRequest);
-   if (status != 0) {
-      string reason = "posting the work request failed with error " + to_string(status) + ": " + strerror(status);
-      cerr << reason << endl;
-      throw NetworkException(reason);
-   }
-}
-//---------------------------------------------------------------------------
-void Network::postFetchAdd(unsigned target, const MemoryRegion &beforeValue, const RemoteMemoryRegion &remoteAddress, uint64_t add, bool completion, uint64_t context, int flags)
-/// Post an atomic fetch/add request
-{
-   // Add the memory region to the scatter/gather list
-   ibv_sge sge;
-   memset(&sge, 0, sizeof(sge));
-   sge.addr = reinterpret_cast<uintptr_t>(beforeValue.address);   // Start address of the local memory buffer
-   sge.length = beforeValue.size;                                 // Length of the buffer
-   sge.lkey = beforeValue.key->lkey;                              // Key of the local Memory Region
-
-   // Create the work request
-   ibv_send_wr workRequest;
-   memset(&workRequest, 0, sizeof(workRequest));
-   workRequest.wr_id = context;                                   // User defined WR ID
-   workRequest.next = nullptr;                                    // Pointer to next WR in list, NULL if last WR
-   workRequest.sg_list = &sge;                                    // Pointer to the s/g array
-   workRequest.num_sge = 1;                                       // Size of the s/g array
-   workRequest.opcode = IBV_WR_ATOMIC_FETCH_AND_ADD;              // Operation type
-   workRequest.send_flags = flags | (completion ? IBV_SEND_SIGNALED : 0); // Request completion notification
-   workRequest.wr.atomic.remote_addr = remoteAddress.address;
-   workRequest.wr.atomic.rkey = remoteAddress.key;
-   workRequest.wr.atomic.compare_add = add;
-
-   // Post work request
-   ibv_send_wr *badWorkRequest = nullptr;
-   int status = ::ibv_post_send(queuePairs[target], &workRequest, &badWorkRequest);
-   if (status != 0) {
-      string reason = "posting the work request failed with error " + to_string(status) + ": " + strerror(status);
-      cerr << reason << endl;
-      throw NetworkException(reason);
-   }
-}
-//---------------------------------------------------------------------------
-void Network::postCompareSwap(unsigned target, const MemoryRegion &beforeValue, const RemoteMemoryRegion &remoteAddress, uint64_t compare, uint64_t swap, bool completion, uint64_t context, int flags)
-/// Post an atomic compare/swap request
-{
-   // Add the memory region to the scatter/gather list
-   ibv_sge sge;
-   memset(&sge, 0, sizeof(sge));
-   sge.addr = reinterpret_cast<uintptr_t>(beforeValue.address);   // Start address of the local memory buffer
-   sge.length = beforeValue.size;                                 // Length of the buffer
-   sge.lkey = beforeValue.key->lkey;                              // Key of the local Memory Region
-
-   // Create the work request
-   ibv_send_wr workRequest;
-   memset(&workRequest, 0, sizeof(workRequest));
-   workRequest.wr_id = context;                                   // User defined WR ID
-   workRequest.next = nullptr;                                    // Pointer to next WR in list, NULL if last WR
-   workRequest.sg_list = &sge;                                    // Pointer to the s/g array
-   workRequest.num_sge = 1;                                       // Size of the s/g array
-   workRequest.opcode = IBV_WR_ATOMIC_CMP_AND_SWP;                // Operation type
-   workRequest.send_flags = flags | (completion ? IBV_SEND_SIGNALED : 0); // Request completion notification
-   workRequest.wr.atomic.remote_addr = remoteAddress.address;
-   workRequest.wr.atomic.rkey = remoteAddress.key;
-   workRequest.wr.atomic.compare_add = compare;
-   workRequest.wr.atomic.swap = swap;
-
-   // Post work request
-   ibv_send_wr *badWorkRequest = nullptr;
-   int status = ::ibv_post_send(queuePairs[target], &workRequest, &badWorkRequest);
-   if (status != 0) {
-      string reason = "posting the work request failed with error " + to_string(status) + ": " + strerror(status);
-      cerr << reason << endl;
-      throw NetworkException(reason);
-   }
-}
-//---------------------------------------------------------------------------
-void Network::postWorkRequest(unsigned target, const WorkRequest &workRequest)
-/// Post a generic work request
-{
-   // Post work request
-   ibv_send_wr *badWorkRequest = nullptr;
-   int status = ::ibv_post_send(queuePairs[target], workRequest.wr.get(), &badWorkRequest);
-   if (status != 0) {
-      string reason = "posting the work request failed with error " + to_string(status) + ": " + strerror(status);
+   // RTS (ready to send)
+   memset(&attributes, 0, sizeof(attributes));
+   attributes.qp_state = IBV_QPS_RTS;
+   attributes.sq_psn = localPSN;       // The packet sequence number of sent packets
+   attributes.timeout = 0;             // The minimum timeout before retransmitting the packet (0 = infinite)
+   attributes.retry_cnt = retryCount;  // How often to retry sending (7 = infinite)
+   attributes.rnr_retry = retryCount;  // How often to retry sending when RNR NACK was received (7 = infinite)
+   attributes.max_rd_atomic = 128;     // The number of outstanding RDMA reads & atomic operations (initiator)
+   if (::ibv_modify_qp(queuePair.qp, &attributes, IBV_QP_STATE | IBV_QP_TIMEOUT | IBV_QP_RETRY_CNT | IBV_QP_RNR_RETRY | IBV_QP_SQ_PSN | IBV_QP_MAX_QP_RD_ATOMIC)) {
+      string reason = "failed to transition QP to RTS state";
       cerr << reason << endl;
       throw NetworkException(reason);
    }
@@ -648,13 +429,13 @@ void Network::postWorkRequest(unsigned target, const WorkRequest &workRequest)
 uint64_t Network::pollSendCompletionQueue()
 /// Poll the send completion queue
 {
-   return pollCompletionQueue(completionQueueSend, IBV_WC_SEND);
+   return pollCompletionQueue(sharedCompletionQueueSend, IBV_WC_SEND);
 }
 //---------------------------------------------------------------------------
 uint64_t Network::pollRecvCompletionQueue()
 /// Poll the receive completion queue
 {
-   return pollCompletionQueue(completionQueueRecv, IBV_WC_RECV);
+   return pollCompletionQueue(sharedCompletionQueueRecv, IBV_WC_RECV);
 }
 //---------------------------------------------------------------------------
 uint64_t Network::pollCompletionQueueBlocking(ibv_cq *completionQueue, int type)
@@ -688,13 +469,13 @@ uint64_t Network::pollCompletionQueueBlocking(ibv_cq *completionQueue, int type)
 uint64_t Network::pollSendCompletionQueueBlocking()
 /// Poll the send completion queue blocking
 {
-   return pollCompletionQueueBlocking(completionQueueSend, IBV_WC_SEND);
+   return pollCompletionQueueBlocking(sharedCompletionQueueSend, IBV_WC_SEND);
 }
 //---------------------------------------------------------------------------
 uint64_t Network::pollRecvCompletionQueueBlocking()
 /// Poll the receive completion queue blocking
 {
-   return pollCompletionQueueBlocking(completionQueueRecv, IBV_WC_RECV);
+   return pollCompletionQueueBlocking(sharedCompletionQueueRecv, IBV_WC_RECV);
 }
 //---------------------------------------------------------------------------
 pair<bool, uint64_t> Network::waitForCompletion()
@@ -864,84 +645,6 @@ void Network::printCapabilities()
    if (status) {
       std::cerr << "Error, closing the device " << ibv_get_device_name(context->device) << " failed";
    }
-}
-// -------------------------------------------------------------------------
-string queuePairStateToString(ibv_qp_state qp_state)
-{
-   switch (qp_state) {
-      case IBV_QPS_RESET:
-         return "IBV_QPS_RESET";
-      case IBV_QPS_INIT:
-         return "IBV_QPS_INIT";
-      case IBV_QPS_RTR:
-         return "IBV_QPS_RTR";
-      case IBV_QPS_RTS:
-         return "IBV_QPS_RTS";
-      case IBV_QPS_SQD:
-         return "IBV_QPS_SQD";
-      case IBV_QPS_SQE:
-         return "IBV_QPS_SQE";
-      case IBV_QPS_ERR:
-         return "IBV_QPS_ERR";
-      default:
-         throw;
-   }
-}
-// -------------------------------------------------------------------------
-string queuePairAccessFlagsToString(int qp_access_flags)
-{
-   string result = "";
-   if (qp_access_flags & IBV_ACCESS_REMOTE_WRITE)
-      result += "IBV_ACCESS_REMOTE_WRITE, ";
-   if (qp_access_flags & IBV_ACCESS_REMOTE_READ)
-      result += "IBV_ACCESS_REMOTE_READ, ";
-   if (qp_access_flags & IBV_ACCESS_REMOTE_ATOMIC)
-      result += "IBV_ACCESS_REMOTE_ATOMIC, ";
-   return result;
-}
-// -------------------------------------------------------------------------
-void Network::printQueuePairDetails(unsigned qpid)
-/// Print details of t he queue pair
-{
-   struct ibv_qp_attr attr;
-   struct ibv_qp_init_attr init_attr;
-   memset(&attr, 0, sizeof(attr));
-   memset(&init_attr, 0, sizeof(init_attr));
-
-   const int allFlags = IBV_QP_STATE | IBV_QP_CUR_STATE | IBV_QP_EN_SQD_ASYNC_NOTIFY | IBV_QP_ACCESS_FLAGS | IBV_QP_PKEY_INDEX | IBV_QP_PORT | IBV_QP_QKEY | IBV_QP_AV | IBV_QP_PATH_MTU | IBV_QP_TIMEOUT | IBV_QP_RETRY_CNT | IBV_QP_RNR_RETRY | IBV_QP_RQ_PSN | IBV_QP_MAX_QP_RD_ATOMIC | IBV_QP_ALT_PATH | IBV_QP_MIN_RNR_TIMER | IBV_QP_SQ_PSN | IBV_QP_MAX_DEST_RD_ATOMIC | IBV_QP_PATH_MIG_STATE | IBV_QP_CAP | IBV_QP_DEST_QPN;
-   if (::ibv_query_qp(queuePairs[qpid], &attr, allFlags, &init_attr)) {
-      string reason = "Error, querying the queue pair details.";
-      cerr << reason << endl;
-      throw NetworkException(reason);
-   }
-
-   cout << "[State of QP " << qpid << "]" << endl;
-   cout << endl;
-   cout << left << setw(44) << "qp_state:" << queuePairStateToString(attr.qp_state) << endl;
-   cout << left << setw(44) << "cur_qp_state:" << queuePairStateToString(attr.cur_qp_state) << endl;
-   cout << left << setw(44) << "path_mtu:" << attr.path_mtu << endl;
-   cout << left << setw(44) << "path_mig_state:" << attr.path_mig_state << endl;
-   cout << left << setw(44) << "qkey:" << attr.qkey << endl;
-   cout << left << setw(44) << "rq_psn:" << attr.rq_psn << endl;
-   cout << left << setw(44) << "sq_psn:" << attr.sq_psn << endl;
-   cout << left << setw(44) << "dest_qp_num:" << attr.dest_qp_num << endl;
-   cout << left << setw(44) << "qp_access_flags:" << queuePairAccessFlagsToString(attr.qp_access_flags) << endl;
-   cout << left << setw(44) << "cap:" << "<not impl>" << endl;
-   cout << left << setw(44) << "ah_attr:" << "<not impl>" << endl;
-   cout << left << setw(44) << "alt_ah_attr:" << "<not impl>" << endl;
-   cout << left << setw(44) << "pkey_index:" << attr.pkey_index << endl;
-   cout << left << setw(44) << "alt_pkey_index:" << attr.alt_pkey_index << endl;
-   cout << left << setw(44) << "en_sqd_async_notify:" << static_cast<int>(attr.en_sqd_async_notify) << endl;
-   cout << left << setw(44) << "sq_draining:" << static_cast<int>(attr.sq_draining) << endl;
-   cout << left << setw(44) << "max_rd_atomic:" << static_cast<int>(attr.max_rd_atomic) << endl;
-   cout << left << setw(44) << "max_dest_rd_atomic:" << static_cast<int>(attr.max_dest_rd_atomic) << endl;
-   cout << left << setw(44) << "min_rnr_timer:" << static_cast<int>(attr.min_rnr_timer) << endl;
-   cout << left << setw(44) << "port_num:" << static_cast<int>(attr.port_num) << endl;
-   cout << left << setw(44) << "timeout:" << static_cast<int>(attr.timeout) << endl;
-   cout << left << setw(44) << "retry_cnt:" << static_cast<int>(attr.retry_cnt) << endl;
-   cout << left << setw(44) << "rnr_retry:" << static_cast<int>(attr.rnr_retry) << endl;
-   cout << left << setw(44) << "alt_port_num:" << static_cast<int>(attr.alt_port_num) << endl;
-   cout << left << setw(44) << "alt_timeout:" << static_cast<int>(attr.alt_timeout) << endl;
 }
 //---------------------------------------------------------------------------
 }

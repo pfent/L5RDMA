@@ -38,6 +38,7 @@ struct MemoryRegion;
 /// Identifies the host of a hash table
 struct HashTableLocation {
    int qpIndex; // Should be the same position as in the vector in the network class ?
+   rdma::QueuePair *queuePair;
    std::string hostname;
    int port;
 };

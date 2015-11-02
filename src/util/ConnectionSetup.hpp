@@ -48,6 +48,8 @@ struct TestHarness {
    std::unique_ptr <zmq::socket_t> broadcastSocket;
 
    rdma::Network network;
+   std::vector <std::unique_ptr<rdma::QueuePair>> queuePairs;
+
    uint32_t localId;
    uint32_t nodeCount;
    std::string coordinatorHostName;
@@ -56,6 +58,7 @@ struct TestHarness {
    std::vector <PeerInfo> peerInfos;
 
    TestHarness(zmq::context_t &context, uint32_t nodeCount, const std::string &coordinatorHostName);
+   ~TestHarness();
 
    // requires a coordinator on [HOSTNAME] running "supportFullyConnectedNetworkCreation"
    void createFullyConnectedNetwork();

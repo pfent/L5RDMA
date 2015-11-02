@@ -22,6 +22,7 @@
 #include "rdma/MemoryRegion.hpp"
 #include "rdma/Network.hpp"
 #include "rdma/WorkRequest.hpp"
+#include "rdma/QueuePair.hpp"
 #include "util/Utility.hpp"
 #include "dht/HashTableNetworkLayout.hpp"
 #include "dht/HashTableServer.hpp"
@@ -82,7 +83,7 @@ void HashTableClient::insert(const Entry &entry)
       // Try swapping until it works
       do {
          workRequest.setCompareValue(oldBucketLocator[0].data);
-         network.postWorkRequest(targetHost, workRequest);
+         remoteTables.remoteHashTables[targetHost].location.queuePair->postWorkRequest(workRequest);
          network.waitForCompletionSend();
       } while (oldBucketLocator[0].data != workRequest.getCompareValue());
       oldNextIdentifier = oldBucketLocator[0];
@@ -109,13 +110,14 @@ uint32_t HashTableClient::count(uint64_t key) const
       vector <BucketLocator> bucketLocator(1);
       rdma::MemoryRegion bucketLocatorMR(bucketLocator.data(), sizeof(bucketLocator[0]) * bucketLocator.size(), network.getProtectionDomain(), rdma::MemoryRegion::Permission::All);
 
+      auto &remote = remoteTables.remoteHashTables[targetHost];
+
       rdma::ReadWorkRequest workRequest;
       workRequest.setId(8029);
       workRequest.setLocalAddress(bucketLocatorMR);
-      rdma::RemoteMemoryRegion htRmr = remoteTables.remoteHashTables[targetHost].htRmr;
-      workRequest.setRemoteAddress(rdma::RemoteMemoryRegion{htRmr.address + targetHtIndex * sizeof(BucketLocator), htRmr.key});
+      workRequest.setRemoteAddress(rdma::RemoteMemoryRegion{remote.htRmr.address + targetHtIndex * sizeof(BucketLocator), remote.htRmr.key});
       workRequest.setCompletion(true);
-      network.postWorkRequest(targetHost, workRequest);
+      remote.location.queuePair->postWorkRequest(workRequest);
       network.waitForCompletionSend();
       next = bucketLocator[0];
    }
@@ -129,13 +131,14 @@ uint32_t HashTableClient::count(uint64_t key) const
          // Read from remote host
          Bucket b;
          {
+            auto &remote = remoteTables.remoteHashTables[next.getHost()];
+
             rdma::ReadWorkRequest workRequest;
             workRequest.setId(8029);
             workRequest.setLocalAddress(bucketMR);
-            rdma::RemoteMemoryRegion bucketRmr = remoteTables.remoteHashTables[next.getHost()].bucketsRmr;
-            workRequest.setRemoteAddress(rdma::RemoteMemoryRegion{bucketRmr.address + next.getOffset() * sizeof(Bucket), bucketRmr.key});
+            workRequest.setRemoteAddress(rdma::RemoteMemoryRegion{remote.bucketsRmr.address + next.getOffset() * sizeof(Bucket), remote.bucketsRmr.key});
             workRequest.setCompletion(true);
-            network.postWorkRequest(next.getHost(), workRequest);
+            remote.location.queuePair->postWorkRequest(workRequest);
             network.waitForCompletionSend();
             b = bucket[0];
          }
