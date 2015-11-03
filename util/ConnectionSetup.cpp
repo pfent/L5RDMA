@@ -19,8 +19,8 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 // ---------------------------------------------------------------------------
 #include "Utility.hpp"
-#include "rdma/QueuePair.hpp"
 #include "ConnectionSetup.hpp"
+#include "rdma/QueuePair.hpp"
 #include "rdma/Network.hpp"
 // ---------------------------------------------------------------------------
 #include <iostream>
@@ -49,10 +49,10 @@ ostream &operator<<(ostream &os, const PeerInfo &peerInfo)
 //---------------------------------------------------------------------------
 TestHarness::TestHarness(zmq::context_t &context, uint32_t nodeCount, const string &coordinatorHostName)
         : context(context)
-          , localId(-1)
+          , localId(~1ul)
           , nodeCount(nodeCount)
           , coordinatorHostName(coordinatorHostName)
-          , verbose(getenv("VERBOSE"))
+          , verbose(getenv("VERBOSE") != nullptr)
 {
    // Setup queue pairs
    for (uint i = 0; i<nodeCount; ++i) {
@@ -80,9 +80,10 @@ TestHarness::~TestHarness()
 void TestHarness::createFullyConnectedNetwork()
 {
    // Create vector with QPs and hostname for each other client
-   vector <PeerInfo> localQPInfos;
+   vector<PeerInfo> localQPInfos;
    for (uint32_t i = 0; i<nodeCount; ++i) {
-      PeerInfo peerInfo(rdma::Address { network.getLID(), queuePairs[i]->getQPN() }, util::getHostname());
+      rdma::Address address{network.getLID(), queuePairs[i]->getQPN()};
+      PeerInfo peerInfo(address, util::getHostname());
       localQPInfos.push_back(peerInfo);
    }
    if (verbose)
@@ -107,7 +108,7 @@ void TestHarness::createFullyConnectedNetwork()
    zmq::message_t allAddresses(nodeCount * nodeCount * sizeof(PeerInfo));
    broadcastSocket->recv(&allAddresses);
    assert(allAddresses.size() == sizeof(PeerInfo) * nodeCount * nodeCount);
-   vector <rdma::Address> remoteAddresses(nodeCount);
+   vector<rdma::Address> remoteAddresses(nodeCount);
    PeerInfo *peerInfoPtr = reinterpret_cast<PeerInfo *>(allAddresses.data());
    for (uint32_t i = 0; i<nodeCount; i++) {
       peerInfos.push_back(peerInfoPtr[i * nodeCount + localId]);

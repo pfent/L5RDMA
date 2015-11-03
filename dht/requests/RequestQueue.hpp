@@ -26,6 +26,10 @@
 #include <zmq.hpp>
 //---------------------------------------------------------------------------
 #include "rdma/Network.hpp"
+#include "rdma/MemoryRegion.hpp"
+#include "rdma/WorkRequest.hpp"
+#include "rdma/QueuePair.hpp"
+#include "rdma/CompletionQueuePair.hpp"
 #include "util/NotAssignable.hpp"
 #include "dht/Common.hpp"
 //---------------------------------------------------------------------------
@@ -37,77 +41,179 @@ struct HashTableNetworkLayout;
 struct HashTableServer;
 //---------------------------------------------------------------------------
 enum class RequestStatus : public uint8_t {
-   FINISHED_AND_RECYCLE, SEND_AGAIN
+   FINISHED, SEND_AGAIN
 };
 //---------------------------------------------------------------------------
-struct Request {
-   virtual RequestStatus onDone() = 0;
-   virtual rdma::WorkRequest &getReqeust() const = 0;
+struct Request : public util::NotAssignable {
+   virtual RequestStatus onCompleted() = 0;
+   virtual rdma::WorkRequest &getRequest() = 0;
    virtual ~RequestStatus() { }
 };
+using namespace std;
 //---------------------------------------------------------------------------
 struct InsertRequest : public Request {
-   uint64_t targetHost;
-   uint64_t targetHtIndex;
+   rdma::AtomicCompareAndSwapWorkRequest workRequest;
 
-   void init(const Entry &entry)
+   BucketLocator oldBucketLocator;
+   rdma::MemoryRegion oldBucketLocatorMR;
+
+   Bucket *bucket;
+   Entry *entry;
+
+   InsertRequest(rdma::Network &network)
+           : oldBucketLocatorMR(&oldBucketLocator, sizeof(oldBucketLocator), network.getProtectionDomain(), rdma::MemoryRegion::Permission::All)
    {
-      targetHost = (entry.key & maskForHostSelection) >> shiftForHostSelection;
-      targetHtIndex = (entry.key & maskForPositionSelection);
-
-      // Write into the bucket
-      {
-         localServer.bucketMemory[bucketOffset].entry = entry;
-         localServer.bucketMemory[bucketOffset].next = oldNextIdentifier;
-      }
-
-      // Obtain memory for the bucket
-      uint64_t bucketOffset = localServer.nextFreeOffset++;
-      BucketLocator bucketLocator(localHostId, bucketOffset);
-
-      // Compare and swap the new value in
-      BucketLocator oldNextIdentifier;
-      {
-         // TODO OPT: Pin local memory
-         vector <BucketLocator> oldBucketLocator(1);
-         rdma::MemoryRegion oldBucketLocatorMR(oldBucketLocator.data(), sizeof(uint64_t) * oldBucketLocator.size(), network.getProtectionDomain(), rdma::MemoryRegion::Permission::All);
-
-         // Create work request
-         rdma::AtomicCompareAndSwapWorkRequest workRequest;
-         workRequest.setId(8029);
-         workRequest.setLocalAddress(oldBucketLocatorMR);
-         rdma::RemoteMemoryRegion htRmr = remoteTables.remoteHashTables[targetHost].htRmr;
-         workRequest.setRemoteAddress(rdma::RemoteMemoryRegion{htRmr.address + targetHtIndex * sizeof(BucketLocator), htRmr.key});
-         workRequest.setCompletion(true);
-         workRequest.setSwapValue(bucketLocator.data);
-
-         // Try swapping until it works
-         do {
-            workRequest.setCompareValue(oldBucketLocator[0].data);
-            network.postWorkRequest(targetHost, workRequest);
-            network.waitForCompletionSend();
-         } while (oldBucketLocator[0].data != workRequest.getCompareValue());
-         oldNextIdentifier = oldBucketLocator[0];
-      }
    }
+
+   ~InsertRequest() { }
+
+   virtual RequestStatus onCompleted()
+   {
+      if (oldBucketLocator.data != workRequest.getCompareValue()) {
+         workRequest.setCompareValue(oldBucketLocator.data);
+         return RequestStatus::SEND_AGAIN;
+      }
+
+      bucket->next.data = oldBucketLocator.data;
+      bucket->entry = *entry;
+
+      return RequestStatus::FINISHED;
+   }
+
+   void init(Entry *entry, Bucket *bucket, rdma::RemoteMemoryRegion &remoteTarget, const BucketLocator &localBucketLocation)
+   {
+      this->entry = entry;
+      this->bucket = bucket;
+
+      // Init work request
+      workRequest.setId((uintptr_t) this);
+      workRequest.setLocalAddress(oldBucketLocatorMR);
+      workRequest.setCompareValue(0);
+      workRequest.setRemoteAddress(remoteTarget);
+      workRequest.setSwapValue(localBucketLocation.data);
+   }
+
+   virtual rdma::WorkRequest &getRequest() { return workRequest; }
+};
+//---------------------------------------------------------------------------
+struct DummyRequest : public Request {
+   rdma::ReadWorkRequest workRequest;
+
+   uint64_t memory;
+   rdma::MemoryRegion memoryMR;
+
+   DummyRequest(rdma::Network &network, rdma::RemoteMemoryRegion &remoteMemoryRegion)
+           : memoryMR(&memory, sizeof(memory), network.getProtectionDomain(), rdma::MemoryRegion::Permission::All)
+   {
+      workRequest.setCompletion(true);
+      workRequest.setLocalAddress(memoryMR);
+      workRequest.setRemoteAddress(remoteMemoryRegion);
+   }
+
+   ~InsertRequest() { }
+
+   virtual RequestStatus onCompleted()
+   {
+      return RequestStatus::FINISHED;
+   }
+
+   virtual rdma::WorkRequest &getRequest() { return workRequest; }
 };
 //---------------------------------------------------------------------------
 class RequestQueue : public util::NotAssignable {
 public:
-   RequestQueue(int bundleSize, int bundleCount);
-   ~RequestQueue();
+   RequestQueue(uint bundleSize, uint bundleCount, rdma::QueuePair &queuePair, DummyRequest &dummyRequest)
+           : queuePair(queuePair)
+             , bundles(bundleCount, Bundle{vector<Request *>(bundleSize)})
+             , bundleSize(bundleSize)
+             , bundleCount(bundleCount)
+             , currentBundle(0)
+             , nextWorkRequestInBundle(0)
+             , bundleUpForCompletion(0)
+             , dummyRequest(dummyRequest)
+   {
+   }
 
-   void submit(Request &request);
+   ~RequestQueue() { }
 
-   void finishAllOpenRequests();
+   void submit(Request *request)
+   {
+      // Wait
+      while (nextWorkRequestInBundle>=bundleSize) {
+         nextWorkRequestInBundle = 0;
+         currentBundle = (currentBundle + 1) % bundleCount;
+
+         // Wait until the bundle is completed
+         if (currentBundle == bundleUpForCompletion) {
+            // Wait for completion event
+            queuePair.getCompletionQueuePair().waitForCompletionSend();
+            bundleUpForCompletion = (bundleUpForCompletion + 1) % bundleCount;
+
+            // Notify all request of this bundle that they are completed
+            for (auto iter : bundles[currentBundle].requests)
+               if (iter->onCompleted() == RequestStatus::SEND_AGAIN)
+                  send(iter);
+         }
+      }
+
+      // Send
+      send(request);
+   }
+
+   void finishAllOpenRequests()
+   {
+      // Find all open work request
+      std::vector<Request *> openRequests;
+      while (nextWorkRequestInBundle != 0 || currentBundle != bundleUpForCompletion) {
+         if (nextWorkRequestInBundle == 0) {
+            currentBundle = (currentBundle - 1 + bundleCount) % bundleCount;
+            nextWorkRequestInBundle = bundleSize;
+         } else {
+            nextWorkRequestInBundle--;
+            openRequests.push_back(bundles[currentBundle].requests[nextWorkRequestInBundle]);
+         }
+      }
+
+      // Wait for completions
+      for (int i = 0; i<openRequests.size() / bundleSize; ++i)
+         queuePair.getCompletionQueuePair().waitForCompletionSend();
+
+      // Make them finish
+      while (!openRequests.empty()) {
+         queuePair.postWorkRequest(dummyRequest.getRequest());
+         queuePair.getCompletionQueuePair().waitForCompletionSend();
+
+         std::vector<Request *> stillOpenRequests;
+         for (auto iter : openRequests) {
+            if (iter->onCompleted() == RequestStatus::SEND_AGAIN) {
+               queuePair.postWorkRequest(iter->getRequest());
+               stillOpenRequests.push_back(iter);
+            }
+         }
+         swap(openRequests, stillOpenRequests);
+      }
+   }
 
 private:
+   void send(Request *request)
+   {
+      bundles[currentBundle].requests[nextWorkRequestInBundle++] = request;
+      request->getRequest().setCompletion(nextWorkRequestInBundle == bundleSize);
+      queuePair.postWorkRequest(request->getRequest());
+   }
+
    struct Bundle {
       std::vector<Request *> requests;
    };
 
-   std::vector <Bundle> bundles;
+   rdma::QueuePair &queuePair;
+   std::vector<Bundle> bundles;
+   const uint32_t bundleSize;
+   const uint32_t bundleCount;
    uint32_t currentBundle;
+   uint32_t nextWorkRequestInBundle;
+   uint32_t bundleUpForCompletion;
+   DummyRequest &dummyRequest;
 };
 //---------------------------------------------------------------------------
 } // End of namespace dht

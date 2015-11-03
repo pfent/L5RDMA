@@ -59,10 +59,10 @@ struct HashTableNetworkLayout : public util::NotAssignable {
    void dump();
 
    // Helper for easy access
-   const HashTableLocation &getLocation(uint i) const { return remoteHashTables[i].location; }
-   const rdma::RemoteMemoryRegion &getHtRmr(uint i) const { return remoteHashTables[i].htRmr; }
-   const rdma::RemoteMemoryRegion &getBucketsRmr(uint i) const { return remoteHashTables[i].bucketsRmr; }
-   const rdma::RemoteMemoryRegion &getNextFreeOffsetRmr(uint i) const { return remoteHashTables[i].nextFreeOffsetRmr; }
+   const HashTableLocation &getLocation(uint64_t i) const { return remoteHashTables[i].location; }
+   const rdma::RemoteMemoryRegion &getHtRmr(uint64_t i) const { return remoteHashTables[i].htRmr; }
+   const rdma::RemoteMemoryRegion &getBucketsRmr(uint64_t i) const { return remoteHashTables[i].bucketsRmr; }
+   const rdma::RemoteMemoryRegion &getNextFreeOffsetRmr(uint64_t i) const { return remoteHashTables[i].nextFreeOffsetRmr; }
 };
 //---------------------------------------------------------------------------
 } // End of namespace dht
