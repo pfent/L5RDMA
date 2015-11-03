@@ -4,7 +4,7 @@ all: alex
 
 TARGET_DIR := bin
 
-CF := -g3 -O0 -std=c++14 -Wextra -Wall -I./src
+CF := -g3 -O0 -std=c++14 -Wextra -Wall -I.
 LF := -g3 -O0 -std=c++14 -libverbs -lpthread -lzmq
 
 CCCACHE_USE?=
@@ -20,17 +20,18 @@ BUILD_DIR = @mkdir -p $(dir $@)
 -include $(TARGET_DIR)/*/*/*.P
 -include $(TARGET_DIR)/*/*/*/*.P
 ## -------------------------------------------------------------------------------------------------
-## Grep all files relevant for the build (= all files located in sub-folders of the src folder)
-src_obj := $(patsubst src/%,$(TARGET_DIR)/src/%, $(patsubst %.cpp,%.o,$(shell find `find 'src/' -maxdepth 1 -type d | tail -n +2` -name "*.cpp")))
+## Grep all files relevant for the build (= all cpp files)
+src_cpp := $(shell find rdma dht util -name "*.cpp")
+src_obj := $(addprefix $(TARGET_DIR)/, $(patsubst %.cpp,%.o,$(src_cpp)))
 ## -------------------------------------------------------------------------------------------------
 ## Build the test program
-tester_obj := $(src_obj) bin/src/Tester.o
+tester_obj := $(src_obj) bin/Tester.o
 tester: $(tester_obj)
 	@if [ $(VERBOSE) ]; then echo $(CXX) -o tester $(tester_obj) $(LF); else echo $(CXX) -o tester; fi
 	@$(CXX) -o tester $(tester_obj) $(LF)
 ## -------------------------------------------------------------------------------------------------
 ## Build the coordinator for exchanging rdma keys
-coordinator_obj := $(src_obj) bin/src/Coordinator.o
+coordinator_obj := $(src_obj) bin/Coordinator.o
 coordinator: $(coordinator_obj)
 	@if [ $(VERBOSE) ]; then echo $(CXX) -o coordinator $(coordinator_obj) $(LF); else echo $(CXX) -o coordinator; fi
 	@$(CXX) -o coordinator $(coordinator_obj) $(LF)

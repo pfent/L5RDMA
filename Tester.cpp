@@ -19,6 +19,7 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //---------------------------------------------------------------------------
 #include "rdma/Network.hpp"
+#include "dht/Common.hpp"
 #include "rdma/MemoryRegion.hpp"
 #include "rdma/WorkRequest.hpp"
 #include "util/ConnectionSetup.hpp"
@@ -28,6 +29,7 @@
 #include "dht/HashTableNetworkLayout.hpp"
 //---------------------------------------------------------------------------
 #include <infiniband/verbs.h>
+#include <zmq.hpp>
 #include <iomanip>
 #include <chrono>
 #include <iostream>
@@ -35,7 +37,6 @@
 #include <algorithm>
 #include <cassert>
 #include <unistd.h>
-#include <zmq.hpp>
 #include <unordered_map>
 //---------------------------------------------------------------------------
 using namespace std;
@@ -55,7 +56,7 @@ void runCode(util::TestHarness &testHarness)
 
    // 2. Network info
    // Create vector with containing node identifiers for all nodes, which host a part of the distributed hash table
-   vector <dht::HashTableLocation> hashTableLocations;
+   vector<dht::HashTableLocation> hashTableLocations;
    for (uint i = 0; i<testHarness.peerInfos.size(); ++i) {
       dht::HashTableLocation hashTableLocation = {(int) i, testHarness.queuePairs[i].get(), testHarness.peerInfos[i].hostname, 8222};
       hashTableLocations.push_back(hashTableLocation);
@@ -73,7 +74,7 @@ void runCode(util::TestHarness &testHarness)
 
    // 4. Test
    srand(0);
-   unordered_multimap <uint64_t, uint64_t> reference;
+   unordered_multimap<uint64_t, uint64_t> reference;
    for (int j = 0; j<10; ++j) {
       uint64_t key = rand();
       distributedHashTableClient.insert({key, {0xdeadbeef}});
