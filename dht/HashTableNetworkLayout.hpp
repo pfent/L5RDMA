@@ -45,21 +45,22 @@ struct MemoryRegion;
 struct HashTableNetworkLayout : public util::NotAssignable {
 
    struct RemoteHashTableInfo {
-      HashTableLocation location;
-
       rdma::RemoteMemoryRegion htRmr;
       rdma::RemoteMemoryRegion bucketsRmr;
       rdma::RemoteMemoryRegion nextFreeOffsetRmr;
    };
 
-   std::vector <RemoteHashTableInfo> remoteHashTables;
+   std::vector<HashTableLocation> locations; // Initialized in constructor
+   std::vector<RemoteHashTableInfo> remoteHashTables; // Initialized by "retrieveRemoteMemoryRegions"
+   std::vector<std::unique_ptr<RequestQueue>> requestQueues; // Initialized by "setupRequestQueue"
 
-   HashTableNetworkLayout();
-   void retrieveRemoteMemoryRegions(zmq::context_t &context, const std::vector <HashTableLocation> &tableLocations);
+   HashTableNetworkLayout(const std::vector<HashTableLocation> &tableLocations);
+   void retrieveRemoteMemoryRegions(zmq::context_t &context);
+   void setupRequestQueues(rdma::Network &network, uint bundleSize, uint bundleCount);
    void dump();
 
    // Helper for easy access
-   const HashTableLocation &getLocation(uint64_t i) const { return remoteHashTables[i].location; }
+   const HashTableLocation &getLocation(uint64_t i) const { return locations[i]; }
    const rdma::RemoteMemoryRegion &getHtRmr(uint64_t i) const { return remoteHashTables[i].htRmr; }
    const rdma::RemoteMemoryRegion &getBucketsRmr(uint64_t i) const { return remoteHashTables[i].bucketsRmr; }
    const rdma::RemoteMemoryRegion &getNextFreeOffsetRmr(uint64_t i) const { return remoteHashTables[i].nextFreeOffsetRmr; }

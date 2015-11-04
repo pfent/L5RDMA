@@ -29,13 +29,14 @@
 #include "util/NotAssignable.hpp"
 //---------------------------------------------------------------------------
 namespace rdma {
-   class QueuePair;
+class QueuePair;
 }
 //---------------------------------------------------------------------------
 namespace dht { // Distributed Hash Table
 //---------------------------------------------------------------------------
 struct RemoteMemoryRegion;
 struct MemoryRegion;
+struct RequestQueue;
 //---------------------------------------------------------------------------
 /// Identifies the host of a hash table
 struct HashTableLocation {

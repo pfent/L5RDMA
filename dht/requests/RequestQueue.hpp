@@ -40,14 +40,14 @@ namespace dht { // Distributed Hash Table
 struct HashTableNetworkLayout;
 struct HashTableServer;
 //---------------------------------------------------------------------------
-enum class RequestStatus : public uint8_t {
+enum struct RequestStatus : uint8_t {
    FINISHED, SEND_AGAIN
 };
 //---------------------------------------------------------------------------
 struct Request : public util::NotAssignable {
    virtual RequestStatus onCompleted() = 0;
    virtual rdma::WorkRequest &getRequest() = 0;
-   virtual ~RequestStatus() { }
+   virtual ~Request() { }
 };
 using namespace std;
 //---------------------------------------------------------------------------
@@ -58,7 +58,6 @@ struct InsertRequest : public Request {
    rdma::MemoryRegion oldBucketLocatorMR;
 
    Bucket *bucket;
-   Entry *entry;
 
    InsertRequest(rdma::Network &network)
            : oldBucketLocatorMR(&oldBucketLocator, sizeof(oldBucketLocator), network.getProtectionDomain(), rdma::MemoryRegion::Permission::All)
@@ -75,14 +74,12 @@ struct InsertRequest : public Request {
       }
 
       bucket->next.data = oldBucketLocator.data;
-      bucket->entry = *entry;
 
       return RequestStatus::FINISHED;
    }
 
-   void init(Entry *entry, Bucket *bucket, rdma::RemoteMemoryRegion &remoteTarget, const BucketLocator &localBucketLocation)
+   void init(Bucket *bucket, rdma::RemoteMemoryRegion &remoteTarget, const BucketLocator &localBucketLocation)
    {
-      this->entry = entry;
       this->bucket = bucket;
 
       // Init work request
@@ -110,7 +107,7 @@ struct DummyRequest : public Request {
       workRequest.setRemoteAddress(remoteMemoryRegion);
    }
 
-   ~InsertRequest() { }
+   ~DummyRequest() { }
 
    virtual RequestStatus onCompleted()
    {
@@ -175,7 +172,7 @@ public:
       }
 
       // Wait for completions
-      for (int i = 0; i<openRequests.size() / bundleSize; ++i)
+      for (uint i = 0; i<openRequests.size() / bundleSize; ++i)
          queuePair.getCompletionQueuePair().waitForCompletionSend();
 
       // Make them finish

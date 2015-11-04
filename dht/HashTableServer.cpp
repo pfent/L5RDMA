@@ -111,14 +111,15 @@ void HashTableServer::dumpHashTableContent(HashTableNetworkLayout &hashTableNetw
          Bucket b;
          {
             auto& remote = hashTableNetworkLayout.remoteHashTables[next.getHost()];
+            auto& remoteLocation = hashTableNetworkLayout.locations[next.getHost()];
 
             rdma::ReadWorkRequest workRequest;
             workRequest.setId(8029);
             workRequest.setLocalAddress(bucketMR);
             workRequest.setRemoteAddress(rdma::RemoteMemoryRegion{remote.bucketsRmr.address + next.getOffset() * sizeof(Bucket), remote.bucketsRmr.key});
             workRequest.setCompletion(true);
-            remote.location.queuePair->postWorkRequest(workRequest);
-            remote.location.queuePair->getCompletionQueuePair().waitForCompletionSend();
+            remoteLocation.queuePair->postWorkRequest(workRequest);
+            remoteLocation.queuePair->getCompletionQueuePair().waitForCompletionSend();
             b = bucket[0];
          }
 

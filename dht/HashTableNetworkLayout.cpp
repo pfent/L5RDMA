@@ -24,6 +24,7 @@
 #include "rdma/WorkRequest.hpp"
 #include "dht/HashTableNetworkLayout.hpp"
 #include "util/Utility.hpp"
+#include "dht/requests/RequestQueue.hpp"
 //---------------------------------------------------------------------------
 #include <cstring>
 #include <iostream>
@@ -32,17 +33,18 @@ using namespace std;
 //---------------------------------------------------------------------------
 namespace dht {
 //---------------------------------------------------------------------------
-HashTableNetworkLayout::HashTableNetworkLayout()
+HashTableNetworkLayout::HashTableNetworkLayout(const vector<HashTableLocation> &hashTableLocations)
+        : locations(hashTableLocations)
+          , remoteHashTables(locations.size())
+          , requestQueues(locations.size())
 {
 }
 //---------------------------------------------------------------------------
-void HashTableNetworkLayout::retrieveRemoteMemoryRegions(zmq::context_t &context, const vector <HashTableLocation> &hashTableLocations)
+void HashTableNetworkLayout::retrieveRemoteMemoryRegions(zmq::context_t &context)
 {
-   remoteHashTables.resize(hashTableLocations.size());
-
-   for (size_t i = 0; i<hashTableLocations.size(); ++i) {
+   for (size_t i = 0; i<locations.size(); ++i) {
       zmq::socket_t socket(context, ZMQ_REQ);
-      socket.connect(("tcp://" + hashTableLocations[i].hostname + ":" + util::to_string(hashTableLocations[i].port)).c_str());
+      socket.connect(("tcp://" + locations[i].hostname + ":" + util::to_string(locations[i].port)).c_str());
 
       zmq::message_t request(0);
       socket.send(request);
@@ -50,7 +52,6 @@ void HashTableNetworkLayout::retrieveRemoteMemoryRegions(zmq::context_t &context
       zmq::message_t response(sizeof(rdma::RemoteMemoryRegion) * 3);
       socket.recv(&response);
 
-      remoteHashTables[i].location = hashTableLocations[i];
       remoteHashTables[i].htRmr = reinterpret_cast<rdma::RemoteMemoryRegion *>(response.data())[0];
       remoteHashTables[i].bucketsRmr = reinterpret_cast<rdma::RemoteMemoryRegion *>(response.data())[1];
       remoteHashTables[i].nextFreeOffsetRmr = reinterpret_cast<rdma::RemoteMemoryRegion *>(response.data())[2];
@@ -59,12 +60,20 @@ void HashTableNetworkLayout::retrieveRemoteMemoryRegions(zmq::context_t &context
    }
 }
 //---------------------------------------------------------------------------
+void HashTableNetworkLayout::setupRequestQueues(rdma::Network &network, uint bundleSize, uint bundleCount)
+{
+   for (size_t i = 0; i<locations.size(); ++i) {
+      DummyRequest *dummyRequest = new DummyRequest(network, remoteHashTables[i].nextFreeOffsetRmr); // TODO LEAK
+      requestQueues[i] = unique_ptr<RequestQueue>(new RequestQueue(bundleSize, bundleCount, *locations[i].queuePair, *dummyRequest));
+   }
+}
+//---------------------------------------------------------------------------
 void HashTableNetworkLayout::dump()
 {
    cout << "> Network Info (" << remoteHashTables.size() << ")" << endl;
    for (size_t i = 0; i<remoteHashTables.size(); ++i) {
       cout << ">   Remote Hash Table (" << i << ")" << endl;
-      cout << ">     location= {qpIndex=" << remoteHashTables[i].location.qpIndex << " hostname=" << remoteHashTables[i].location.hostname << " port=" << remoteHashTables[i].location.port << "}" << endl;
+      cout << ">     location= {qpIndex=" << locations[i].qpIndex << " hostname=" << locations[i].hostname << " port=" << locations[i].port << "}" << endl;
       cout << ">     htRmr= {" << remoteHashTables[i].htRmr << "}" << endl;
       cout << ">     bucketsRmr= {" << remoteHashTables[i].bucketsRmr << "}" << endl;
       cout << ">     nextFreeOffsetRmr= {" << remoteHashTables[i].nextFreeOffsetRmr << "}" << endl;

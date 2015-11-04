@@ -25,6 +25,7 @@
 #include "util/ConnectionSetup.hpp"
 #include "util/Utility.hpp"
 #include "dht/HashTableClient.hpp"
+#include "dht/requests/RequestQueue.hpp"
 #include "dht/HashTableServer.hpp"
 #include "dht/HashTableNetworkLayout.hpp"
 //---------------------------------------------------------------------------
@@ -61,8 +62,9 @@ void runCode(util::TestHarness &testHarness)
       dht::HashTableLocation hashTableLocation = {(int) i, testHarness.queuePairs[i].get(), testHarness.peerInfos[i].hostname, 8222};
       hashTableLocations.push_back(hashTableLocation);
    }
-   dht::HashTableNetworkLayout hashTableNetworkLayout;
-   hashTableNetworkLayout.retrieveRemoteMemoryRegions(testHarness.context, hashTableLocations);
+   dht::HashTableNetworkLayout hashTableNetworkLayout(hashTableLocations);
+   hashTableNetworkLayout.retrieveRemoteMemoryRegions(testHarness.context);
+   hashTableNetworkLayout.setupRequestQueues(testHarness.network, 1, 1);
    if (getenv("VERBOSE"))
       hashTableNetworkLayout.dump();
 
@@ -73,24 +75,27 @@ void runCode(util::TestHarness &testHarness)
       distributedHashTableClient.dump();
 
    // 4. Test
-   srand(0);
-   unordered_multimap<uint64_t, uint64_t> reference;
-   for (int j = 0; j<10; ++j) {
-      uint64_t key = rand();
-      distributedHashTableClient.insert({key, {0xdeadbeef}});
-      reference.insert(make_pair(key, 0xdeadbeef));
+   if (testHarness.localId == 0) {
+      distributedHashTableClient.insert(dht::Entry{2, array<uint64_t, 1>()});
    }
+   //   srand(0);
+   //   unordered_multimap<uint64_t, uint64_t> reference;
+   //   for (int j = 0; j<10; ++j) {
+   //      uint64_t key = rand();
+   //      distributedHashTableClient.insert({key, {0xdeadbeef}});
+   //      reference.insert(make_pair(key, 0xdeadbeef));
+   //   }
 
    // 5. Done
    cout << "[PRESS ENTER TO PRINT HT]" << endl;
    cin.get();
    if (getenv("VERBOSE"))
       localHashTableServer.dumpHashTableContent(hashTableNetworkLayout);
-   for (auto iter: reference) {
-      uint32_t my_result = distributedHashTableClient.count(iter.first);
-      uint32_t ref_result = reference.count(iter.first);
-      assert(my_result == 2 * ref_result);
-   }
+   //   for (auto iter: reference) {
+   //      uint32_t my_result = distributedHashTableClient.count(iter.first);
+   //      uint32_t ref_result = reference.count(iter.first);
+   //      assert(my_result == 2 * ref_result);
+   //   }
    cout << "[PRESS ENTER TO CONTINUE]" << endl;
    cin.get();
 }
