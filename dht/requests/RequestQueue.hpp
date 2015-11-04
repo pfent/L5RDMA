@@ -183,6 +183,7 @@ public:
          std::vector<Request *> stillOpenRequests;
          for (auto iter : openRequests) {
             if (iter->onCompleted() == RequestStatus::SEND_AGAIN) {
+               iter->getRequest().setCompletion(false);
                queuePair.postWorkRequest(iter->getRequest());
                stillOpenRequests.push_back(iter);
             }

@@ -50,7 +50,7 @@ HashTableServer::HashTableServer(rdma::Network &network, uint32_t htSize, uint32
    // Check alignment
    assert((((uint64_t) htMr->address) & 0x7) == 0);
    assert((((uint64_t) bucketsMr->address) & 0x7) == 0);
-   assert((((uint64_t) & nextFreeOffset) & 0x7) == 0);
+   assert((((uint64_t) &nextFreeOffset) & 0x7) == 0);
 }
 //---------------------------------------------------------------------------
 void HashTableServer::startAddressServiceAsync(zmq::context_t &context, string hostname, int port)
@@ -62,7 +62,7 @@ void HashTableServer::startAddressServiceAsync(zmq::context_t &context, string h
    socket->bind((string("tcp://*:") + util::to_string(port)).c_str());
 
    // Prepare a message (outside an actual message because zmq destroys messages when sending them)
-   vector <rdma::RemoteMemoryRegion> messageMemory(3);
+   vector<rdma::RemoteMemoryRegion> messageMemory(3);
    rdma::RemoteMemoryRegion htRmr{reinterpret_cast<uintptr_t>(htMr->address), htMr->key->rkey};
    rdma::RemoteMemoryRegion bucketsRmr{reinterpret_cast<uintptr_t>(bucketsMr->address), bucketsMr->key->rkey};
    rdma::RemoteMemoryRegion nextFreeOffsetRmr{reinterpret_cast<uintptr_t>(nextFreeOffsetMr->address), nextFreeOffsetMr->key->rkey};
@@ -100,7 +100,7 @@ void HashTableServer::dumpMemoryRegions()
 void HashTableServer::dumpHashTableContent(HashTableNetworkLayout &hashTableNetworkLayout)
 {
    // Pin local memory
-   vector <Bucket> bucket(1);
+   vector<Bucket> bucket(1);
    rdma::MemoryRegion bucketMR(bucket.data(), sizeof(Bucket) * bucket.size(), network.getProtectionDomain(), rdma::MemoryRegion::Permission::All);
 
    for (uint i = 0; i<htMemory.size(); ++i) {
@@ -110,8 +110,8 @@ void HashTableServer::dumpHashTableContent(HashTableNetworkLayout &hashTableNetw
          // Read from remote host
          Bucket b;
          {
-            auto& remote = hashTableNetworkLayout.remoteHashTables[next.getHost()];
-            auto& remoteLocation = hashTableNetworkLayout.locations[next.getHost()];
+            auto &remote = hashTableNetworkLayout.remoteHashTables[next.getHost()];
+            auto &remoteLocation = hashTableNetworkLayout.locations[next.getHost()];
 
             rdma::ReadWorkRequest workRequest;
             workRequest.setId(8029);

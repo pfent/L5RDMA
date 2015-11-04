@@ -67,6 +67,7 @@ void HashTableClient::insert(const Entry &entry)
 
    // Allocate a bucket
    uint64_t bucketOffset = localServer.nextFreeOffset++;
+   assert(bucketOffset < localServer.bucketMemory.size());
    BucketLocator newBucketLocator(localHostId, bucketOffset);
    Bucket *newBucket = &localServer.bucketMemory[bucketOffset];
    newBucket->entry = entry; // next will be set once it was retrieved from the remote host
