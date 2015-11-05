@@ -22,6 +22,7 @@
 #include "ConnectionSetup.hpp"
 #include "rdma/QueuePair.hpp"
 #include "rdma/Network.hpp"
+#include "rdma/CompletionQueuePair.hpp"
 // ---------------------------------------------------------------------------
 #include <iostream>
 #include <iomanip>
@@ -56,15 +57,16 @@ TestHarness::TestHarness(zmq::context_t &context, uint32_t nodeCount, const stri
 {
    // Setup queue pairs
    for (uint i = 0; i<nodeCount; ++i) {
-      queuePairs.push_back(make_unique<rdma::QueuePair>(network));
+      auto completionQueue = new rdma::CompletionQueuePair(network);
+      queuePairs.push_back(unique_ptr<rdma::QueuePair>(new rdma::QueuePair(network, *completionQueue)));
    }
 
    // Request reply socket
-   masterSocket = make_unique<zmq::socket_t>(context, ZMQ_REQ);
+   masterSocket = unique_ptr<zmq::socket_t>(new zmq::socket_t(context, ZMQ_REQ));
    masterSocket->connect(("tcp://" + coordinatorHostName + ":8028").c_str());
 
    // Broadcast socket
-   broadcastSocket = make_unique<zmq::socket_t>(context, ZMQ_SUB);
+   broadcastSocket = unique_ptr<zmq::socket_t>(new zmq::socket_t(context, ZMQ_SUB));
    broadcastSocket->setsockopt(ZMQ_SUBSCRIBE, "", 0);
    broadcastSocket->connect(("tcp://" + coordinatorHostName + ":8029").c_str());
 

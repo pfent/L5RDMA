@@ -78,7 +78,7 @@ struct InsertRequest : public Request {
       return RequestStatus::FINISHED;
    }
 
-   void init(Bucket *bucket, rdma::RemoteMemoryRegion &remoteTarget, const BucketLocator &localBucketLocation)
+   void init(Bucket *bucket, const rdma::RemoteMemoryRegion &remoteTarget, const BucketLocator &localBucketLocation)
    {
       this->bucket = bucket;
 

@@ -75,20 +75,9 @@ void runCode(util::TestHarness &testHarness)
       distributedHashTableClient.dump();
 
    // 4. Test
-   //   if (testHarness.localId == 0) {
-   //      distributedHashTableClient.insert(dht::Entry{42, array<uint64_t, 1>()});
-   //      distributedHashTableClient.insert(dht::Entry{43, array<uint64_t, 1>()});
-   //      hashTableNetworkLayout.requestQueues[0]->finishAllOpenRequests();
-   //   }
-   //   cout << "inserterd " << endl;
-
    srand(0);
-   unordered_multimap<uint64_t, uint64_t> reference;
    for (uint64_t j = 0; j<10000; ++j) {
-      //      uint64_t key = rand();
-      //      cout << "insert: " << key << endl;
       distributedHashTableClient.insert({j, {0xdeadbeef}});
-      reference.insert(make_pair(j, 0xdeadbeef));
    }
    for (uint k = 0; k<testHarness.nodeCount; ++k) {
       hashTableNetworkLayout.requestQueues[k]->finishAllOpenRequests();
@@ -102,10 +91,9 @@ void runCode(util::TestHarness &testHarness)
    }
    for (int j = 0; j<10000; ++j) {
       uint32_t my_result = distributedHashTableClient.count(j);
-      uint32_t ref_result = reference.count(j);
 
-      if (my_result != ref_result * 2)
-         cout << "key: " << j << ": " << my_result << " " << ref_result << endl;
+      if (my_result != 2)
+         cout << "key: " << j << ": " << my_result << " bucket: " << (j % 32) << endl;
       //      assert(my_result == ref_result * 2);
    }
    cout << "[PRESS ENTER TO CONTINUE]" << endl;
