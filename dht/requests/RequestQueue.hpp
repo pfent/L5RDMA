@@ -23,6 +23,7 @@
 #include <memory>
 #include <array>
 #include <vector>
+#include <iostream>
 #include <zmq.hpp>
 //---------------------------------------------------------------------------
 #include "rdma/Network.hpp"
@@ -129,10 +130,16 @@ public:
              , nextWorkRequestInBundle(0)
              , bundleUpForCompletion(0)
              , dummyRequest(dummyRequest)
+             , sentDummyCount(0)
+             , sentRequestCount(0)
    {
    }
 
-   ~RequestQueue() { }
+   ~RequestQueue()
+   {
+      cout << "sentDummyCount = " << sentDummyCount << endl;
+      cout << "sentRequestCount = " << sentRequestCount << endl;
+   }
 
    void submit(Request *request)
    {
@@ -178,6 +185,7 @@ public:
 
       // Make them finish
       while (!openRequests.empty()) {
+         sentDummyCount++;
          queuePair.postWorkRequest(dummyRequest.getRequest());
          queuePair.getCompletionQueuePair().waitForCompletionSend();
 
@@ -185,6 +193,7 @@ public:
          for (auto iter : openRequests) {
             if (iter->onCompleted() == RequestStatus::SEND_AGAIN) {
                iter->getRequest().setCompletion(false);
+               sentRequestCount++;
                queuePair.postWorkRequest(iter->getRequest());
                stillOpenRequests.push_back(iter);
             }
@@ -196,6 +205,7 @@ public:
 private:
    void send(Request *request)
    {
+      sentRequestCount++;
       bundles[currentBundle].requests[nextWorkRequestInBundle++] = request;
       request->getRequest().setCompletion(nextWorkRequestInBundle == bundleSize);
       queuePair.postWorkRequest(request->getRequest());
@@ -213,6 +223,9 @@ private:
    uint32_t nextWorkRequestInBundle;
    uint32_t bundleUpForCompletion;
    DummyRequest &dummyRequest;
+
+   uint64_t sentDummyCount;
+   uint64_t sentRequestCount;
 };
 //---------------------------------------------------------------------------
 } // End of namespace dht
