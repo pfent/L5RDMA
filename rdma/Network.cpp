@@ -93,6 +93,9 @@ Network::~Network()
 {
    int status;
 
+   sharedReceiveQueue.release();
+   sharedCompletionQueuePair.release();
+
    // Deallocate the protection domain
    status = ::ibv_dealloc_pd(protectionDomain);
    if (status != 0) {

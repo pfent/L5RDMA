@@ -51,7 +51,7 @@ struct TestHarness {
    std::unique_ptr <zmq::socket_t> masterSocket;
    std::unique_ptr <zmq::socket_t> broadcastSocket;
 
-   rdma::Network network;
+   rdma::Network& network;
    std::vector <std::unique_ptr<rdma::QueuePair>> queuePairs;
 
    uint32_t localId;
@@ -61,7 +61,7 @@ struct TestHarness {
 
    std::vector <PeerInfo> peerInfos;
 
-   TestHarness(zmq::context_t &context, uint32_t nodeCount, const std::string &coordinatorHostName);
+   TestHarness(zmq::context_t &context, rdma::Network& network, uint32_t nodeCount, const std::string &coordinatorHostName);
    ~TestHarness();
 
    // requires a coordinator on [HOSTNAME] running "supportFullyConnectedNetworkCreation"
@@ -72,6 +72,8 @@ struct TestHarness {
 
    // requires a coordinator on [HOSTNAME] running "supportRemoteMemoryAddressPublishing"
    rdma::RemoteMemoryRegion retrieveAddress();
+
+   void shutdown();
 };
 //---------------------------------------------------------------------------
 /// This guy has all the code for a coordinator to setup a fully connected rdma network

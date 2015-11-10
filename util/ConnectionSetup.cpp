@@ -48,8 +48,9 @@ ostream &operator<<(ostream &os, const PeerInfo &peerInfo)
    return os << "hostname='" << peerInfo.hostname << "', address={" << peerInfo.address << "}";
 };
 //---------------------------------------------------------------------------
-TestHarness::TestHarness(zmq::context_t &context, uint32_t nodeCount, const string &coordinatorHostName)
+TestHarness::TestHarness(zmq::context_t &context, rdma::Network &network, uint32_t nodeCount, const string &coordinatorHostName)
         : context(context)
+          , network(network)
           , localId(~1ul)
           , nodeCount(nodeCount)
           , coordinatorHostName(coordinatorHostName)
@@ -157,6 +158,12 @@ rdma::RemoteMemoryRegion TestHarness::retrieveAddress()
    }
 
    return remoteMemoryRegion;
+}
+//---------------------------------------------------------------------------
+void TestHarness::shutdown()
+{
+   masterSocket->close();
+   broadcastSocket->close();
 }
 //---------------------------------------------------------------------------
 SetupSupport::SetupSupport(zmq::context_t &context)

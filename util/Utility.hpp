@@ -56,7 +56,7 @@ template<typename Number> bool isPowerOfTwo(Number x)
    return ((x != 0) && !(x & (x - 1)));
 }
 //---------------------------------------------------------------------------
-inline int getNumberOfSetBits(uint64_t i)
+inline uint64_t getNumberOfSetBits(uint64_t i)
 {
    i = i - ((i >> 1) & 0x5555555555555555);
    i = (i & 0x3333333333333333) + ((i >> 2) & 0x3333333333333333);

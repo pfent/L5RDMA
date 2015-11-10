@@ -27,6 +27,7 @@
 #include "rdma/CompletionQueuePair.hpp"
 #include "util/Utility.hpp"
 //---------------------------------------------------------------------------
+#include <unistd.h>
 #include <cstring>
 #include <iostream>
 #include <cassert>
@@ -41,6 +42,7 @@ HashTableServer::HashTableServer(rdma::Network &network, uint32_t htSize, uint32
           , bucketMemory(maxBucketCount)
           , nextFreeOffset(1) // First bucket is the "invalid bucket"
           , network(network)
+          , running(true)
 {
    // Pin memory regions
    htMr = make_unique<rdma::MemoryRegion>(htMemory.data(), sizeof(htMemory[0]) * htSize, network.getProtectionDomain(), rdma::MemoryRegion::Permission::All); // All - because who cares, it's research :)
@@ -51,6 +53,10 @@ HashTableServer::HashTableServer(rdma::Network &network, uint32_t htSize, uint32
    assert((((uint64_t) htMr->address) & 0x7) == 0);
    assert((((uint64_t) bucketsMr->address) & 0x7) == 0);
    assert((((uint64_t) &nextFreeOffset) & 0x7) == 0);
+}
+//---------------------------------------------------------------------------
+HashTableServer::~HashTableServer()
+{
 }
 //---------------------------------------------------------------------------
 void HashTableServer::startAddressServiceAsync(zmq::context_t &context, string hostname, int port)
@@ -72,16 +78,34 @@ void HashTableServer::startAddressServiceAsync(zmq::context_t &context, string h
 
    thread = make_unique<::thread>([=, &context]() {
       // Send the addresses to each one who asks
-      while (1) {
-         zmq::message_t request;
-         socket->recv(&request);
-         assert(request.size() == 0); // :p .. we don't need info from the peers
+      while (running) {
+         zmq::pollitem_t items[] = {*socket, 0, ZMQ_POLLIN, 0};
+         int rc = zmq_poll(items, 1, 1000); // 1s
 
-         zmq::message_t reply(sizeof(rdma::RemoteMemoryRegion) * 3);
-         memcpy(reply.data(), messageMemory.data(), sizeof(rdma::RemoteMemoryRegion) * 3);
-         socket->send(reply);
+         if (rc<0) {
+            cout << errno << endl;
+            cout << zmq_errno() << endl;
+            cout << zmq_strerror(zmq_errno()) << endl;
+            throw;
+         }
+
+         if (items[0].revents != 0) {
+            zmq::message_t request;
+            socket->recv(&request);
+            assert(request.size() == 0); // :p .. we don't need info from the peers
+
+            zmq::message_t reply(sizeof(rdma::RemoteMemoryRegion) * 3);
+            memcpy(reply.data(), messageMemory.data(), sizeof(rdma::RemoteMemoryRegion) * 3);
+            socket->send(reply);
+         }
       }
    });
+}
+//---------------------------------------------------------------------------
+void HashTableServer::stopAddressService()
+{
+   running = false;
+   thread->join();
 }
 //---------------------------------------------------------------------------
 void HashTableServer::dumpMemoryRegions()
@@ -89,12 +113,13 @@ void HashTableServer::dumpMemoryRegions()
    cout << "> Created HT Server" << endl;
    cout << ">   htMr= {" << *htMr << "}" << endl;
    cout << ">   bucketsMr= {" << *bucketsMr << "}" << endl;
-   cout << ">   nextFreeOffsetMr= {" << *nextFreeOffsetMr << "}" << endl;
+   cout << ">   nextFreeOffsetMr= " << *nextFreeOffsetMr << "}" << endl;
    if (socket == nullptr) {
       cout << ">   address distribution service NOT started." << endl;
    } else {
       cout << ">   listenting on: {hostname=" << hostname << " port=" << port << "}" << endl;
    }
+   cout << "> [End]" << endl;
 }
 //---------------------------------------------------------------------------
 void HashTableServer::dumpHashTableContent(HashTableNetworkLayout &hashTableNetworkLayout)

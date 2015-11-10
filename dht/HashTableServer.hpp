@@ -42,8 +42,10 @@ struct HashTableNetworkLayout;
 struct HashTableServer : public util::NotAssignable {
 
    HashTableServer(rdma::Network &network, uint32_t htSize, uint32_t maxBucketCount);
+   ~HashTableServer();
 
    void startAddressServiceAsync(zmq::context_t &context, std::string hostname, int port);
+   void stopAddressService();
 
    void dumpMemoryRegions();
    void dumpHashTableContent(HashTableNetworkLayout &hashTableNetworkLayout);
@@ -66,6 +68,7 @@ private:
    std::string hostname;
    int port;
    std::unique_ptr <std::thread> thread;
+   bool running;
 };
 //---------------------------------------------------------------------------
 } // End of namespace dht

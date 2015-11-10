@@ -33,14 +33,14 @@ struct ibv_send_wr;
 //---------------------------------------------------------------------------
 namespace util { // Utility
 //---------------------------------------------------------------------------
-template<class T> class FreeListPolicy { // TODO: copied from other project .. did not read it
+template<class T> class FreeListAllocator { // TODO: copied from other project .. did not read it
 public:
    T *allocate()
    {
       if (nextFreeElement != NULL) {
-         void *result = nextFreeElement;
+         T *result = (T *) nextFreeElement;
          nextFreeElement = nextFreeElement->next;
-         return (T *) result;
+         return result;
       }
 
       if (positionInCurrentChunk>=Chunk::chunkSize) {

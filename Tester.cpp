@@ -45,12 +45,13 @@ using namespace rdma;
 //---------------------------------------------------------------------------
 void runCode(util::TestHarness &testHarness)
 {
-   const uint64_t kEntriesPerHost = 32;
+   const uint64_t kEntriesPerHost = 8 * 1024 * 1024;
+   const uint64_t kInserts = 8 * 1024;
 
    // 1. Start Server
    // Allocate and pin rdma enabled remote memory regions
    // Start zmq socket (REP), which can be used by the clients to retrieve information about memory regions
-   dht::HashTableServer localHashTableServer(testHarness.network, kEntriesPerHost, 1024 * 1024);
+   dht::HashTableServer localHashTableServer(testHarness.network, kEntriesPerHost, kInserts + 1);
    localHashTableServer.startAddressServiceAsync(testHarness.context, util::getHostname(), 8222);
    if (getenv("VERBOSE"))
       localHashTableServer.dumpMemoryRegions();
@@ -75,13 +76,16 @@ void runCode(util::TestHarness &testHarness)
       distributedHashTableClient.dump();
 
    // 4. Test
-   srand(0);
-   for (uint64_t j = 0; j<10000; ++j) {
-      distributedHashTableClient.insert({j, {0xdeadbeef}});
+   auto begin = chrono::high_resolution_clock::now();
+   srand(testHarness.localId);
+   for (uint64_t j = 0; j<kInserts; ++j) {
+      distributedHashTableClient.insert({(uint64_t) rand(), {0xdeadbeef}});
    }
    for (uint k = 0; k<testHarness.nodeCount; ++k) {
       hashTableNetworkLayout.requestQueues[k]->finishAllOpenRequests();
    }
+   auto end = chrono::high_resolution_clock::now();
+   cout << "Time for " << kInserts << ": " << chrono::duration_cast<chrono::microseconds>(end - begin).count() << "us" << endl;
 
    // 5. Done
    cout << "[PRESS ENTER TO PRINT HT]" << endl;
@@ -89,17 +93,18 @@ void runCode(util::TestHarness &testHarness)
    if (getenv("VERBOSE")) {
       //      localHashTableServer.dumpHashTableContent(hashTableNetworkLayout);
    }
-   for (int j = 0; j<10000; ++j) {
-      uint32_t my_result = distributedHashTableClient.count(j);
-
-      if (my_result != 2)
-         cout << "key: " << j << ": " << my_result << " bucket: " << (j % 32) << endl;
-      //      assert(my_result == ref_result * 2);
-   }
+   //   for (uint64_t j = 0; j<kInserts; ++j) {
+   //      uint32_t my_result = distributedHashTableClient.count(j);
+   //
+   //      if (my_result != testHarness.nodeCount)
+   //         cout << "key: " << j << ": " << my_result << " bucket: " << (j % 32) << endl;
+   //      //      assert(my_result == ref_result * 2);
+   //   }
    cout << "[PRESS ENTER TO CONTINUE]" << endl;
    cin.get();
 
-   exit(0); // TODO: clean shutdown .. why ? :p
+   // 6. Shutdown
+   localHashTableServer.stopAddressService();
 }
 //---------------------------------------------------------------------------
 int main(int argc, char **argv)
@@ -114,10 +119,13 @@ int main(int argc, char **argv)
 
    // Create Network/**/
    zmq::context_t context(1);
-   util::TestHarness testHarness(context, nodeCount, coordinatorName);
+   rdma::Network network;
+   util::TestHarness testHarness(context, network, nodeCount, coordinatorName);
    testHarness.createFullyConnectedNetwork();
 
    // Run performance tests
    runCode(testHarness);
+   testHarness.shutdown();
+   context.close();
 }
 //---------------------------------------------------------------------------

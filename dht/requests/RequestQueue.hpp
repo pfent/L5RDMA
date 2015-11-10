@@ -64,7 +64,7 @@ struct InsertRequest : public Request {
    {
    }
 
-   ~InsertRequest() { }
+   virtual ~InsertRequest() { }
 
    virtual RequestStatus onCompleted()
    {
@@ -75,6 +75,7 @@ struct InsertRequest : public Request {
 
       bucket->next.data = oldBucketLocator.data;
 
+      delete this;
       return RequestStatus::FINISHED;
    }
 
