@@ -28,6 +28,7 @@
 #include "dht/HashTableNetworkLayout.hpp"
 #include "dht/HashTableServer.hpp"
 #include "dht/requests/RequestQueue.hpp"
+#include "util/FreeListAllocator.hpp"
 //---------------------------------------------------------------------------
 #include <cstring>
 #include <iostream>
@@ -73,7 +74,7 @@ void HashTableClient::insert(const Entry &entry)
    newBucket->entry = entry; // next will be set once it was retrieved from the remote host
 
    // Fire off the request
-   dht::InsertRequest *insertRequest = new dht::InsertRequest(network); // TODO LEAK (use pool)
+   dht::InsertRequest *insertRequest = remoteTables.requestQueues[targetHost]->getInsertRequestPool().allocate();
    insertRequest->init(newBucket, remoteBucketLocator, newBucketLocator);
    remoteTables.requestQueues[targetHost]->submit(insertRequest);
 }

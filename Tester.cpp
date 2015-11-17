@@ -28,6 +28,7 @@
 #include "dht/requests/RequestQueue.hpp"
 #include "dht/HashTableServer.hpp"
 #include "dht/HashTableNetworkLayout.hpp"
+#include "util/FreeListAllocator.hpp"
 //---------------------------------------------------------------------------
 #include <infiniband/verbs.h>
 #include <zmq.hpp>
@@ -46,7 +47,7 @@ using namespace rdma;
 void runCode(util::TestHarness &testHarness)
 {
    const uint64_t kEntriesPerHost = 8 * 1024 * 1024;
-   const uint64_t kInserts = 8 * 1024;
+   const uint64_t kInserts = 1024 * 1024;
 
    // 1. Start Server
    // Allocate and pin rdma enabled remote memory regions
@@ -65,7 +66,7 @@ void runCode(util::TestHarness &testHarness)
    }
    dht::HashTableNetworkLayout hashTableNetworkLayout(hashTableLocations);
    hashTableNetworkLayout.retrieveRemoteMemoryRegions(testHarness.context);
-   hashTableNetworkLayout.setupRequestQueues(testHarness.network, 1, 1);
+   hashTableNetworkLayout.setupRequestQueues(testHarness.network, 4, 4);
    if (getenv("VERBOSE"))
       hashTableNetworkLayout.dump();
 
@@ -77,7 +78,7 @@ void runCode(util::TestHarness &testHarness)
 
    // 4. Test
    auto begin = chrono::high_resolution_clock::now();
-   srand(testHarness.localId);
+   srand(testHarness.localId + 123);
    for (uint64_t j = 0; j<kInserts; ++j) {
       distributedHashTableClient.insert({(uint64_t) rand(), {0xdeadbeef}});
    }

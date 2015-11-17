@@ -21,71 +21,88 @@
 #pragma once
 //---------------------------------------------------------------------------
 #include <memory>
+#include <iostream>
 #include <array>
 #include <vector>
-#include <zmq.hpp>
+#include <set>
+#include <functional>
 //---------------------------------------------------------------------------
 #include "rdma/Network.hpp"
 #include "util/NotAssignable.hpp"
 #include "dht/Common.hpp"
 //---------------------------------------------------------------------------
-struct ibv_send_wr;
-//---------------------------------------------------------------------------
 namespace util { // Utility
 //---------------------------------------------------------------------------
-template<class T> class FreeListAllocator { // TODO: copied from other project .. did not read it
+template<class T> struct FreeListElement {
+   T *next;
+};
+//---------------------------------------------------------------------------
+template<class T> class FreeListAllocator {
 public:
-   T *allocate()
+
+   FreeListAllocator(std::vector<T *> &&mem)
+           : mem(std::move(mem))
+             , nextFreeElement(nullptr)
    {
-      if (nextFreeElement != NULL) {
-         T *result = (T *) nextFreeElement;
-         nextFreeElement = nextFreeElement->next;
-         return result;
+      for (uint64_t i = 0; i<this->mem.size(); ++i) {
+         free(this->mem[i]);
       }
-
-      if (positionInCurrentChunk>=Chunk::chunkSize) {
-         Chunk *lastChunk = currentChunk;
-         currentChunk = new Chunk();
-         lastChunk->next = currentChunk;
-         positionInCurrentChunk = 0;
-      }
-
-      return (T *) (currentChunk->mem + (positionInCurrentChunk++ * sizeof(T)));
    }
 
-   void free(void *data)
+   T *allocate()
    {
-      static_cast<FreeElement *>(data)->next = nextFreeElement;
-      nextFreeElement = static_cast<FreeElement *>(data);
+      assert(nextFreeElement != NULL);
+
+      T *result = nextFreeElement;
+      nextFreeElement = nextFreeElement->next;
+      return result;
+   }
+
+   void free(T *element)
+   {
+      element->next = nextFreeElement;
+      nextFreeElement = element;
    }
 
 private:
-   struct Chunk {
-      Chunk()
-      {
-         mem = new uint8_t[chunkSize * sizeof(T)];
-         next = NULL;
-      }
-      ~Chunk()
-      {
-         delete[] mem;
-         if (next != NULL)
-            delete next;
-      }
-      static const uint64_t chunkSize = 64;
-      uint8_t *mem;
-      Chunk *next;
-   };
-
-   struct FreeElement {
-      FreeElement *next;
-   };
-
-   static FreeElement *nextFreeElement;
-   static Chunk firstChunk;
-   static Chunk *currentChunk;
-   static uint32_t positionInCurrentChunk;
+   std::vector<T*> mem;
+   T *nextFreeElement;
 };
+//---------------------------------------------------------------------------
+static inline void testFreeListAllocator()
+{
+   struct Sample : public FreeListElement<Sample> {
+      int a;
+   };
+
+   const int kEntries = 128;
+
+   std::vector<Sample *> data(kEntries);
+   for (int i = 0; i<kEntries; ++i) {
+      data[i] = new Sample();
+      data[i]->a = i + 1;
+   }
+
+   FreeListAllocator<Sample> allocator(std::move(data));
+
+   // Alloc everything and free it again
+   for (int j = 0; j<100; ++j) {
+      // Alloc
+      int sum = 0;
+      std::set<Sample *> dataPtr;
+      for (int i = 0; i<kEntries; ++i) {
+         Sample *sample = allocator.allocate();
+         sum += sample->a;
+         dataPtr.insert(sample);
+      }
+      assert(sum == kEntries * (kEntries + 1) / 2);
+
+      // Free
+      for (auto iter : dataPtr) {
+         allocator.free(iter);
+      }
+   }
+}
 //---------------------------------------------------------------------------
 } // End of namespace util
 //---------------------------------------------------------------------------

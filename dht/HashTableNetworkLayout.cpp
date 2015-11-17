@@ -64,7 +64,7 @@ void HashTableNetworkLayout::setupRequestQueues(rdma::Network &network, uint bun
 {
    for (size_t i = 0; i<locations.size(); ++i) {
       DummyRequest *dummyRequest = new DummyRequest(network, remoteHashTables[i].nextFreeOffsetRmr); // TODO LEAK
-      requestQueues[i] = unique_ptr<RequestQueue>(new RequestQueue(bundleSize, bundleCount, *locations[i].queuePair, *dummyRequest));
+      requestQueues[i] = unique_ptr<RequestQueue>(new RequestQueue(network, bundleSize, bundleCount, *locations[i].queuePair, *dummyRequest));
    }
 }
 //---------------------------------------------------------------------------

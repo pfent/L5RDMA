@@ -4,8 +4,8 @@ all: alex
 
 TARGET_DIR := bin
 
-CF := -g3 -O0 -std=c++14 -Wextra -Wall -I.
-LF := -g3 -O0 -std=c++14 -libverbs -lpthread -lzmq
+CF := -g0 -O3 -std=c++14 -Wextra -Wall -I.
+LF := -g0 -O3 -std=c++14 -libverbs -lpthread -lzmq
 
 CCCACHE_USE?=
 CXX?= g++

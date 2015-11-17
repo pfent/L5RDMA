@@ -25,6 +25,7 @@
 #include <vector>
 #include <iostream>
 #include <zmq.hpp>
+#include <util/FreeListAllocator.hpp>
 //---------------------------------------------------------------------------
 #include "rdma/Network.hpp"
 #include "rdma/MemoryRegion.hpp"
@@ -52,7 +53,7 @@ struct Request : public util::NotAssignable {
 };
 using namespace std;
 //---------------------------------------------------------------------------
-struct InsertRequest : public Request {
+struct InsertRequest : public Request, public util::FreeListElement<InsertRequest> {
    rdma::AtomicCompareAndSwapWorkRequest workRequest;
 
    BucketLocator oldBucketLocator;
@@ -60,8 +61,11 @@ struct InsertRequest : public Request {
 
    Bucket *bucket;
 
-   InsertRequest(rdma::Network &network)
+   util::FreeListAllocator<InsertRequest> &freeListAllocator;
+
+   InsertRequest(rdma::Network &network, util::FreeListAllocator<InsertRequest> &freeListAllocator)
            : oldBucketLocatorMR(&oldBucketLocator, sizeof(oldBucketLocator), network.getProtectionDomain(), rdma::MemoryRegion::Permission::All)
+             , freeListAllocator(freeListAllocator)
    {
    }
 
@@ -75,8 +79,7 @@ struct InsertRequest : public Request {
       }
 
       bucket->next.data = oldBucketLocator.data;
-
-      delete this;
+      freeListAllocator.free(this);
       return RequestStatus::FINISHED;
    }
 
@@ -121,7 +124,7 @@ struct DummyRequest : public Request {
 //---------------------------------------------------------------------------
 class RequestQueue : public util::NotAssignable {
 public:
-   RequestQueue(uint bundleSize, uint bundleCount, rdma::QueuePair &queuePair, DummyRequest &dummyRequest)
+   RequestQueue(rdma::Network &network, uint bundleSize, uint bundleCount, rdma::QueuePair &queuePair, DummyRequest &dummyRequest)
            : queuePair(queuePair)
              , bundles(bundleCount, Bundle{vector<Request *>(bundleSize)})
              , bundleSize(bundleSize)
@@ -132,7 +135,11 @@ public:
              , dummyRequest(dummyRequest)
              , sentDummyCount(0)
              , sentRequestCount(0)
+             , insertRequestPool(std::vector<InsertRequest *>())
    {
+      for (uint i = 0; i<bundleSize * bundleCount + 1; ++i) {
+         insertRequestPool.free(new InsertRequest(network, insertRequestPool)); // TODO Leak
+      }
    }
 
    ~RequestQueue()
@@ -202,6 +209,8 @@ public:
       }
    }
 
+   util::FreeListAllocator<InsertRequest> &getInsertRequestPool() { return insertRequestPool; }
+
 private:
    void send(Request *request)
    {
@@ -226,6 +235,8 @@ private:
 
    uint64_t sentDummyCount;
    uint64_t sentRequestCount;
+
+   util::FreeListAllocator<InsertRequest> insertRequestPool;
 };
 //---------------------------------------------------------------------------
 } // End of namespace dht
