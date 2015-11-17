@@ -33,45 +33,40 @@
 //---------------------------------------------------------------------------
 namespace util { // Utility
 //---------------------------------------------------------------------------
-template<class T> struct FreeListElement {
+template<class T> struct InlineListElement {
    T *next;
 };
 //---------------------------------------------------------------------------
-template<class T> class FreeListAllocator {
+template<class T> class InlineList : public NotAssignable {
 public:
 
-   FreeListAllocator(std::vector<T *> &&mem)
-           : mem(std::move(mem))
-             , nextFreeElement(nullptr)
+   InlineList()
+           : next(nullptr)
    {
-      for (uint64_t i = 0; i<this->mem.size(); ++i) {
-         free(this->mem[i]);
-      }
    }
 
-   T *allocate()
+   T *pop()
    {
-      assert(nextFreeElement != NULL);
+      assert(next != NULL);
 
-      T *result = nextFreeElement;
-      nextFreeElement = nextFreeElement->next;
+      T *result = next;
+      next = next->next;
       return result;
    }
 
-   void free(T *element)
+   void push(T *element)
    {
-      element->next = nextFreeElement;
-      nextFreeElement = element;
+      element->next = next;
+      next = element;
    }
 
 private:
-   std::vector<T*> mem;
-   T *nextFreeElement;
+   T *next;
 };
 //---------------------------------------------------------------------------
 static inline void testFreeListAllocator()
 {
-   struct Sample : public FreeListElement<Sample> {
+   struct Sample : public InlineListElement<Sample> {
       int a;
    };
 
@@ -83,7 +78,10 @@ static inline void testFreeListAllocator()
       data[i]->a = i + 1;
    }
 
-   FreeListAllocator<Sample> allocator(std::move(data));
+   InlineList<Sample> allocator;
+   for (uint i = 0; i<data.size(); ++i) {
+      allocator.push(data[i]);
+   }
 
    // Alloc everything and free it again
    for (int j = 0; j<100; ++j) {
@@ -91,7 +89,7 @@ static inline void testFreeListAllocator()
       int sum = 0;
       std::set<Sample *> dataPtr;
       for (int i = 0; i<kEntries; ++i) {
-         Sample *sample = allocator.allocate();
+         Sample *sample = allocator.pop();
          sum += sample->a;
          dataPtr.insert(sample);
       }
@@ -99,7 +97,7 @@ static inline void testFreeListAllocator()
 
       // Free
       for (auto iter : dataPtr) {
-         allocator.free(iter);
+         allocator.push(iter);
       }
    }
 }

@@ -28,7 +28,7 @@
 #include "dht/requests/RequestQueue.hpp"
 #include "dht/HashTableServer.hpp"
 #include "dht/HashTableNetworkLayout.hpp"
-#include "util/FreeListAllocator.hpp"
+#include "util/InlineList.hpp"
 //---------------------------------------------------------------------------
 #include <infiniband/verbs.h>
 #include <zmq.hpp>

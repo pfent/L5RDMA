@@ -21,6 +21,7 @@
 #include "HashTableClient.hpp"
 #include "rdma/MemoryRegion.hpp"
 #include "rdma/Network.hpp"
+#include "dht/requests/Request.hpp"
 #include "rdma/WorkRequest.hpp"
 #include "dht/HashTableNetworkLayout.hpp"
 #include "util/Utility.hpp"
@@ -37,6 +38,7 @@ HashTableNetworkLayout::HashTableNetworkLayout(const vector<HashTableLocation> &
         : locations(hashTableLocations)
           , remoteHashTables(locations.size())
           , requestQueues(locations.size())
+          , insertRequestPools(locations.size())
 {
 }
 //---------------------------------------------------------------------------
@@ -64,7 +66,12 @@ void HashTableNetworkLayout::setupRequestQueues(rdma::Network &network, uint bun
 {
    for (size_t i = 0; i<locations.size(); ++i) {
       DummyRequest *dummyRequest = new DummyRequest(network, remoteHashTables[i].nextFreeOffsetRmr); // TODO LEAK
-      requestQueues[i] = unique_ptr<RequestQueue>(new RequestQueue(network, bundleSize, bundleCount, *locations[i].queuePair, *dummyRequest));
+      requestQueues[i] = unique_ptr<RequestQueue>(new RequestQueue(bundleSize, bundleCount, *locations[i].queuePair, *dummyRequest));
+   }
+   for (size_t i = 0; i<locations.size(); ++i) {
+      for (size_t b = 0; b<bundleSize * bundleCount + 1; ++b) {
+         insertRequestPools[i].push(new InsertRequest(network, insertRequestPools[i])); // TODO Leak
+      }
    }
 }
 //---------------------------------------------------------------------------

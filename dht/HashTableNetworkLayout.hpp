@@ -36,10 +36,15 @@ namespace rdma {
 class QueuePair;
 }
 //---------------------------------------------------------------------------
+namespace util {
+template<typename T> class InlineList;
+}
+//---------------------------------------------------------------------------
 namespace dht { // Distributed Hash Table
 //---------------------------------------------------------------------------
 struct RemoteMemoryRegion;
 struct MemoryRegion;
+struct InsertRequest;
 //---------------------------------------------------------------------------
 /// Gathers and stores information about remote shared hash tables (locals are treated as remote, because of atomicity (ask alex))
 struct HashTableNetworkLayout : public util::NotAssignable {
@@ -53,6 +58,7 @@ struct HashTableNetworkLayout : public util::NotAssignable {
    std::vector<HashTableLocation> locations; // Initialized in constructor
    std::vector<RemoteHashTableInfo> remoteHashTables; // Initialized by "retrieveRemoteMemoryRegions"
    std::vector<std::unique_ptr<RequestQueue>> requestQueues; // Initialized by "setupRequestQueue"
+   std::vector<util::InlineList<InsertRequest>> insertRequestPools; // Initialized by "setupRequestQueue"
 
    HashTableNetworkLayout(const std::vector<HashTableLocation> &tableLocations);
    void retrieveRemoteMemoryRegions(zmq::context_t &context);

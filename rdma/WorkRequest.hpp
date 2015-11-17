@@ -34,7 +34,7 @@ class WorkRequest {
    friend class QueuePair;
 
 protected:
-   std::unique_ptr <ibv_send_wr> wr;
+   std::unique_ptr<ibv_send_wr> wr;
    const WorkRequest *next;
 
    WorkRequest();
@@ -44,6 +44,7 @@ protected:
    ~WorkRequest();
 
 public:
+
    /// Clear all set data and restore to original state after construction
    void reset();
 
@@ -117,6 +118,10 @@ public:
    void setSwapValue(uint64_t value);
    uint64_t getSwapValue() const;
 };
+//---------------------------------------------------------------------------
+static_assert(sizeof(rdma::WorkRequest) == sizeof(rdma::AtomicCompareAndSwapWorkRequest), "");
+static_assert(sizeof(rdma::WorkRequest) == sizeof(rdma::ReadWorkRequest), "");
+
 //---------------------------------------------------------------------------
 } // End of namespace rdma
 //---------------------------------------------------------------------------
