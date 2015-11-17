@@ -37,7 +37,7 @@ coordinator: $(coordinator_obj)
 	@$(CXX) -o coordinator $(coordinator_obj) $(LF)
 ## -------------------------------------------------------------------------------------------------
 ## Build the performance measurement tool
-perf_obj := $(src_obj) bin/src/Perf.o
+perf_obj := $(src_obj) bin/Perf.o
 perf: $(perf_obj)
 	@if [ $(VERBOSE) ]; then echo $(CXX) -o perf $(perf_obj) $(LF); else echo $(CXX) -o perf; fi
 	@$(CXX) -o perf $(perf_obj) $(LF)

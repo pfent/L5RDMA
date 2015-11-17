@@ -21,6 +21,8 @@
 #include "rdma/Network.hpp"
 #include "rdma/MemoryRegion.hpp"
 #include "rdma/WorkRequest.hpp"
+#include "rdma/QueuePair.hpp"
+#include "rdma/CompletionQueuePair.hpp"
 #include "util/ConnectionSetup.hpp"
 //---------------------------------------------------------------------------
 #include <infiniband/verbs.h>
@@ -39,7 +41,7 @@ using namespace rdma;
 void runServerCode(util::TestHarness &testHarness)
 {
    // Create memory
-   vector <uint64_t> shared(128);
+   vector<uint64_t> shared(128);
    fill(shared.begin(), shared.end(), 0);
    MemoryRegion sharedMR(shared.data(), sizeof(uint64_t) * shared.size(), testHarness.network.getProtectionDomain(), MemoryRegion::Permission::All);
 
@@ -60,54 +62,58 @@ void runClientCode(util::TestHarness &testHarness)
    RemoteMemoryRegion rmr = testHarness.retrieveAddress();
 
    // Pin local memory
-   vector <uint64_t> shared(1);
+   vector<uint64_t> shared(1);
    MemoryRegion sharedMR(shared.data(), sizeof(uint64_t) * shared.size(), testHarness.network.getProtectionDomain(), MemoryRegion::Permission::All);
+   rdma::QueuePair &queuePair = *testHarness.queuePairs[0];
 
-   const int maxOpenCompletions = 4;
+   const int maxOpenCompletions = 1;
    int openCompletions = 0;
 
-   for (int run = 2; run<=2; run++) {
-      const int bundleSize = (1 << run);
-      const int totalRequests = 1 << 20;
-      const int iterations = totalRequests / bundleSize;
+   for (int warmUp = 0; warmUp<5; warmUp++) {
+      for (int run = 0; run<=0; run++) {
+         const int bundleSize = (1 << run);
+         const int totalRequests = 1 << 20;
+         const int iterations = totalRequests / bundleSize;
 
-      // Create work requests
-      vector <unique_ptr<AtomicFetchAndAddWorkRequest>> workRequests(bundleSize);
-      for (int i = 0; i<bundleSize; ++i) {
-         workRequests[i] = make_unique<AtomicFetchAndAddWorkRequest>();
-         workRequests[i]->setId(8028 + i);
-         workRequests[i]->setLocalAddress(sharedMR);
-         workRequests[i]->setRemoteAddress(rmr);
-         workRequests[i]->setAddValue(1);
-         workRequests[i]->setCompletion(i == bundleSize - 1);
-         if (i != 0)
-            workRequests[i - 1]->setNextWorkRequest(workRequests[i].get());
-      }
+         // Create work requests
+         vector<unique_ptr<AtomicFetchAndAddWorkRequest>> workRequests(bundleSize);
+         for (int i = 0; i<bundleSize; ++i) {
+            workRequests[i] = make_unique<AtomicFetchAndAddWorkRequest>();
+            workRequests[i]->setId(8028 + i);
+            workRequests[i]->setLocalAddress(sharedMR);
+            workRequests[i]->setRemoteAddress(rmr);
+            workRequests[i]->setAddValue(1);
+            workRequests[i]->setCompletion(i == bundleSize - 1);
+            if (i != 0)
+               workRequests[i - 1]->setNextWorkRequest(workRequests[i].get());
+         }
 
-      // Performance
-      auto begin = chrono::high_resolution_clock::now();
-      for (int i = 0; i<iterations; ++i) {
-         testHarness.network.postWorkRequest(0, *workRequests[0]);
-         openCompletions++;
+         // Performance
+         auto begin = chrono::high_resolution_clock::now();
+         for (int i = 0; i<iterations; ++i) {
+            queuePair.postWorkRequest(*workRequests[0]);
+            openCompletions++;
 
-         if (openCompletions == maxOpenCompletions) {
-            testHarness.network.waitForCompletionSend();
+            if (openCompletions == maxOpenCompletions) {
+               queuePair.getCompletionQueuePair().waitForCompletionSend();
+               openCompletions--;
+            }
+         }
+         while (openCompletions != 0) {
+            queuePair.getCompletionQueuePair().waitForCompletionSend();
             openCompletions--;
          }
-      }
-      while (openCompletions != 0) {
-         testHarness.network.waitForCompletionSend();
-         openCompletions--;
-      }
-      auto end = chrono::high_resolution_clock::now();
+         auto end = chrono::high_resolution_clock::now();
 
-      cout << "run: " << run << endl;
-      cout << "total: " << totalRequests << endl;
-      cout << "iterations: " << iterations << endl;
-      cout << "bundleSize: " << bundleSize << endl;
-      cout << "time: " << chrono::duration_cast<chrono::nanoseconds>(end - begin).count() << endl;
-      cout << "data: " << shared[0] + 1 << endl;
-      cout << "---" << endl;
+         cout << "run: " << run << endl;
+         cout << "total: " << totalRequests << endl;
+         cout << "iterations: " << iterations << endl;
+         cout << "bundleSize: " << bundleSize << endl;
+         cout << "maxOpenCompletions: " << maxOpenCompletions << endl;
+         cout << "time: " << chrono::duration_cast<chrono::nanoseconds>(end - begin).count() << endl;
+         cout << "data: " << shared[0] + 1 << endl;
+         cout << "---" << endl;
+      }
    }
 
    // Done
@@ -128,7 +134,8 @@ int main(int argc, char **argv)
 
    // Create Network
    zmq::context_t context(1);
-   util::TestHarness testHarness(context, nodeCount, coordinatorName);
+   rdma::Network network;
+   util::TestHarness testHarness(context, network, nodeCount, coordinatorName);
    testHarness.createFullyConnectedNetwork();
 
    // Run performance tests

@@ -57,6 +57,7 @@ int main(int argc, char **argv)
    while (1) {
       cout << "> Creating FullyConnectedNetworkCreation" << endl;
       setupSupport.supportFullyConnectedNetworkCreation(nodeCount);
+      setupSupport.supportRemoteMemoryAddressPublishing();
       cout << "> Done" << endl;
 
 //      cout << "> Publish RemoteAddress" << endl;
