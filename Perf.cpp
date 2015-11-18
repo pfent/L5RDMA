@@ -69,8 +69,8 @@ void runClientCode(util::TestHarness &testHarness)
    const int maxOpenCompletions = 1;
    int openCompletions = 0;
 
-   for (int warmUp = 0; warmUp<5; warmUp++) {
-      for (int run = 0; run<=0; run++) {
+   for (int warmUp = 0; warmUp<10; warmUp++) {
+      for (int run = 4; run<=4; run++) {
          const int bundleSize = (1 << run);
          const int totalRequests = 1 << 20;
          const int iterations = totalRequests / bundleSize;
