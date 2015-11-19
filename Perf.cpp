@@ -38,7 +38,7 @@
 using namespace std;
 using namespace rdma;
 //---------------------------------------------------------------------------
-int64_t runOneTest(const RemoteMemoryRegion &rmr, const MemoryRegion &sharedMR, QueuePair &queuePair, int bundleSize, int maxActiveBundles, const int iterations);
+int64_t runOneTest(const RemoteMemoryRegion &rmr, const MemoryRegion &sharedMR, QueuePair &queuePair, int bundleSize, int maxBundles, const int iterations);
 //---------------------------------------------------------------------------
 void runServerCode(util::TestHarness &testHarness)
 {
@@ -137,24 +137,24 @@ void runClientCodeNonChained(util::TestHarness &testHarness)
    // Config
    const int kTotalRequests = 1 << 20;
    const int kRuns = 10;
-   const int kMaxBundleSize = 4;
+   const int kMaxBundles = 4;
    const int kAllowedOutstandingCompletionsByHardware = 16;
-   assert(kMaxBundleSize<kAllowedOutstandingCompletionsByHardware); // and kMaxBundleSize should be a power of two
+   assert(kMaxBundles<kAllowedOutstandingCompletionsByHardware); // and kMaxBundleSize should be a power of two
    cout << "kTotalRequests=" << kTotalRequests << endl;
-   cout << "kMaxBundleSize=" << kMaxBundleSize << endl;
+   cout << "kMaxBundleSize=" << kMaxBundles << endl;
    cout << "kAllowedOutstandingCompletionsByHardware=" << kAllowedOutstandingCompletionsByHardware << endl;
 
-   for (int bundleSize = 1; bundleSize<=kMaxBundleSize; bundleSize = bundleSize << 1) {
-      for (int maxActiveBundles = 1; maxActiveBundles<=kAllowedOutstandingCompletionsByHardware / bundleSize; maxActiveBundles = maxActiveBundles << 1) {
+   for (int maxBundles = 1; maxBundles<=kMaxBundles; maxBundles = maxBundles << 1) {
+      for (int bundleSize = 1; bundleSize<=kAllowedOutstandingCompletionsByHardware / maxBundles; bundleSize = bundleSize << 1) {
          // Print config
          cout << "bundleSize=" << bundleSize << endl;
-         cout << "maxActiveBundles=" << maxActiveBundles << endl;
-         cout << "maxOutstandingMessages=" << maxActiveBundles * bundleSize << endl;
+         cout << "maxBundles=" << maxBundles << endl;
+         cout << "maxOutstandingMessages=" << maxBundles * bundleSize << endl;
 
          // Run ten times to get accurate measurements
          vector<int64_t> results;
          for (int run = 0; run<kRuns; run++) {
-            int64_t time = runOneTest(rmr, sharedMR, queuePair, bundleSize, maxActiveBundles, kTotalRequests);
+            int64_t time = runOneTest(rmr, sharedMR, queuePair, bundleSize, maxBundles, kTotalRequests);
             results.push_back(time);
          }
 
@@ -174,7 +174,7 @@ void runClientCodeNonChained(util::TestHarness &testHarness)
    cout << "data: " << shared[0] << endl;
 }
 //---------------------------------------------------------------------------
-int64_t runOneTest(const RemoteMemoryRegion &rmr, const MemoryRegion &sharedMR, QueuePair &queuePair, const int bundleSize, const int maxActiveBundles, const int kTotalRequests)
+int64_t runOneTest(const RemoteMemoryRegion &rmr, const MemoryRegion &sharedMR, QueuePair &queuePair, const int bundleSize, const int maxBundles, const int kTotalRequests)
 {
    // Create work requests
    AtomicFetchAndAddWorkRequest workRequest;
@@ -185,7 +185,7 @@ int64_t runOneTest(const RemoteMemoryRegion &rmr, const MemoryRegion &sharedMR, 
    workRequest.setCompletion(false);
 
    // Track number of outstanding completions
-   int openCompletions = 0;
+   int openBundles = 0;
    const int requiredBundles = kTotalRequests / bundleSize;
 
    // Performance
@@ -196,16 +196,16 @@ int64_t runOneTest(const RemoteMemoryRegion &rmr, const MemoryRegion &sharedMR, 
          queuePair.postWorkRequest(workRequest);
       workRequest.setCompletion(true);
       queuePair.postWorkRequest(workRequest);
-      openCompletions++;
+      openBundles++;
 
-      if (openCompletions == maxActiveBundles) {
+      if (openBundles == maxBundles) {
          queuePair.getCompletionQueuePair().pollSendCompletionQueueBlocking();
-         openCompletions--;
+         openBundles--;
       }
    }
-   while (openCompletions != 0) {
+   while (openBundles != 0) {
       queuePair.getCompletionQueuePair().pollSendCompletionQueueBlocking();
-      openCompletions--;
+      openBundles--;
    }
 
    // Track time
