@@ -34,16 +34,32 @@
 #include <cassert>
 #include <unistd.h>
 #include <zmq.hpp>
+#include <random>
 //---------------------------------------------------------------------------
 using namespace std;
 using namespace rdma;
 //---------------------------------------------------------------------------
-int64_t runOneTest(const RemoteMemoryRegion &rmr, const MemoryRegion &sharedMR, QueuePair &queuePair, int bundleSize, int maxBundles, const int iterations);
+const uint64_t remoteMemorySize = 1024 * 1024 * 1024; // 1 Gb
+//---------------------------------------------------------------------------
+int64_t runOneTest(const RemoteMemoryRegion &rmr, const MemoryRegion &sharedMR, QueuePair &queuePair, int bundleSize, int maxBundles, const int iterations, const vector<uint32_t> &randomNumbers);
+//---------------------------------------------------------------------------
+vector<uint32_t> generateRandom(uint32_t count, uint32_t max)
+{
+   std::random_device rd;
+   std::mt19937 gen(rd());
+   std::uniform_int_distribution<> dis(0, max);
+
+   vector<uint32_t> result(count);
+   for (uint i = 0; i<count; ++i) {
+      result[i] = dis(gen);
+   }
+   return move(result);
+}
 //---------------------------------------------------------------------------
 void runServerCode(util::TestHarness &testHarness)
 {
    // Create memory
-   vector<uint64_t> shared(128);
+   vector<uint64_t> shared(remoteMemorySize / sizeof(uint64_t)); // PIN 1 GB
    fill(shared.begin(), shared.end(), 0);
    MemoryRegion sharedMR(shared.data(), sizeof(uint64_t) * shared.size(), testHarness.network.getProtectionDomain(), MemoryRegion::Permission::All);
 
@@ -51,72 +67,6 @@ void runServerCode(util::TestHarness &testHarness)
    RemoteMemoryRegion rmr{reinterpret_cast<uintptr_t>(sharedMR.address), sharedMR.key->rkey};
    testHarness.publishAddress(rmr);
    testHarness.retrieveAddress();
-
-   // Done
-   cout << "[PRESS ENTER TO CONTINUE]" << endl;
-   cin.get();
-   cout << "data: " << shared[0] << endl;
-}
-//---------------------------------------------------------------------------
-void runClientCodeChained(util::TestHarness &testHarness)
-{
-   // Get target memory
-   RemoteMemoryRegion rmr = testHarness.retrieveAddress();
-
-   // Pin local memory
-   vector<uint64_t> shared(1);
-   MemoryRegion sharedMR(shared.data(), sizeof(uint64_t) * shared.size(), testHarness.network.getProtectionDomain(), MemoryRegion::Permission::All);
-   rdma::QueuePair &queuePair = *testHarness.queuePairs[0];
-
-   const int maxOpenCompletions = 1;
-   int openCompletions = 0;
-
-   for (int warmUp = 0; warmUp<10; warmUp++) {
-      for (int run = 0; run<=0; run++) {
-         const int bundleSize = (1 << run);
-         const int totalRequests = 1 << 20;
-         const int iterations = totalRequests / bundleSize;
-
-         // Create work requests
-         vector<unique_ptr<AtomicFetchAndAddWorkRequest>> workRequests(bundleSize);
-         for (int i = 0; i<bundleSize; ++i) {
-            workRequests[i] = make_unique<AtomicFetchAndAddWorkRequest>();
-            workRequests[i]->setId(8028 + i);
-            workRequests[i]->setLocalAddress(sharedMR);
-            workRequests[i]->setRemoteAddress(rmr);
-            workRequests[i]->setAddValue(1);
-            workRequests[i]->setCompletion(i == bundleSize - 1);
-            if (i != 0)
-               workRequests[i - 1]->setNextWorkRequest(workRequests[i].get());
-         }
-
-         // Performance
-         auto begin = chrono::high_resolution_clock::now();
-         for (int i = 0; i<iterations; ++i) {
-            queuePair.postWorkRequest(*workRequests[0]);
-            openCompletions++;
-
-            if (openCompletions == maxOpenCompletions) {
-               queuePair.getCompletionQueuePair().waitForCompletionSend();
-               openCompletions--;
-            }
-         }
-         while (openCompletions != 0) {
-            queuePair.getCompletionQueuePair().waitForCompletionSend();
-            openCompletions--;
-         }
-         auto end = chrono::high_resolution_clock::now();
-
-         cout << "run: " << run << endl;
-         cout << "total: " << totalRequests << endl;
-         cout << "iterations: " << iterations << endl;
-         cout << "bundleSize: " << bundleSize << endl;
-         cout << "maxOpenCompletions: " << maxOpenCompletions << endl;
-         cout << "time: " << chrono::duration_cast<chrono::nanoseconds>(end - begin).count() << endl;
-         cout << "data: " << shared[0] + 1 << endl;
-         cout << "---" << endl;
-      }
-   }
 
    // Done
    cout << "[PRESS ENTER TO CONTINUE]" << endl;
@@ -137,8 +87,9 @@ void runClientCodeNonChained(util::TestHarness &testHarness)
    // Config
    const int kTotalRequests = 1 << 20;
    const int kRuns = 10;
-   const int kMaxBundles = 4;
+   const int kMaxBundles = 8;
    const int kAllowedOutstandingCompletionsByHardware = 16;
+   vector<uint32_t> randomNumbers = generateRandom(kTotalRequests, remoteMemorySize / sizeof(uint64_t));
    assert(kMaxBundles<kAllowedOutstandingCompletionsByHardware); // and kMaxBundleSize should be a power of two
    cout << "kTotalRequests=" << kTotalRequests << endl;
    cout << "kMaxBundleSize=" << kMaxBundles << endl;
@@ -154,7 +105,7 @@ void runClientCodeNonChained(util::TestHarness &testHarness)
          // Run ten times to get accurate measurements
          vector<int64_t> results;
          for (int run = 0; run<kRuns; run++) {
-            int64_t time = runOneTest(rmr, sharedMR, queuePair, bundleSize, maxBundles, kTotalRequests);
+            int64_t time = runOneTest(rmr, sharedMR, queuePair, bundleSize, maxBundles, kTotalRequests, randomNumbers);
             results.push_back(time);
          }
 
@@ -174,26 +125,29 @@ void runClientCodeNonChained(util::TestHarness &testHarness)
    cout << "data: " << shared[0] << endl;
 }
 //---------------------------------------------------------------------------
-int64_t runOneTest(const RemoteMemoryRegion &rmr, const MemoryRegion &sharedMR, QueuePair &queuePair, const int bundleSize, const int maxBundles, const int kTotalRequests)
+int64_t runOneTest(const RemoteMemoryRegion &rmr, const MemoryRegion &sharedMR, QueuePair &queuePair, const int bundleSize, const int maxBundles, const int kTotalRequests, const vector<uint32_t> &randomNumbers)
 {
    // Create work requests
    ReadWorkRequest workRequest;
    workRequest.setId(8028);
    workRequest.setLocalAddress(sharedMR);
-   workRequest.setRemoteAddress(rmr);
    workRequest.setCompletion(false);
 
    // Track number of outstanding completions
    int openBundles = 0;
+   int currentRandomNumber = 0;
    const int requiredBundles = kTotalRequests / bundleSize;
 
    // Performance
    auto begin = chrono::steady_clock::now();
    for (int i = 0; i<requiredBundles; ++i) {
       workRequest.setCompletion(false);
-      for (int b = 0; b<bundleSize - 1; ++b)
+      for (int b = 0; b<bundleSize - 1; ++b) {
+         workRequest.setRemoteAddress(RemoteMemoryRegion{rmr.address + randomNumbers[currentRandomNumber++], rmr.key});
          queuePair.postWorkRequest(workRequest);
+      }
       workRequest.setCompletion(true);
+      workRequest.setRemoteAddress(RemoteMemoryRegion{rmr.address + randomNumbers[currentRandomNumber++], rmr.key});
       queuePair.postWorkRequest(workRequest);
       openBundles++;
 
@@ -235,3 +189,4 @@ int main(int argc, char **argv)
       runClientCodeNonChained(testHarness);
    }
 }
+//---------------------------------------------------------------------------
