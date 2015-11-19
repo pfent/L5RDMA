@@ -38,6 +38,8 @@
 using namespace std;
 using namespace rdma;
 //---------------------------------------------------------------------------
+int64_t runOneTest(const RemoteMemoryRegion &rmr, const MemoryRegion &sharedMR, QueuePair &queuePair, int bundleSize, int maxActiveBundles, const int iterations);
+//---------------------------------------------------------------------------
 void runServerCode(util::TestHarness &testHarness)
 {
    // Create memory
@@ -132,52 +134,37 @@ void runClientCodeNonChained(util::TestHarness &testHarness)
    MemoryRegion sharedMR(shared.data(), sizeof(uint64_t) * shared.size(), testHarness.network.getProtectionDomain(), MemoryRegion::Permission::All);
    rdma::QueuePair &queuePair = *testHarness.queuePairs[0];
 
-   const int maxOpenCompletions = 1;
-   int openCompletions = 0;
+   // Config
+   const int kTotalRequests = 1 << 20;
+   const int kRuns = 10;
+   const int kMaxBundleSize = 4;
+   const int kAllowedOutstandingCompletionsByHardware = 16;
+   assert(kMaxBundleSize<kAllowedOutstandingCompletionsByHardware); // and kMaxBundleSize should be a power of two
+   cout << "kTotalRequests=" << kTotalRequests << endl;
+   cout << "kMaxBundleSize=" << kMaxBundleSize << endl;
+   cout << "kAllowedOutstandingCompletionsByHardware=" << kAllowedOutstandingCompletionsByHardware << endl;
 
-   for (int warmUp = 0; warmUp<10; warmUp++) {
-      for (int run = 1; run<=1; run++) {
-         const int bundleSize = (1 << run);
-         const int totalRequests = 1 << 20;
-         const int iterations = totalRequests / bundleSize;
+   for (int bundleSize = 1; bundleSize<=kMaxBundleSize; bundleSize = bundleSize << 1) {
+      for (int maxActiveBundles = 1; maxActiveBundles<=kAllowedOutstandingCompletionsByHardware / bundleSize; maxActiveBundles = maxActiveBundles << 1) {
+         // Print config
+         cout << "bundleSize=" << bundleSize << endl;
+         cout << "maxActiveBundles=" << maxActiveBundles << endl;
+         cout << "maxOutstandingMessages=" << maxActiveBundles * bundleSize << endl;
 
-         // Create work requests
-         AtomicFetchAndAddWorkRequest workRequest;
-         workRequest.setId(8028);
-         workRequest.setLocalAddress(sharedMR);
-         workRequest.setRemoteAddress(rmr);
-         workRequest.setAddValue(1);
-         workRequest.setCompletion(false);
-
-         // Performance
-         auto begin = chrono::high_resolution_clock::now();
-         for (int i = 0; i<iterations; ++i) {
-            workRequest.setCompletion(false);
-            for (int b = 0; b<bundleSize - 1; ++b)
-               queuePair.postWorkRequest(workRequest);
-            workRequest.setCompletion(true);
-            queuePair.postWorkRequest(workRequest);
-            openCompletions++;
-
-            if (openCompletions == maxOpenCompletions) {
-               queuePair.getCompletionQueuePair().waitForCompletionSend();
-               openCompletions--;
-            }
+         // Run ten times to get accurate measurements
+         vector<int64_t> results;
+         for (int run = 0; run<kRuns; run++) {
+            int64_t time = runOneTest(rmr, sharedMR, queuePair, bundleSize, maxActiveBundles, kTotalRequests);
+            results.push_back(time);
          }
-         while (openCompletions != 0) {
-            queuePair.getCompletionQueuePair().waitForCompletionSend();
-            openCompletions--;
-         }
-         auto end = chrono::high_resolution_clock::now();
 
-         cout << "run: " << run << endl;
-         cout << "total: " << totalRequests << endl;
-         cout << "iterations: " << iterations << endl;
-         cout << "bundleSize: " << bundleSize << endl;
-         cout << "maxOpenCompletions: " << maxOpenCompletions << endl;
-         cout << "ttime: " << chrono::duration_cast<chrono::nanoseconds>(end - begin).count() << endl;
-         cout << "data: " << shared[0] + 1 << endl;
-         cout << "---" << endl;
+         // Print results
+         cout << "checkSum=" << shared[0] + 1 << endl;
+         cout << "times=" << endl;
+         sort(results.begin(), results.end());
+         for (auto result : results) {
+            cout << result << endl;
+         }
       }
    }
 
@@ -185,6 +172,45 @@ void runClientCodeNonChained(util::TestHarness &testHarness)
    cout << "[PRESS ENTER TO CONTINUE]" << endl;
    cin.get();
    cout << "data: " << shared[0] << endl;
+}
+//---------------------------------------------------------------------------
+int64_t runOneTest(const RemoteMemoryRegion &rmr, const MemoryRegion &sharedMR, QueuePair &queuePair, const int bundleSize, const int maxActiveBundles, const int kTotalRequests)
+{
+   // Create work requests
+   AtomicFetchAndAddWorkRequest workRequest;
+   workRequest.setId(8028);
+   workRequest.setLocalAddress(sharedMR);
+   workRequest.setRemoteAddress(rmr);
+   workRequest.setAddValue(1);
+   workRequest.setCompletion(false);
+
+   // Track number of outstanding completions
+   int openCompletions = 0;
+   const int requiredBundles = kTotalRequests / bundleSize;
+
+   // Performance
+   auto begin = chrono::steady_clock::now();
+   for (int i = 0; i<requiredBundles; ++i) {
+      workRequest.setCompletion(false);
+      for (int b = 0; b<bundleSize - 1; ++b)
+         queuePair.postWorkRequest(workRequest);
+      workRequest.setCompletion(true);
+      queuePair.postWorkRequest(workRequest);
+      openCompletions++;
+
+      if (openCompletions == maxActiveBundles) {
+         queuePair.getCompletionQueuePair().pollSendCompletionQueueBlocking();
+         openCompletions--;
+      }
+   }
+   while (openCompletions != 0) {
+      queuePair.getCompletionQueuePair().pollSendCompletionQueueBlocking();
+      openCompletions--;
+   }
+
+   // Track time
+   auto end = chrono::steady_clock::now();
+   return chrono::duration_cast<chrono::nanoseconds>(end - begin).count();
 }
 //---------------------------------------------------------------------------
 int main(int argc, char **argv)
