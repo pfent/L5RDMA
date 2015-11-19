@@ -56,7 +56,7 @@ void runServerCode(util::TestHarness &testHarness)
    cout << "data: " << shared[0] << endl;
 }
 //---------------------------------------------------------------------------
-void runClientCode(util::TestHarness &testHarness)
+void runClientCodeChained(util::TestHarness &testHarness)
 {
    // Get target memory
    RemoteMemoryRegion rmr = testHarness.retrieveAddress();
@@ -70,7 +70,7 @@ void runClientCode(util::TestHarness &testHarness)
    int openCompletions = 0;
 
    for (int warmUp = 0; warmUp<10; warmUp++) {
-      for (int run = 4; run<=4; run++) {
+      for (int run = 0; run<=0; run++) {
          const int bundleSize = (1 << run);
          const int totalRequests = 1 << 20;
          const int iterations = totalRequests / bundleSize;
@@ -122,6 +122,71 @@ void runClientCode(util::TestHarness &testHarness)
    cout << "data: " << shared[0] << endl;
 }
 //---------------------------------------------------------------------------
+void runClientCodeNonChained(util::TestHarness &testHarness)
+{
+   // Get target memory
+   RemoteMemoryRegion rmr = testHarness.retrieveAddress();
+
+   // Pin local memory
+   vector<uint64_t> shared(1);
+   MemoryRegion sharedMR(shared.data(), sizeof(uint64_t) * shared.size(), testHarness.network.getProtectionDomain(), MemoryRegion::Permission::All);
+   rdma::QueuePair &queuePair = *testHarness.queuePairs[0];
+
+   const int maxOpenCompletions = 1;
+   int openCompletions = 0;
+
+   for (int warmUp = 0; warmUp<10; warmUp++) {
+      for (int run = 1; run<=1; run++) {
+         const int bundleSize = (1 << run);
+         const int totalRequests = 1 << 20;
+         const int iterations = totalRequests / bundleSize;
+
+         // Create work requests
+         AtomicFetchAndAddWorkRequest workRequest;
+         workRequest.setId(8028);
+         workRequest.setLocalAddress(sharedMR);
+         workRequest.setRemoteAddress(rmr);
+         workRequest.setAddValue(1);
+         workRequest.setCompletion(false);
+
+         // Performance
+         auto begin = chrono::high_resolution_clock::now();
+         for (int i = 0; i<iterations; ++i) {
+            workRequest.setCompletion(false);
+            for (int b = 0; b<bundleSize - 1; ++b)
+               queuePair.postWorkRequest(workRequest);
+            workRequest.setCompletion(true);
+            queuePair.postWorkRequest(workRequest);
+            openCompletions++;
+
+            if (openCompletions == maxOpenCompletions) {
+               queuePair.getCompletionQueuePair().waitForCompletionSend();
+               openCompletions--;
+            }
+         }
+         while (openCompletions != 0) {
+            queuePair.getCompletionQueuePair().waitForCompletionSend();
+            openCompletions--;
+         }
+         auto end = chrono::high_resolution_clock::now();
+
+         cout << "run: " << run << endl;
+         cout << "total: " << totalRequests << endl;
+         cout << "iterations: " << iterations << endl;
+         cout << "bundleSize: " << bundleSize << endl;
+         cout << "maxOpenCompletions: " << maxOpenCompletions << endl;
+         cout << "ttime: " << chrono::duration_cast<chrono::nanoseconds>(end - begin).count() << endl;
+         cout << "data: " << shared[0] + 1 << endl;
+         cout << "---" << endl;
+      }
+   }
+
+   // Done
+   cout << "[PRESS ENTER TO CONTINUE]" << endl;
+   cin.get();
+   cout << "data: " << shared[0] << endl;
+}
+//---------------------------------------------------------------------------
 int main(int argc, char **argv)
 {
    // Parse input
@@ -142,6 +207,6 @@ int main(int argc, char **argv)
    if (testHarness.localId == 0) {
       runServerCode(testHarness);
    } else {
-      runClientCode(testHarness);
+      runClientCodeNonChained(testHarness);
    }
 }
