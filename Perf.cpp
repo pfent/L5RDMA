@@ -177,11 +177,10 @@ void runClientCodeNonChained(util::TestHarness &testHarness)
 int64_t runOneTest(const RemoteMemoryRegion &rmr, const MemoryRegion &sharedMR, QueuePair &queuePair, const int bundleSize, const int maxBundles, const int kTotalRequests)
 {
    // Create work requests
-   AtomicFetchAndAddWorkRequest workRequest;
+   ReadWorkRequest workRequest;
    workRequest.setId(8028);
    workRequest.setLocalAddress(sharedMR);
    workRequest.setRemoteAddress(rmr);
-   workRequest.setAddValue(1);
    workRequest.setCompletion(false);
 
    // Track number of outstanding completions
@@ -199,12 +198,12 @@ int64_t runOneTest(const RemoteMemoryRegion &rmr, const MemoryRegion &sharedMR, 
       openBundles++;
 
       if (openBundles == maxBundles) {
-         queuePair.getCompletionQueuePair().pollSendCompletionQueueBlocking();
+         queuePair.getCompletionQueuePair().waitForCompletionSend();
          openBundles--;
       }
    }
    while (openBundles != 0) {
-      queuePair.getCompletionQueuePair().pollSendCompletionQueueBlocking();
+      queuePair.getCompletionQueuePair().waitForCompletionSend();
       openBundles--;
    }
 
