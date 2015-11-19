@@ -282,7 +282,7 @@ uint64_t CompletionQueuePair::pollCompletionQueueBlocking(ibv_cq *completionQueu
 uint64_t CompletionQueuePair::pollSendCompletionQueueBlocking()
 /// Poll the send completion queue blocking
 {
-   return pollCompletionQueueBlocking(sendQueue, IBV_WC_RDMA_READ);
+   return pollCompletionQueueBlocking(sendQueue, IBV_WC_FETCH_ADD);
 }
 //---------------------------------------------------------------------------
 uint64_t CompletionQueuePair::pollRecvCompletionQueueBlocking()

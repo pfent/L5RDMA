@@ -128,10 +128,11 @@ void runClientCodeNonChained(util::TestHarness &testHarness)
 int64_t runOneTest(const RemoteMemoryRegion &rmr, const MemoryRegion &sharedMR, QueuePair &queuePair, const int bundleSize, const int maxBundles, const int kTotalRequests, const vector<uint32_t> &randomNumbers)
 {
    // Create work requests
-   ReadWorkRequest workRequest;
+   AtomicFetchAndAddWorkRequest workRequest;
    workRequest.setId(8028);
    workRequest.setLocalAddress(sharedMR);
    workRequest.setCompletion(false);
+   workRequest.setAddValue(1);
 
    // Track number of outstanding completions
    int openBundles = 0;
@@ -143,11 +144,11 @@ int64_t runOneTest(const RemoteMemoryRegion &rmr, const MemoryRegion &sharedMR, 
    for (int i = 0; i<requiredBundles; ++i) {
       workRequest.setCompletion(false);
       for (int b = 0; b<bundleSize - 1; ++b) {
-         workRequest.setRemoteAddress(RemoteMemoryRegion{rmr.address + randomNumbers[currentRandomNumber++], rmr.key});
+         workRequest.setRemoteAddress(RemoteMemoryRegion{rmr.address + sizeof(uint64_t) * randomNumbers[currentRandomNumber++], rmr.key});
          queuePair.postWorkRequest(workRequest);
       }
       workRequest.setCompletion(true);
-      workRequest.setRemoteAddress(RemoteMemoryRegion{rmr.address + randomNumbers[currentRandomNumber++], rmr.key});
+      workRequest.setRemoteAddress(RemoteMemoryRegion{rmr.address + sizeof(uint64_t) * randomNumbers[currentRandomNumber++], rmr.key});
       queuePair.postWorkRequest(workRequest);
       openBundles++;
 
