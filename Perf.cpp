@@ -49,8 +49,7 @@ int64_t runOneTest(const RemoteMemoryRegion &rmr, const MemoryRegion &sharedMR, 
 //---------------------------------------------------------------------------
 vector<uint64_t> generateRandomIndexes(uint64_t count, uint64_t max, uint64_t sizeOfType)
 {
-   std::random_device rd;
-   std::mt19937 gen(rd());
+   std::mt19937 gen(123);
    std::uniform_int_distribution<uint64_t> dis(0, (max / sizeOfType) - 1);
 
    vector<uint64_t> result(count);
