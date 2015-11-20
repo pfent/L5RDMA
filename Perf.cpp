@@ -41,17 +41,17 @@ using namespace rdma;
 //---------------------------------------------------------------------------
 const uint64_t remoteMemorySize = 1024 * 1024 * 1024; // 1 Gb
 //---------------------------------------------------------------------------
-int64_t runOneTest(const RemoteMemoryRegion &rmr, const MemoryRegion &sharedMR, QueuePair &queuePair, int bundleSize, int maxBundles, const int iterations, const vector<uint32_t> &randomNumbers);
+int64_t runOneTest(const RemoteMemoryRegion &rmr, const MemoryRegion &sharedMR, QueuePair &queuePair, int bundleSize, int maxBundles, const int iterations, const vector<uint64_t> &randomIndexes);
 //---------------------------------------------------------------------------
-vector<uint32_t> generateRandom(uint32_t count, uint32_t max)
+vector<uint64_t> generateRandomIndexes(uint64_t count, uint64_t max, uint64_t sizeOfType)
 {
    std::random_device rd;
    std::mt19937 gen(rd());
-   std::uniform_int_distribution<> dis(0, max);
+   std::uniform_int_distribution<uint64_t> dis(0, (max / sizeOfType) - 1);
 
-   vector<uint32_t> result(count);
+   vector<uint64_t> result(count);
    for (uint i = 0; i<count; ++i) {
-      result[i] = dis(gen);
+      result[i] = sizeOfType * dis(gen);
    }
    return move(result);
 }
@@ -89,7 +89,7 @@ void runClientCodeNonChained(util::TestHarness &testHarness)
    const int kRuns = 10;
    const int kMaxBundles = 8;
    const int kAllowedOutstandingCompletionsByHardware = 16;
-   vector<uint32_t> randomNumbers = generateRandom(kTotalRequests, remoteMemorySize / sizeof(uint64_t));
+   vector<uint64_t> randomIndexes = generateRandomIndexes(kTotalRequests, remoteMemorySize, sizeof(uint64_t));
    assert(kMaxBundles<kAllowedOutstandingCompletionsByHardware); // and kMaxBundleSize should be a power of two
    cout << "kTotalRequests=" << kTotalRequests << endl;
    cout << "kMaxBundleSize=" << kMaxBundles << endl;
@@ -105,7 +105,7 @@ void runClientCodeNonChained(util::TestHarness &testHarness)
          // Run ten times to get accurate measurements
          vector<int64_t> results;
          for (int run = 0; run<kRuns; run++) {
-            int64_t time = runOneTest(rmr, sharedMR, queuePair, bundleSize, maxBundles, kTotalRequests, randomNumbers);
+            int64_t time = runOneTest(rmr, sharedMR, queuePair, bundleSize, maxBundles, kTotalRequests, randomIndexes);
             results.push_back(time);
          }
 
@@ -125,14 +125,13 @@ void runClientCodeNonChained(util::TestHarness &testHarness)
    cout << "data: " << shared[0] << endl;
 }
 //---------------------------------------------------------------------------
-int64_t runOneTest(const RemoteMemoryRegion &rmr, const MemoryRegion &sharedMR, QueuePair &queuePair, const int bundleSize, const int maxBundles, const int kTotalRequests, const vector<uint32_t> &randomNumbers)
+int64_t runOneTest(const RemoteMemoryRegion &rmr, const MemoryRegion &sharedMR, QueuePair &queuePair, const int bundleSize, const int maxBundles, const int kTotalRequests, const vector<uint64_t> &randomIndexes)
 {
    // Create work requests
-   AtomicFetchAndAddWorkRequest workRequest;
+   ReadWorkRequest workRequest;
    workRequest.setId(8028);
    workRequest.setLocalAddress(sharedMR);
    workRequest.setCompletion(false);
-   workRequest.setAddValue(1);
 
    // Track number of outstanding completions
    int openBundles = 0;
@@ -144,11 +143,11 @@ int64_t runOneTest(const RemoteMemoryRegion &rmr, const MemoryRegion &sharedMR, 
    for (int i = 0; i<requiredBundles; ++i) {
       workRequest.setCompletion(false);
       for (int b = 0; b<bundleSize - 1; ++b) {
-         workRequest.setRemoteAddress(RemoteMemoryRegion{rmr.address + sizeof(uint64_t) * randomNumbers[currentRandomNumber++], rmr.key});
+         workRequest.setRemoteAddress(RemoteMemoryRegion{rmr.address + randomIndexes[currentRandomNumber++], rmr.key});
          queuePair.postWorkRequest(workRequest);
       }
       workRequest.setCompletion(true);
-      workRequest.setRemoteAddress(RemoteMemoryRegion{rmr.address + sizeof(uint64_t) * randomNumbers[currentRandomNumber++], rmr.key});
+      workRequest.setRemoteAddress(RemoteMemoryRegion{rmr.address + randomIndexes[currentRandomNumber++], rmr.key});
       queuePair.postWorkRequest(workRequest);
       openBundles++;
 
