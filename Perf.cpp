@@ -151,12 +151,12 @@ int64_t runOneTest(const RemoteMemoryRegion &rmr, const MemoryRegion &sharedMR, 
       openBundles++;
 
       if (openBundles == maxBundles) {
-         queuePair.getCompletionQueuePair().pollSendCompletionQueueBlocking();
+         queuePair.getCompletionQueuePair().waitForCompletionSend();
          openBundles--;
       }
    }
    while (openBundles != 0) {
-      queuePair.getCompletionQueuePair().pollSendCompletionQueueBlocking();
+      queuePair.getCompletionQueuePair().waitForCompletionSend();
       openBundles--;
    }
 
