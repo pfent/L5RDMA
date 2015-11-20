@@ -39,7 +39,11 @@
 using namespace std;
 using namespace rdma;
 //---------------------------------------------------------------------------
-const uint64_t remoteMemorySize = 1024 * 1024 * 1024; // 1 Gb
+const uint64_t KB = 1024;
+const uint64_t MB = 1024 * KB;
+const uint64_t GB = 1024 * MB;
+const uint64_t remoteMemorySize = 32 * GB;
+vector<uint64_t> memorySizes{1 * KB, 10 * KB, 100 * KB, 1 * MB, 10 * MB, 100 * MB, 1 * GB, 2 * GB, 4 * GB, 8 * GB, 16 * GB, 32 * GB};
 //---------------------------------------------------------------------------
 int64_t runOneTest(const RemoteMemoryRegion &rmr, const MemoryRegion &sharedMR, QueuePair &queuePair, int bundleSize, int maxBundles, const int iterations, const vector<uint64_t> &randomIndexes);
 //---------------------------------------------------------------------------
@@ -59,7 +63,7 @@ vector<uint64_t> generateRandomIndexes(uint64_t count, uint64_t max, uint64_t si
 void runServerCode(util::TestHarness &testHarness)
 {
    // Create memory
-   vector<uint64_t> shared(remoteMemorySize / sizeof(uint64_t)); // PIN 1 GB
+   vector<uint64_t> shared(remoteMemorySize / sizeof(uint64_t)); // PIN complete memory
    fill(shared.begin(), shared.end(), 0);
    MemoryRegion sharedMR(shared.data(), sizeof(uint64_t) * shared.size(), testHarness.network.getProtectionDomain(), MemoryRegion::Permission::All);
 
@@ -88,34 +92,35 @@ void runClientCodeNonChained(util::TestHarness &testHarness)
    const int kTotalRequests = 1 << 20;
    const int kRuns = 10;
    const int kMaxBundles = 8;
+   const int bundleSize = 4;
+   const int maxBundles = 4;
    const int kAllowedOutstandingCompletionsByHardware = 16;
-   vector<uint64_t> randomIndexes = generateRandomIndexes(kTotalRequests, remoteMemorySize, sizeof(uint64_t));
    assert(kMaxBundles<kAllowedOutstandingCompletionsByHardware); // and kMaxBundleSize should be a power of two
    cout << "kTotalRequests=" << kTotalRequests << endl;
    cout << "kMaxBundleSize=" << kMaxBundles << endl;
    cout << "kAllowedOutstandingCompletionsByHardware=" << kAllowedOutstandingCompletionsByHardware << endl;
 
-   for (int maxBundles = 1; maxBundles<=kMaxBundles; maxBundles = maxBundles << 1) {
-      for (int bundleSize = 1; bundleSize<=kAllowedOutstandingCompletionsByHardware / maxBundles; bundleSize = bundleSize << 1) {
-         // Print config
-         cout << "bundleSize=" << bundleSize << endl;
-         cout << "maxBundles=" << maxBundles << endl;
-         cout << "maxOutstandingMessages=" << maxBundles * bundleSize << endl;
+   for (auto memorySize : memorySizes) {
+      // Print config
+      cout << "memorySize=" << memorySize << endl;
+      cout << "bundleSize=" << bundleSize << endl;
+      cout << "maxBundles=" << maxBundles << endl;
+      cout << "maxOutstandingMessages=" << maxBundles * bundleSize << endl;
+      vector<uint64_t> randomIndexes = generateRandomIndexes(kTotalRequests, memorySize, sizeof(uint64_t));
 
-         // Run ten times to get accurate measurements
-         vector<int64_t> results;
-         for (int run = 0; run<kRuns; run++) {
-            int64_t time = runOneTest(rmr, sharedMR, queuePair, bundleSize, maxBundles, kTotalRequests, randomIndexes);
-            results.push_back(time);
-         }
+      // Run ten times to get accurate measurements
+      vector<int64_t> results;
+      for (int run = 0; run<kRuns; run++) {
+         int64_t time = runOneTest(rmr, sharedMR, queuePair, bundleSize, maxBundles, kTotalRequests, randomIndexes);
+         results.push_back(time);
+      }
 
-         // Print results
-         cout << "checkSum=" << shared[0] + 1 << endl;
-         cout << "times=" << endl;
-         sort(results.begin(), results.end());
-         for (auto result : results) {
-            cout << result << endl;
-         }
+      // Print results
+      cout << "checkSum=" << shared[0] + 1 << endl;
+      cout << "times=" << endl;
+      sort(results.begin(), results.end());
+      for (auto result : results) {
+         cout << result << endl;
       }
    }
 
@@ -132,7 +137,6 @@ int64_t runOneTest(const RemoteMemoryRegion &rmr, const MemoryRegion &sharedMR, 
    workRequest.setId(8028);
    workRequest.setLocalAddress(sharedMR);
    workRequest.setCompletion(false);
-   workRequest.setRemoteAddress(rmr);
 
    // Track number of outstanding completions
    int openBundles = 0;
@@ -144,19 +148,21 @@ int64_t runOneTest(const RemoteMemoryRegion &rmr, const MemoryRegion &sharedMR, 
    for (int i = 0; i<requiredBundles; ++i) {
       workRequest.setCompletion(false);
       for (int b = 0; b<bundleSize - 1; ++b) {
+         workRequest.setRemoteAddress(RemoteMemoryRegion{rmr.address + randomIndexes[currentRandomNumber++], rmr.key});
          queuePair.postWorkRequest(workRequest);
       }
       workRequest.setCompletion(true);
+      workRequest.setRemoteAddress(RemoteMemoryRegion{rmr.address + randomIndexes[currentRandomNumber++], rmr.key});
       queuePair.postWorkRequest(workRequest);
       openBundles++;
 
       if (openBundles == maxBundles) {
-         queuePair.getCompletionQueuePair().waitForCompletionSend();
+         queuePair.getCompletionQueuePair().pollSendCompletionQueueBlocking();
          openBundles--;
       }
    }
    while (openBundles != 0) {
-      queuePair.getCompletionQueuePair().waitForCompletionSend();
+      queuePair.getCompletionQueuePair().pollSendCompletionQueueBlocking();
       openBundles--;
    }
 
