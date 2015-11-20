@@ -65,6 +65,9 @@ void runServerCode(util::TestHarness &testHarness)
    vector<uint64_t> shared(remoteMemorySize / sizeof(uint64_t)); // PIN complete memory
    fill(shared.begin(), shared.end(), 0);
    MemoryRegion sharedMR(shared.data(), sizeof(uint64_t) * shared.size(), testHarness.network.getProtectionDomain(), MemoryRegion::Permission::All);
+   for (uint64_t i = 0; i<shared.size(); ++i) {
+      shared[i] = i;
+   }
 
    // Publish address
    RemoteMemoryRegion rmr{reinterpret_cast<uintptr_t>(sharedMR.address), sharedMR.key->rkey};
@@ -193,4 +196,4 @@ int main(int argc, char **argv)
       runClientCodeNonChained(testHarness);
    }
 }
-//---------------------------------------------------------------------------
+//--
