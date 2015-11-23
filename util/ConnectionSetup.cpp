@@ -62,14 +62,29 @@ TestHarness::TestHarness(zmq::context_t &context, rdma::Network &network, uint32
       queuePairs.push_back(unique_ptr<rdma::QueuePair>(new rdma::QueuePair(network, *completionQueue)));
    }
 
-   // Request reply socket
-   masterSocket = unique_ptr<zmq::socket_t>(new zmq::socket_t(context, ZMQ_REQ));
-   masterSocket->connect(("tcp://" + coordinatorHostName + ":8028").c_str());
+   // Normal socket pair
+   {
+      // Request reply socket
+      masterSocket = unique_ptr<zmq::socket_t>(new zmq::socket_t(context, ZMQ_REQ));
+      masterSocket->connect(("tcp://" + coordinatorHostName + ":8028").c_str());
 
-   // Broadcast socket
-   broadcastSocket = unique_ptr<zmq::socket_t>(new zmq::socket_t(context, ZMQ_SUB));
-   broadcastSocket->setsockopt(ZMQ_SUBSCRIBE, "", 0);
-   broadcastSocket->connect(("tcp://" + coordinatorHostName + ":8029").c_str());
+      // Broadcast socket
+      broadcastSocket = unique_ptr<zmq::socket_t>(new zmq::socket_t(context, ZMQ_SUB));
+      broadcastSocket->setsockopt(ZMQ_SUBSCRIBE, "", 0);
+      broadcastSocket->connect(("tcp://" + coordinatorHostName + ":8029").c_str());
+   }
+
+   // Barrier socket pair
+   {
+      // Barrier request reply socket
+      barrierMasterSocket = unique_ptr<zmq::socket_t>(new zmq::socket_t(context, ZMQ_REQ));
+      barrierMasterSocket->connect(("tcp://" + coordinatorHostName + ":8030").c_str());
+
+      // Barrier broadcast socket
+      barrierBroadcastSocket = unique_ptr<zmq::socket_t>(new zmq::socket_t(context, ZMQ_SUB));
+      barrierBroadcastSocket->setsockopt(ZMQ_SUBSCRIBE, "", 0);
+      barrierBroadcastSocket->connect(("tcp://" + coordinatorHostName + ":8031").c_str());
+   }
 
    // Wait for setup to finish .. great job zmq
    usleep(100000); // = 100ms
@@ -160,28 +175,63 @@ rdma::RemoteMemoryRegion TestHarness::retrieveAddress()
    return remoteMemoryRegion;
 }
 //---------------------------------------------------------------------------
+// requires a coordinator on [HOSTNAME] running "supportBarrier"
+void TestHarness::barrier()
+{
+   if (verbose) {
+      cout << "> Entering Barrier" << endl;
+   }
+
+   zmq::message_t request(sizeof(uint32_t));
+   barrierMasterSocket->send(request);
+   barrierMasterSocket->recv(&request);
+   barrierBroadcastSocket->recv(&request);
+
+   if (verbose) {
+      cout << "> Leaving Barrier" << endl;
+   }
+}
+//---------------------------------------------------------------------------
 void TestHarness::shutdown()
 {
    masterSocket->close();
    broadcastSocket->close();
+   barrierMasterSocket->close();
+   barrierBroadcastSocket->close();
 }
 //---------------------------------------------------------------------------
 SetupSupport::SetupSupport(zmq::context_t &context)
         : context(context)
 {
-   // Create sign-up socket
-   masterSocket = make_unique<zmq::socket_t>(context, ZMQ_REP);
-   masterSocket->bind("tcp://*:8028");
+   // Normal socket pair
+   {
+      // Create sign-up socket
+      masterSocket = make_unique<zmq::socket_t>(context, ZMQ_REP);
+      masterSocket->bind("tcp://*:8028");
 
-   // Create broadcast socket
-   broadcastSocket = make_unique<zmq::socket_t>(context, ZMQ_PUB);
-   broadcastSocket->bind("tcp://*:8029");
+      // Create broadcast socket
+      broadcastSocket = make_unique<zmq::socket_t>(context, ZMQ_PUB);
+      broadcastSocket->bind("tcp://*:8029");
+   }
+
+   // Barrier socket pair
+   {
+      // Create sign-up socket
+      barrierMasterSocket = make_unique<zmq::socket_t>(context, ZMQ_REP);
+      barrierMasterSocket->bind("tcp://*:8030");
+
+      // Create broadcast socket
+      barrierBroadcastSocket = make_unique<zmq::socket_t>(context, ZMQ_PUB);
+      barrierBroadcastSocket->bind("tcp://*:8031");
+   }
 }
 //---------------------------------------------------------------------------
 SetupSupport::~SetupSupport()
 {
    masterSocket->close();
    broadcastSocket->close();
+   barrierMasterSocket->close();
+   barrierBroadcastSocket->close();
 }
 //---------------------------------------------------------------------------
 void SetupSupport::supportFullyConnectedNetworkCreation(uint32_t nodeCount)
@@ -209,11 +259,22 @@ void SetupSupport::supportRemoteMemoryAddressPublishing()
    // Read address from master socket and send to everyone
    zmq::message_t msg(sizeof(rdma::RemoteMemoryRegion));
    masterSocket->recv(&msg);
-   cout << "sleeping for 2s before starting clients ... " << endl;
-   usleep(2000000);
-   cout << "running !!" << endl;
    broadcastSocket->send(msg);
    masterSocket->send(msg); // Does not matter
+}
+//---------------------------------------------------------------------------
+void SetupSupport::supportBarrier(uint32_t nodeCount)
+{
+   // Wait for a message from everyone
+   for (uint32_t i = 0; i<nodeCount; ++i) {
+      zmq::message_t msg(sizeof(uint64_t));
+      barrierMasterSocket->recv(&msg);
+      barrierMasterSocket->send(msg); // Does not matter
+   }
+
+   // Allow everyone to continue
+   zmq::message_t msg(sizeof(uint64_t));
+   barrierBroadcastSocket->send(msg);
 }
 //---------------------------------------------------------------------------
 } // End of namespace util

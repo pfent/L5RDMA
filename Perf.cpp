@@ -45,6 +45,14 @@ const uint64_t GB = 1024 * MB;
 const uint64_t remoteMemorySize = 32 * GB;
 vector<uint64_t> memorySizes{1 * KB, 10 * KB, 100 * KB, 1 * MB, 10 * MB, 100 * MB, 1 * GB, 2 * GB, 4 * GB, 8 * GB, 16 * GB, 32 * GB};
 //---------------------------------------------------------------------------
+// Config
+const int kTotalRequests = 1 << 20;
+const int kRuns = 10;
+const int kMaxBundles = 8;
+const int bundleSize = 4;
+const int maxBundles = 4;
+const int kAllowedOutstandingCompletionsByHardware = 16;
+//---------------------------------------------------------------------------
 int64_t runOneTest(const RemoteMemoryRegion &rmr, const MemoryRegion &sharedMR, QueuePair &queuePair, int bundleSize, int maxBundles, const int iterations, const vector<uint64_t> &randomIndexes);
 //---------------------------------------------------------------------------
 vector<uint64_t> generateRandomIndexes(uint64_t count, uint64_t max, uint64_t sizeOfType)
@@ -61,48 +69,41 @@ vector<uint64_t> generateRandomIndexes(uint64_t count, uint64_t max, uint64_t si
 //---------------------------------------------------------------------------
 void runServerCode(util::TestHarness &testHarness)
 {
-   // Create memory
-   vector<uint64_t> shared(remoteMemorySize / sizeof(uint64_t)); // PIN complete memory
-   fill(shared.begin(), shared.end(), 0);
-   MemoryRegion sharedMR(shared.data(), sizeof(uint64_t) * shared.size(), testHarness.network.getProtectionDomain(), MemoryRegion::Permission::All);
-   for (uint64_t i = 0; i<shared.size(); ++i) {
-      shared[i] = i;
-   }
+   for (auto memorySize : memorySizes) {
+      // Create memory
+      cout << "> Ping " << memorySize << " Bytes" << endl;
+      vector<uint64_t> shared(memorySize / sizeof(uint64_t));
+      fill(shared.begin(), shared.end(), 0);
+      MemoryRegion sharedMR(shared.data(), sizeof(uint64_t) * shared.size(), testHarness.network.getProtectionDomain(), MemoryRegion::Permission::All);
 
-   // Publish address
-   RemoteMemoryRegion rmr{reinterpret_cast<uintptr_t>(sharedMR.address), sharedMR.key->rkey};
-   testHarness.publishAddress(rmr);
-   testHarness.retrieveAddress();
+      // Publish address
+      RemoteMemoryRegion rmr{reinterpret_cast<uintptr_t>(sharedMR.address), sharedMR.key->rkey};
+      testHarness.publishAddress(rmr);
+      testHarness.retrieveAddress();
+      testHarness.barrier();
+   }
 
    // Done
    cout << "[PRESS ENTER TO CONTINUE]" << endl;
    cin.get();
-   cout << "data: " << shared[0] << endl;
 }
 //---------------------------------------------------------------------------
-void runClientCodeNonChained(util::TestHarness &testHarness)
+void runClientCode(util::TestHarness &testHarness)
 {
-   // Get target memory
-   RemoteMemoryRegion rmr = testHarness.retrieveAddress();
-
    // Pin local memory
    vector<uint64_t> shared(1);
    MemoryRegion sharedMR(shared.data(), sizeof(uint64_t) * shared.size(), testHarness.network.getProtectionDomain(), MemoryRegion::Permission::All);
    rdma::QueuePair &queuePair = *testHarness.queuePairs[0];
 
-   // Config
-   const int kTotalRequests = 1 << 20;
-   const int kRuns = 10;
-   const int kMaxBundles = 8;
-   const int bundleSize = 4;
-   const int maxBundles = 4;
-   const int kAllowedOutstandingCompletionsByHardware = 16;
    assert(kMaxBundles<kAllowedOutstandingCompletionsByHardware); // and kMaxBundleSize should be a power of two
    cout << "kTotalRequests=" << kTotalRequests << endl;
    cout << "kMaxBundleSize=" << kMaxBundles << endl;
    cout << "kAllowedOutstandingCompletionsByHardware=" << kAllowedOutstandingCompletionsByHardware << endl;
 
    for (auto memorySize : memorySizes) {
+      // Get target memory
+      RemoteMemoryRegion rmr = testHarness.retrieveAddress();
+
       // Print config
       cout << "memorySize=" << memorySize << endl;
       cout << "bundleSize=" << bundleSize << endl;
@@ -124,6 +125,7 @@ void runClientCodeNonChained(util::TestHarness &testHarness)
       for (auto result : results) {
          cout << result << endl;
       }
+      testHarness.barrier();
    }
 
    // Done
@@ -193,7 +195,7 @@ int main(int argc, char **argv)
    if (testHarness.localId == 0) {
       runServerCode(testHarness);
    } else {
-      runClientCodeNonChained(testHarness);
+      runClientCode(testHarness);
    }
 }
 //--

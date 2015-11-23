@@ -30,6 +30,8 @@
 #include <cassert>
 #include <unistd.h>
 #include <zmq.hpp>
+#include <thread>
+#include <sstream>
 //---------------------------------------------------------------------------
 using namespace std;
 using namespace rdma;
@@ -54,19 +56,13 @@ int main(int argc, char **argv)
    zmq::context_t context(1);
    util::SetupSupport setupSupport(context);
 
+   cout << "> Creating FullyConnectedNetworkCreation" << endl;
+   setupSupport.supportFullyConnectedNetworkCreation(nodeCount);
+   setupSupport.supportRemoteMemoryAddressPublishing();
+
    while (1) {
-      cout << "> Creating FullyConnectedNetworkCreation" << endl;
-      setupSupport.supportFullyConnectedNetworkCreation(nodeCount);
+      setupSupport.supportBarrier(nodeCount);
       setupSupport.supportRemoteMemoryAddressPublishing();
-      cout << "> Done" << endl;
-
-//      cout << "> Publish RemoteAddress" << endl;
-//      setupSupport.supportRemoteMemoryAddressPublishing();
-//      cout << "> Done" << endl;
-
-      //      cout << "[PRESS ENTER TO CONTINUE]" << endl;
-      //   cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-      //      cin.get();
    }
 }
 //---------------------------------------------------------------------------

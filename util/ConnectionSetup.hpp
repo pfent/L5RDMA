@@ -51,6 +51,9 @@ struct TestHarness {
    std::unique_ptr <zmq::socket_t> masterSocket;
    std::unique_ptr <zmq::socket_t> broadcastSocket;
 
+   std::unique_ptr <zmq::socket_t> barrierMasterSocket;
+   std::unique_ptr <zmq::socket_t> barrierBroadcastSocket;
+
    rdma::Network& network;
    std::vector <std::unique_ptr<rdma::QueuePair>> queuePairs;
 
@@ -73,6 +76,9 @@ struct TestHarness {
    // requires a coordinator on [HOSTNAME] running "supportRemoteMemoryAddressPublishing"
    rdma::RemoteMemoryRegion retrieveAddress();
 
+   // requires a coordinator on [HOSTNAME] running "supportBarrier"
+   void barrier();
+
    void shutdown();
 };
 //---------------------------------------------------------------------------
@@ -83,12 +89,17 @@ struct SetupSupport {
    std::unique_ptr <zmq::socket_t> masterSocket;
    std::unique_ptr <zmq::socket_t> broadcastSocket;
 
+   std::unique_ptr <zmq::socket_t> barrierMasterSocket;
+   std::unique_ptr <zmq::socket_t> barrierBroadcastSocket;
+
    SetupSupport(zmq::context_t &context);
    ~SetupSupport();
 
    void supportFullyConnectedNetworkCreation(uint32_t nodeCount);
 
    void supportRemoteMemoryAddressPublishing();
+
+   void supportBarrier(uint32_t nodeCount);
 };
 //---------------------------------------------------------------------------
 } // End of namespace util
