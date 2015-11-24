@@ -96,7 +96,7 @@ void createAndShareQueuePairs(util::Peer &peer, rdma::Network &network, uint32_t
 //---------------------------------------------------------------------------
 void runServerCode(util::Peer &peer, rdma::Network &network)
 {
-   createAndShareQueuePairs(peer, network, 2);
+   createAndShareQueuePairs(peer, network, 4);
 
    for (auto memorySize : memorySizes) {
       // Create memory
@@ -119,7 +119,7 @@ void runServerCode(util::Peer &peer, rdma::Network &network)
 //---------------------------------------------------------------------------
 void runClientCode(util::Peer &peer, rdma::Network &network, uint32_t serverId)
 {
-   createAndShareQueuePairs(peer, network, 2);
+   createAndShareQueuePairs(peer, network, 4);
 
    // Pin local memory
    vector<uint64_t> shared(1);
@@ -174,7 +174,7 @@ int64_t runOneTest(const RemoteMemoryRegion &rmr, const MemoryRegion &sharedMR, 
    workRequest.setCompletion(false);
 
    // Track number of outstanding completions
-   vector<int> openBundles(2, 0);
+   vector<int> openBundles(4, 0);
    int currentRandomNumber = 0;
    const int requiredBundles = kTotalRequests / bundleSize;
 
@@ -184,19 +184,19 @@ int64_t runOneTest(const RemoteMemoryRegion &rmr, const MemoryRegion &sharedMR, 
       workRequest.setCompletion(false);
       for (int b = 0; b<bundleSize - 1; ++b) {
          workRequest.setRemoteAddress(RemoteMemoryRegion{rmr.address + randomIndexes[currentRandomNumber++], rmr.key});
-         queuePairs[i & 1]->postWorkRequest(workRequest);
+         queuePairs[i & 2]->postWorkRequest(workRequest);
       }
       workRequest.setCompletion(true);
       workRequest.setRemoteAddress(RemoteMemoryRegion{rmr.address + randomIndexes[currentRandomNumber++], rmr.key});
-      queuePairs[i & 1]->postWorkRequest(workRequest);
-      openBundles[i & 1]++;
+      queuePairs[i & 2]->postWorkRequest(workRequest);
+      openBundles[i & 2]++;
 
-      if (openBundles[i & 1] == maxBundles) {
-         queuePairs[i & 1]->getCompletionQueuePair().pollSendCompletionQueueBlocking();
-         openBundles[i & 1]--;
+      if (openBundles[i & 2] == maxBundles) {
+         queuePairs[i & 2]->getCompletionQueuePair().pollSendCompletionQueueBlocking();
+         openBundles[i & 2]--;
       }
    }
-   for (int i = 0; i<2; ++i) {
+   for (int i = 0; i<4; ++i) {
       while (openBundles[i] != 0) {
          queuePairs[i]->getCompletionQueuePair().pollSendCompletionQueueBlocking();
          openBundles[i]--;

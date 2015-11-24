@@ -119,6 +119,7 @@ void Coordinator::supportBarrier()
          }
 
          // Allow everyone to continue
+         cout << "free barrier" << endl;
          zmq::message_t msg(sizeof(uint64_t));
          barrierBroadcastSocket->send(msg);
       }
