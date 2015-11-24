@@ -24,6 +24,10 @@
 #include "rdma/QueuePair.hpp"
 #include "rdma/CompletionQueuePair.hpp"
 #include "util/ConnectionSetup.hpp"
+#include "util/Peer.hpp"
+#include "util/Utility.hpp"
+#include "util/MemoryRef.hpp"
+#include "util/Coordinator.hpp"
 //---------------------------------------------------------------------------
 #include <infiniband/verbs.h>
 #include <iomanip>
@@ -52,8 +56,9 @@ const int kMaxBundles = 8;
 const int bundleSize = 4;
 const int maxBundles = 4;
 const int kAllowedOutstandingCompletionsByHardware = 16;
+vector<unique_ptr<rdma::QueuePair>> queuePairs;
 //---------------------------------------------------------------------------
-int64_t runOneTest(const RemoteMemoryRegion &rmr, const MemoryRegion &sharedMR, QueuePair &queuePair, int bundleSize, int maxBundles, const int iterations, const vector<uint64_t> &randomIndexes);
+int64_t runOneTest(const RemoteMemoryRegion &rmr, const MemoryRegion &sharedMR, int bundleSize, int maxBundles, const int iterations, const vector<uint64_t> &randomIndexes);
 //---------------------------------------------------------------------------
 vector<uint64_t> generateRandomIndexes(uint64_t count, uint64_t max, uint64_t sizeOfType)
 {
@@ -67,20 +72,44 @@ vector<uint64_t> generateRandomIndexes(uint64_t count, uint64_t max, uint64_t si
    return move(result);
 }
 //---------------------------------------------------------------------------
-void runServerCode(util::TestHarness &testHarness)
+void createAndShareQueuePairs(util::Peer &peer, rdma::Network &network, uint32_t queuePairCount)
 {
+   assert(peer.getNodeCount() == 2);
+
+   vector<rdma::Address> addresses;
+   for (uint i = 0; i<queuePairCount; ++i) {
+      auto completionQueue = new rdma::CompletionQueuePair(network); // TODO leak
+      queuePairs.push_back(unique_ptr<rdma::QueuePair>(new rdma::QueuePair(network, *completionQueue)));
+      addresses.push_back(rdma::Address{network.getLID(), queuePairs[i]->getQPN()});
+   }
+
+   peer.publish("queuePairs", util::MemoryRef((char *) addresses.data(), addresses.size() * sizeof(rdma::Address)));
+   peer.barrier();
+
+   vector<uint8_t> remoteAddresses = peer.lookUp("queuePairs", (peer.getLocalId() + 1) % peer.getNodeCount());
+   rdma::Address *addressPtr = (rdma::Address *) remoteAddresses.data();
+   for (uint i = 0; i<queuePairCount; ++i) {
+      queuePairs[i]->connect(addressPtr[i]);
+   }
+   peer.barrier();
+}
+//---------------------------------------------------------------------------
+void runServerCode(util::Peer &peer, rdma::Network &network)
+{
+   createAndShareQueuePairs(peer, network, 2);
+
    for (auto memorySize : memorySizes) {
       // Create memory
       cout << "> Ping " << memorySize << " Bytes" << endl;
       vector<uint64_t> shared(memorySize / sizeof(uint64_t));
       fill(shared.begin(), shared.end(), 0);
-      MemoryRegion sharedMR(shared.data(), sizeof(uint64_t) * shared.size(), testHarness.network.getProtectionDomain(), MemoryRegion::Permission::All);
+      MemoryRegion sharedMR(shared.data(), sizeof(uint64_t) * shared.size(), network.getProtectionDomain(), MemoryRegion::Permission::All);
 
       // Publish address
       RemoteMemoryRegion rmr{reinterpret_cast<uintptr_t>(sharedMR.address), sharedMR.key->rkey};
-      testHarness.publishAddress(rmr);
-      testHarness.retrieveAddress();
-      testHarness.barrier();
+      peer.publish(util::to_string(memorySize), util::MemoryRef((char *) &rmr, sizeof(RemoteMemoryRegion)));
+      peer.barrier();
+      peer.barrier();
    }
 
    // Done
@@ -88,12 +117,13 @@ void runServerCode(util::TestHarness &testHarness)
    cin.get();
 }
 //---------------------------------------------------------------------------
-void runClientCode(util::TestHarness &testHarness)
+void runClientCode(util::Peer &peer, rdma::Network &network, uint32_t serverId)
 {
+   createAndShareQueuePairs(peer, network, 2);
+
    // Pin local memory
    vector<uint64_t> shared(1);
-   MemoryRegion sharedMR(shared.data(), sizeof(uint64_t) * shared.size(), testHarness.network.getProtectionDomain(), MemoryRegion::Permission::All);
-   rdma::QueuePair &queuePair = *testHarness.queuePairs[0];
+   MemoryRegion sharedMR(shared.data(), sizeof(uint64_t) * shared.size(), network.getProtectionDomain(), MemoryRegion::Permission::All);
 
    assert(kMaxBundles<kAllowedOutstandingCompletionsByHardware); // and kMaxBundleSize should be a power of two
    cout << "kTotalRequests=" << kTotalRequests << endl;
@@ -102,7 +132,8 @@ void runClientCode(util::TestHarness &testHarness)
 
    for (auto memorySize : memorySizes) {
       // Get target memory
-      RemoteMemoryRegion rmr = testHarness.retrieveAddress();
+      peer.barrier(); // Wait till info is public
+      RemoteMemoryRegion rmr = *(RemoteMemoryRegion *) peer.lookUp(util::to_string(memorySize), serverId).data();
 
       // Print config
       cout << "memorySize=" << memorySize << endl;
@@ -114,7 +145,7 @@ void runClientCode(util::TestHarness &testHarness)
       // Run ten times to get accurate measurements
       vector<int64_t> results;
       for (int run = 0; run<kRuns; run++) {
-         int64_t time = runOneTest(rmr, sharedMR, queuePair, bundleSize, maxBundles, kTotalRequests, randomIndexes);
+         int64_t time = runOneTest(rmr, sharedMR, bundleSize, maxBundles, kTotalRequests, randomIndexes);
          results.push_back(time);
       }
 
@@ -125,7 +156,7 @@ void runClientCode(util::TestHarness &testHarness)
       for (auto result : results) {
          cout << result << endl;
       }
-      testHarness.barrier();
+      peer.barrier(); // Signal that we are done
    }
 
    // Done
@@ -134,7 +165,7 @@ void runClientCode(util::TestHarness &testHarness)
    cout << "data: " << shared[0] << endl;
 }
 //---------------------------------------------------------------------------
-int64_t runOneTest(const RemoteMemoryRegion &rmr, const MemoryRegion &sharedMR, QueuePair &queuePair, const int bundleSize, const int maxBundles, const int kTotalRequests, const vector<uint64_t> &randomIndexes)
+int64_t runOneTest(const RemoteMemoryRegion &rmr, const MemoryRegion &sharedMR, const int bundleSize, const int maxBundles, const int kTotalRequests, const vector<uint64_t> &randomIndexes)
 {
    // Create work requests
    ReadWorkRequest workRequest;
@@ -143,7 +174,7 @@ int64_t runOneTest(const RemoteMemoryRegion &rmr, const MemoryRegion &sharedMR, 
    workRequest.setCompletion(false);
 
    // Track number of outstanding completions
-   int openBundles = 0;
+   vector<int> openBundles(2, 0);
    int currentRandomNumber = 0;
    const int requiredBundles = kTotalRequests / bundleSize;
 
@@ -153,21 +184,23 @@ int64_t runOneTest(const RemoteMemoryRegion &rmr, const MemoryRegion &sharedMR, 
       workRequest.setCompletion(false);
       for (int b = 0; b<bundleSize - 1; ++b) {
          workRequest.setRemoteAddress(RemoteMemoryRegion{rmr.address + randomIndexes[currentRandomNumber++], rmr.key});
-         queuePair.postWorkRequest(workRequest);
+         queuePairs[i & 1]->postWorkRequest(workRequest);
       }
       workRequest.setCompletion(true);
       workRequest.setRemoteAddress(RemoteMemoryRegion{rmr.address + randomIndexes[currentRandomNumber++], rmr.key});
-      queuePair.postWorkRequest(workRequest);
-      openBundles++;
+      queuePairs[i & 1]->postWorkRequest(workRequest);
+      openBundles[i & 1]++;
 
-      if (openBundles == maxBundles) {
-         queuePair.getCompletionQueuePair().pollSendCompletionQueueBlocking();
-         openBundles--;
+      if (openBundles[i & 1] == maxBundles) {
+         queuePairs[i & 1]->getCompletionQueuePair().pollSendCompletionQueueBlocking();
+         openBundles[i & 1]--;
       }
    }
-   while (openBundles != 0) {
-      queuePair.getCompletionQueuePair().pollSendCompletionQueueBlocking();
-      openBundles--;
+   for (int i = 0; i<2; ++i) {
+      while (openBundles[i] != 0) {
+         queuePairs[i]->getCompletionQueuePair().pollSendCompletionQueueBlocking();
+         openBundles[i]--;
+      }
    }
 
    // Track time
@@ -182,20 +215,22 @@ int main(int argc, char **argv)
       cerr << "usage: " << argv[0] << " [nodeCount] [coordinator]" << endl;
       exit(EXIT_FAILURE);
    }
+   uint32_t serverId = 0;
    uint32_t nodeCount = atoi(argv[1]);
    string coordinatorName = argv[2];
 
    // Create Network
    zmq::context_t context(1);
    rdma::Network network;
-   util::TestHarness testHarness(context, network, nodeCount, coordinatorName);
-   testHarness.createFullyConnectedNetwork();
+   util::Peer peer(context, nodeCount, coordinatorName);
+   peer.startPublisherService();
+   peer.exchangeHostnames();
 
    // Run performance tests
-   if (testHarness.localId == 0) {
-      runServerCode(testHarness);
+   if (peer.getLocalId() == serverId) {
+      runServerCode(peer, network);
    } else {
-      runClientCode(testHarness);
+      runClientCode(peer, network, serverId);
    }
 }
-//--
+//---------------------------------------------------------------------------

@@ -18,52 +18,54 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //---------------------------------------------------------------------------
-#include "rdma/Network.hpp"
-#include "rdma/MemoryRegion.hpp"
-#include "rdma/WorkRequest.hpp"
-#include "util/ConnectionSetup.hpp"
-#include "util/Coordinator.hpp"
-#include "util/Utility.hpp"
+#pragma once
 //---------------------------------------------------------------------------
-#include <iomanip>
-#include <iostream>
+#include <string>
 #include <memory>
-#include <algorithm>
-#include <cassert>
-#include <unistd.h>
 #include <zmq.hpp>
-#include <thread>
-#include <sstream>
-#include <util/Coordinator.hpp>
 //---------------------------------------------------------------------------
-using namespace std;
-using namespace rdma;
+#include "rdma/Network.hpp"
 //---------------------------------------------------------------------------
-namespace {
-uint32_t getNodeCount(int argc, char **argv)
-{
-   if (argc != 2) {
-      cerr << "usage: " << argv[0] << " [nodeCount]" << endl;
-      exit(EXIT_FAILURE);
-   }
-   uint32_t nodeCount;
-   istringstream in(argv[1]);
-   in >> nodeCount;
-   return nodeCount;
-}
+namespace rdma {
+class QueuePair;
 }
 //---------------------------------------------------------------------------
-int main(int argc, char **argv)
-{
-   uint32_t nodeCount = getNodeCount(argc, argv);
-   zmq::context_t context(1);
-   util::Coordinator coordinator(context, nodeCount, util::getHostname());
-   cout << "> start supportBarrier" << endl;
-   coordinator.supportBarrier(); // async
+namespace util {
+//---------------------------------------------------------------------------
+struct Hostname {
+   static const int MAX_HOSTNAME_SIZE = 128;
 
-   while (1) {
-      cout << "> supportHostnameExchange" << endl;
-      coordinator.supportHostnameExchange();
-   }
-}
+   Hostname(const std::string &hostname);
+
+   char hostname[MAX_HOSTNAME_SIZE];
+
+   std::string asString() const;
+};
+std::ostream &operator<<(std::ostream &os, const Hostname &hostname);
+//---------------------------------------------------------------------------
+/// This guy has all the code for the clients to setup a fully connected rdma network
+struct Coordinator {
+   zmq::context_t &context;
+
+   std::unique_ptr<zmq::socket_t> masterSocket;
+   std::unique_ptr<zmq::socket_t> broadcastSocket;
+
+   std::unique_ptr<zmq::socket_t> barrierMasterSocket;
+   std::unique_ptr<zmq::socket_t> barrierBroadcastSocket;
+
+   uint32_t nodeCount;
+   std::string coordinatorHostname;
+   bool verbose;
+
+   std::vector<Hostname> hostnames;
+
+   Coordinator(zmq::context_t &context, uint32_t nodeCount, const std::string &coordinatorHostName);
+   ~Coordinator();
+
+   void supportHostnameExchange();
+
+   void supportBarrier();
+};
+//---------------------------------------------------------------------------
+} // End of namespace util
 //---------------------------------------------------------------------------

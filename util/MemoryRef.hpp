@@ -18,52 +18,45 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //---------------------------------------------------------------------------
-#include "rdma/Network.hpp"
-#include "rdma/MemoryRegion.hpp"
-#include "rdma/WorkRequest.hpp"
-#include "util/ConnectionSetup.hpp"
-#include "util/Coordinator.hpp"
-#include "util/Utility.hpp"
+#pragma once
 //---------------------------------------------------------------------------
-#include <iomanip>
-#include <iostream>
-#include <memory>
-#include <algorithm>
+#include <cstring>
+#include <cstdint>
+#include <string>
 #include <cassert>
-#include <unistd.h>
-#include <zmq.hpp>
-#include <thread>
-#include <sstream>
-#include <util/Coordinator.hpp>
 //---------------------------------------------------------------------------
-using namespace std;
-using namespace rdma;
+namespace util {
 //---------------------------------------------------------------------------
-namespace {
-uint32_t getNodeCount(int argc, char **argv)
-{
-   if (argc != 2) {
-      cerr << "usage: " << argv[0] << " [nodeCount]" << endl;
-      exit(EXIT_FAILURE);
-   }
-   uint32_t nodeCount;
-   istringstream in(argv[1]);
-   in >> nodeCount;
-   return nodeCount;
-}
-}
-//---------------------------------------------------------------------------
-int main(int argc, char **argv)
-{
-   uint32_t nodeCount = getNodeCount(argc, argv);
-   zmq::context_t context(1);
-   util::Coordinator coordinator(context, nodeCount, util::getHostname());
-   cout << "> start supportBarrier" << endl;
-   coordinator.supportBarrier(); // async
+/// A non-owning reference to a chunk of memory
+class MemoryRef {
+	/// A pointer to the data
+	char* ptr;
+	/// The length of the string
+	uint32_t len;
 
-   while (1) {
-      cout << "> supportHostnameExchange" << endl;
-      coordinator.supportHostnameExchange();
-   }
-}
+public:
+	/// Constructor
+   MemoryRef(char* data, uint32_t len) : ptr(data),len(len) {}
+   /// Return pointer to data
+   const char* data() const { return ptr; }
+   const char* data(uint32_t offset) const { assert(offset<len); return ptr + offset; }
+   char* data() { return ptr; }
+   char* data(uint32_t offset) { assert(offset<len); return ptr + offset; }
+
+   /// Create a non owning reference
+   MemoryRef subRef(uint32_t offset) { assert(len>=offset); return MemoryRef(data(offset), len-offset); }
+
+	/// Return length
+	uint32_t size() const { return len; }
+
+   /// Create a string (copy memory)
+   const std::string to_string() const { return std::string(ptr, len); }
+   const std::string to_hex() const;
+
+	/// Index operator
+	char operator[](uint32_t index) const { return ptr[index]; }
+	char& operator[](uint32_t index) { return ptr[index]; }
+};
+//---------------------------------------------------------------------------
+} // End of namespace util
 //---------------------------------------------------------------------------

@@ -18,52 +18,27 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //---------------------------------------------------------------------------
-#include "rdma/Network.hpp"
-#include "rdma/MemoryRegion.hpp"
-#include "rdma/WorkRequest.hpp"
-#include "util/ConnectionSetup.hpp"
-#include "util/Coordinator.hpp"
-#include "util/Utility.hpp"
-//---------------------------------------------------------------------------
-#include <iomanip>
-#include <iostream>
-#include <memory>
-#include <algorithm>
-#include <cassert>
-#include <unistd.h>
-#include <zmq.hpp>
-#include <thread>
-#include <sstream>
-#include <util/Coordinator.hpp>
+#include "MemoryRef.hpp"
+#include <string>
+#include <array>
 //---------------------------------------------------------------------------
 using namespace std;
-using namespace rdma;
+//---------------------------------------------------------------------------
+namespace util {
 //---------------------------------------------------------------------------
 namespace {
-uint32_t getNodeCount(int argc, char **argv)
-{
-   if (argc != 2) {
-      cerr << "usage: " << argv[0] << " [nodeCount]" << endl;
-      exit(EXIT_FAILURE);
-   }
-   uint32_t nodeCount;
-   istringstream in(argv[1]);
-   in >> nodeCount;
-   return nodeCount;
-}
+array<char, 16> numToHex{{'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'}};
 }
 //---------------------------------------------------------------------------
-int main(int argc, char **argv)
+const string MemoryRef::to_hex() const
 {
-   uint32_t nodeCount = getNodeCount(argc, argv);
-   zmq::context_t context(1);
-   util::Coordinator coordinator(context, nodeCount, util::getHostname());
-   cout << "> start supportBarrier" << endl;
-   coordinator.supportBarrier(); // async
-
-   while (1) {
-      cout << "> supportHostnameExchange" << endl;
-      coordinator.supportHostnameExchange();
+   string result;
+   for (uint32_t i = 0; i < size(); i++) {
+      result += numToHex[*(uint8_t*) data(i) >> 4];
+      result += numToHex[*(uint8_t*) data(i) & 0x0f];
    }
+   return result;
 }
+//---------------------------------------------------------------------------
+} // End of namespace util
 //---------------------------------------------------------------------------
