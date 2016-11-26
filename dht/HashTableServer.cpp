@@ -79,7 +79,7 @@ void HashTableServer::startAddressServiceAsync(zmq::context_t &context, string h
    thread = make_unique<::thread>([=, &context]() {
       // Send the addresses to each one who asks
       while (running) {
-         zmq::pollitem_t items[] = {*socket, 0, ZMQ_POLLIN, 0};
+         zmq::pollitem_t items[] = {(void*)*socket, 0, ZMQ_POLLIN, 0};
          int rc = zmq_poll(items, 1, 1000); // 1s
 
          if (rc<0) {

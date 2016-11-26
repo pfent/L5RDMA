@@ -40,6 +40,7 @@
 #include <cassert>
 #include <unistd.h>
 #include <unordered_map>
+#include <stdlib.h>
 //---------------------------------------------------------------------------
 using namespace std;
 using namespace rdma;

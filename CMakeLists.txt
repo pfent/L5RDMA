@@ -1,9 +1,14 @@
 cmake_minimum_required(VERSION 3.3)
 project(rdma_hash_map)
+# needed dependencies: zeromq and libibverbs
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14 -lzmq -lpthread -libverbs")
 
-set(SOURCE_FILES Coordinator.cpp Perf.cpp Tester.cpp dht/HashTableClient.cpp dht/HashTableNetworkLayout.cpp dht/HashTableServer.cpp dht/requests/RequestQueue.cpp dht/requests/Request.cpp rdma/CompletionQueuePair.cpp rdma/MemoryRegion.cpp rdma/Network.cpp rdma/QueuePair.cpp rdma/ReceiveQueue.cpp rdma/WorkRequest.cpp util/ConnectionSetup.cpp util/InlineList.cpp util/Utility.cpp util/Coordinator.cpp util/Peer.cpp util/MemoryRef.cpp)
+set(SOURCE_FILES dht/HashTableClient.cpp dht/HashTableNetworkLayout.cpp dht/HashTableServer.cpp dht/requests/RequestQueue.cpp dht/requests/Request.cpp rdma/CompletionQueuePair.cpp rdma/MemoryRegion.cpp rdma/Network.cpp rdma/QueuePair.cpp rdma/ReceiveQueue.cpp rdma/WorkRequest.cpp util/ConnectionSetup.cpp util/InlineList.cpp util/Utility.cpp util/Coordinator.cpp util/Peer.cpp util/MemoryRef.cpp)
+
 
 include_directories(. /usr/local/Cellar/zeromq/4.1.3/include/)
-add_executable(SampleCode "${SOURCE_FILES}")
+#add_executable(SampleCode "${SOURCE_FILES}")
+add_executable(Coordinator Coordinator.cpp "${SOURCE_FILES}")
+add_executable(Tester Tester.cpp "${SOURCE_FILES}")
+add_executable(Perf Perf.cpp "${SOURCE_FILES}")

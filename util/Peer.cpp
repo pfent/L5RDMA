@@ -133,7 +133,7 @@ void Peer::startPublisherService()
    running = true;
    thread = make_unique<::thread>([=]() {
       while (running) {
-         zmq::pollitem_t items[] = {*peerServerSocket, 0, ZMQ_POLLIN, 0};
+         zmq::pollitem_t items[] = {(void*)*peerServerSocket, 0, ZMQ_POLLIN, 0};
          int rc = zmq_poll(items, 1, 1000); // 1s
 
          if (rc<0) {
