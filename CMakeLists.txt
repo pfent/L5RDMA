@@ -8,5 +8,7 @@ set(SOURCE_FILES rdma/CompletionQueuePair.cpp rdma/MemoryRegion.cpp rdma/Network
 
 include_directories(..)
 add_executable(Test main.cpp "${SOURCE_FILES}")
+target_link_libraries(Test pthread ibverbs)
+
 add_executable(minimal minimal.cpp "${SOURCE_FILES}")
 target_link_libraries(minimal pthread ibverbs)
