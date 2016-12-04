@@ -30,3 +30,4 @@ tester
 
 # Project files
 .idea
+cmake-build-debug/

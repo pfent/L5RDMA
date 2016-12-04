@@ -20,9 +20,8 @@
 //---------------------------------------------------------------------------
 #pragma once
 //---------------------------------------------------------------------------
-#include "util/NotAssignable.hpp"
-//---------------------------------------------------------------------------
 #include <memory>
+
 //---------------------------------------------------------------------------
 struct ibv_send_wr;
 //---------------------------------------------------------------------------
@@ -31,37 +30,46 @@ struct ibv_cq;
 //---------------------------------------------------------------------------
 namespace rdma {
 //---------------------------------------------------------------------------
-struct WorkRequest;
-struct Address;
-class Network;
-class CompletionQueuePair;
-class ReceiveQueue;
+    struct WorkRequest;
+    struct Address;
+
+    class Network;
+
+    class CompletionQueuePair;
+
+    class ReceiveQueue;
+
 //---------------------------------------------------------------------------
-class QueuePair : public util::NotAssignable {
-   ibv_qp *qp;
+    class QueuePair {
+        QueuePair(QueuePair const &) = delete;
 
-   Network &network;
+        QueuePair &operator=(QueuePair const &) = delete;
 
-   CompletionQueuePair &completionQueuePair;
+        ibv_qp *qp;
 
-public:
-   QueuePair(Network &network); // Uses shared completion and receive Queue
-   QueuePair(Network &network, ReceiveQueue &receiveQueue); // Uses shared completion Queue
-   QueuePair(Network &network, CompletionQueuePair &completionQueuePair); // Uses shared receive Queue
-   QueuePair(Network &network, CompletionQueuePair &completionQueuePair, ReceiveQueue &receiveQueue);
-   ~QueuePair();
+        Network &network;
 
-   uint32_t getQPN();
+        CompletionQueuePair &completionQueuePair;
 
-   void connect(const Address &address, unsigned retryCount = 0);
+    public:
+        QueuePair(Network &network); // Uses shared completion and receive Queue
+        QueuePair(Network &network, ReceiveQueue &receiveQueue); // Uses shared completion Queue
+        QueuePair(Network &network, CompletionQueuePair &completionQueuePair); // Uses shared receive Queue
+        QueuePair(Network &network, CompletionQueuePair &completionQueuePair, ReceiveQueue &receiveQueue);
 
-   void postWorkRequest(const WorkRequest &workRequest);
+        ~QueuePair();
 
-   /// Print detailed information about this queue pair
-   void printQueuePairDetails();
+        uint32_t getQPN();
 
-   CompletionQueuePair &getCompletionQueuePair() { return completionQueuePair; }
-};
+        void connect(const Address &address, unsigned retryCount = 0);
+
+        void postWorkRequest(const WorkRequest &workRequest);
+
+        /// Print detailed information about this queue pair
+        void printQueuePairDetails();
+
+        CompletionQueuePair &getCompletionQueuePair() { return completionQueuePair; }
+    };
 //---------------------------------------------------------------------------
 } // End of namespace rdma
 //---------------------------------------------------------------------------

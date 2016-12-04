@@ -20,11 +20,10 @@
 //---------------------------------------------------------------------------
 #pragma once
 //---------------------------------------------------------------------------
-#include "util/NotAssignable.hpp"
-//---------------------------------------------------------------------------
 #include <vector>
 #include <cstdint>
 #include <mutex>
+
 //---------------------------------------------------------------------------
 struct ibv_comp_channel;
 struct ibv_srq;
@@ -32,48 +31,60 @@ struct ibv_cq;
 //---------------------------------------------------------------------------
 namespace rdma {
 //---------------------------------------------------------------------------
-class Network;
+    class Network;
+
 //---------------------------------------------------------------------------
-class CompletionQueuePair : public util::NotAssignable {
-   friend class QueuePair;
+    class CompletionQueuePair {
+        friend class QueuePair;
 
-   /// The send completion queue
-   ibv_cq *sendQueue;
-   /// The receive completion queue
-   ibv_cq *receiveQueue;
-   /// The completion channel
-   ibv_comp_channel *channel;
+        CompletionQueuePair(CompletionQueuePair const &) = delete;
 
-   /// The cached work completions
-   std::vector <std::pair<bool, uint64_t>> cachedCompletions;
-   /// Protect wait for events method from concurrent access
-   std::mutex guard;
+        CompletionQueuePair &operator=(CompletionQueuePair const &) = delete;
 
-   uint64_t pollCompletionQueue(ibv_cq *completionQueue, int type);
-   std::pair<bool, uint64_t> waitForCompletion(bool restrict, bool onlySend);
+        /// The send completion queue
+        ibv_cq *sendQueue;
+        /// The receive completion queue
+        ibv_cq *receiveQueue;
+        /// The completion channel
+        ibv_comp_channel *channel;
 
-public:
-   /// Ctor
-   CompletionQueuePair(Network &network);
-   ~CompletionQueuePair();
+        /// The cached work completions
+        std::vector<std::pair<bool, uint64_t>> cachedCompletions;
+        /// Protect wait for events method from concurrent access
+        std::mutex guard;
 
-   /// Poll the send completion queue
-   uint64_t pollSendCompletionQueue();
-   /// Poll the receive completion queue
-   uint64_t pollRecvCompletionQueue();
+        uint64_t pollCompletionQueue(ibv_cq *completionQueue, int type);
 
-   // Poll a completion queue blocking
-   uint64_t pollCompletionQueueBlocking(ibv_cq *completionQueue, int type);
-   /// Poll the send completion queue blocking
-   uint64_t pollSendCompletionQueueBlocking();
-   /// Poll the receive completion queue blocking
-   uint64_t pollRecvCompletionQueueBlocking();
+        std::pair<bool, uint64_t> waitForCompletion(bool restrict, bool onlySend);
 
-   /// Wait for a work request completion
-   std::pair<bool, uint64_t> waitForCompletion();
-   uint64_t waitForCompletionSend();
-   uint64_t waitForCompletionReceive();
-};
+    public:
+        /// Ctor
+        CompletionQueuePair(Network &network);
+
+        ~CompletionQueuePair();
+
+        /// Poll the send completion queue
+        uint64_t pollSendCompletionQueue();
+
+        /// Poll the receive completion queue
+        uint64_t pollRecvCompletionQueue();
+
+        // Poll a completion queue blocking
+        uint64_t pollCompletionQueueBlocking(ibv_cq *completionQueue, int type);
+
+        /// Poll the send completion queue blocking
+        uint64_t pollSendCompletionQueueBlocking();
+
+        /// Poll the receive completion queue blocking
+        uint64_t pollRecvCompletionQueueBlocking();
+
+        /// Wait for a work request completion
+        std::pair<bool, uint64_t> waitForCompletion();
+
+        uint64_t waitForCompletionSend();
+
+        uint64_t waitForCompletionReceive();
+    };
 //---------------------------------------------------------------------------
 } // End of namespace rdma
 //---------------------------------------------------------------------------

@@ -20,29 +20,35 @@
 //---------------------------------------------------------------------------
 #pragma once
 //---------------------------------------------------------------------------
-#include "util/NotAssignable.hpp"
-//---------------------------------------------------------------------------
 #include <vector>
 #include <cstdint>
 #include <mutex>
+
 //---------------------------------------------------------------------------
 struct ibv_srq;
 //---------------------------------------------------------------------------
 namespace rdma {
 //---------------------------------------------------------------------------
-class Network;
-//---------------------------------------------------------------------------
-class ReceiveQueue : public util::NotAssignable {
-   friend class QueuePair;
-   friend class CompletionQueuePair;
+    class Network;
 
-   /// The receive queue
-   ibv_srq *queue;
-public:
-   /// Ctor
-   ReceiveQueue(Network &network);
-   ~ReceiveQueue();
-};
+//---------------------------------------------------------------------------
+    class ReceiveQueue {
+        friend class QueuePair;
+
+        friend class CompletionQueuePair;
+
+        ReceiveQueue(ReceiveQueue const &) = delete;
+
+        ReceiveQueue &operator=(ReceiveQueue const &) = delete;
+
+        /// The receive queue
+        ibv_srq *queue;
+    public:
+        /// Ctor
+        ReceiveQueue(Network &network);
+
+        ~ReceiveQueue();
+    };
 //---------------------------------------------------------------------------
 } // End of namespace rdma
 //---------------------------------------------------------------------------
