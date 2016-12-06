@@ -43,6 +43,12 @@ void tcp_bind(int sock, sockaddr_in &addr) {
     }
 }
 
+struct RDMA_Info {
+    uint32_t QPN; // TODO qpn probably should be separate, because we can't setup a RMR without a network
+    uint32_t rmrKey;
+    uintptr_t rmrAddress;
+};
+
 int tcp_accept(int sock, sockaddr_in &inAddr) {
     socklen_t inAddrLen = sizeof inAddr;
     auto acced = accept(sock, (sockaddr *) &inAddr, &inAddrLen);
@@ -67,11 +73,21 @@ int main(int argc, char **argv) {
     const char DATA[] = "123456789012345678901234567890123456789012345678901234567890123";
     static_assert(BUFFER_SIZE == sizeof(DATA), "DATA needs the right size ");
 
+    // TODO:
+    // Setup Network && CompletionQueuePair && QueuePair
+
     if (isClient) {
         sockaddr_in addr;
         addr.sin_family = AF_INET;
         addr.sin_port = htons(port);
         inet_pton(AF_INET, argv[3], &addr.sin_addr);
+
+        // TODO:
+        // Recieve the qpn
+        // Setup the Network
+        // Setup shared memory region
+        // Exchange RMR keys && addresses
+        // Setup the Remote memory region
 
         tcp_connect(sock, addr);
         copy(begin(DATA), end(DATA), begin(buffer));
@@ -89,6 +105,14 @@ int main(int argc, char **argv) {
         addr.sin_family = AF_INET;
         addr.sin_port = htons(port);
         addr.sin_addr.s_addr = INADDR_ANY;
+
+        // TODO:
+        // Recieve the qpn
+        // Setup the Network
+        // Setup shared memory region
+        // Exchange RMR keys && addresses
+        // Setup the Remote memory region
+
         tcp_bind(sock, addr);
         listen(sock, SOMAXCONN);
         sockaddr_in inAddr;
