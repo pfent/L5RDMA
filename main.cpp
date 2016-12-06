@@ -49,6 +49,7 @@ void tcp_bind(int sock, sockaddr_in &addr) {
 void exchangeQPNAndConnect(int sock, Network &network, QueuePair &queuePair);
 
 void receiveAndSetupRmr(int sock, RemoteMemoryRegion &remoteMemoryRegion);
+
 void sendRmrInfo(int sock, MemoryRegion &sharedMemoryRegion);
 
 int tcp_accept(int sock, sockaddr_in &inAddr) {
@@ -101,6 +102,9 @@ int main(int argc, char **argv) {
 
         queuePair.postWorkRequest(workRequest);
         auto a = completionQueue.waitForCompletion();
+
+        // TODO: Network::postFetchAdd() to update bytes to read / write count
+
         cout << "Completed: " << a.first << " " << a.second << endl;
     } else {
         sockaddr_in addr;
@@ -111,22 +115,23 @@ int main(int argc, char **argv) {
         tcp_bind(sock, addr);
         listen(sock, SOMAXCONN);
         sockaddr_in inAddr;
-        for (;;) {
-            auto acced = tcp_accept(sock, inAddr);
-            exchangeQPNAndConnect(acced, network, queuePair);
 
-            MemoryRegion sharedMR(buffer, BUFFER_SIZE, network.getProtectionDomain(), MemoryRegion::Permission::All);
-            sendRmrInfo(acced, sharedMR);
+        auto acced = tcp_accept(sock, inAddr);
+        exchangeQPNAndConnect(acced, network, queuePair);
 
-            // TODO: maintain a bytes to read / bytes to write count
-            int qwe;
-            cout << "waiting for data ..." << endl;
-            cin >> qwe;
+        MemoryRegion sharedMR(buffer, BUFFER_SIZE, network.getProtectionDomain(), MemoryRegion::Permission::All);
+        sendRmrInfo(acced, sharedMR);
 
-            cout << buffer;
+        // TODO: maintain a bytes to read / bytes to write count
+        int qwe;
+        cout << "waiting for data ..." << endl;
+        cin >> qwe;
 
-            close(acced);
+        for (char c : buffer) {
+            cout << c;
         }
+
+        close(acced);
     }
 
     close(sock);
