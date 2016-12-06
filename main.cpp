@@ -6,6 +6,8 @@
 #include <unistd.h>
 #include <algorithm>
 #include <chrono>
+#include <rdma_tests/rdma/CompletionQueuePair.hpp>
+#include <rdma_tests/rdma/QueuePair.hpp>
 #include "rdma/Network.hpp"
 
 using namespace std;
@@ -73,9 +75,12 @@ int main(int argc, char **argv) {
     const char DATA[] = "123456789012345678901234567890123456789012345678901234567890123";
     static_assert(BUFFER_SIZE == sizeof(DATA), "DATA needs the right size ");
 
-    // TODO:
-    // Setup Network && CompletionQueuePair && QueuePair
+    // RDMA networking. The queues are needed on both sides
+    Network network;
+    CompletionQueuePair completionQueue(network);
+    QueuePair queuePair(network, completionQueue);
 
+    const uint32_t  qpn = queuePair.getQPN();
     if (isClient) {
         sockaddr_in addr;
         addr.sin_family = AF_INET;
@@ -90,16 +95,9 @@ int main(int argc, char **argv) {
         // Setup the Remote memory region
 
         tcp_connect(sock, addr);
-        copy(begin(DATA), end(DATA), begin(buffer));
-        const auto start = chrono::steady_clock::now();
-        tcp_write(sock, buffer, BUFFER_SIZE);
-        fill(begin(buffer), end(buffer), 0);
-        tcp_read(sock, buffer, BUFFER_SIZE);
-        if (not equal(begin(buffer), end(buffer), begin(DATA))) {
-            throw runtime_error{"expected '" + string(DATA) + "', received " + string(begin(buffer), end(buffer))};
-        }
-        const auto end = chrono::steady_clock::now();
-        cout << "RTT: " << chrono::duration<double, milli>(end - start).count() << "ms" << endl;
+        uint32_t qPNbuffer = htonl(qpn);
+        tcp_write(sock, &qPNbuffer, sizeof(qPNbuffer)); // Send own qpn to server
+        tcp_read(sock, &qPNbuffer, sizeof(qPNbuffer)); // receive qpn
     } else {
         sockaddr_in addr;
         addr.sin_family = AF_INET;
