@@ -3,12 +3,12 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <unistd.h>
-#include <algorithm>
 #include <rdma_tests/rdma/CompletionQueuePair.hpp>
 #include <rdma_tests/rdma/QueuePair.hpp>
 #include <rdma_tests/rdma/MemoryRegion.hpp>
 #include <rdma_tests/rdma/WorkRequest.hpp>
 #include <infiniband/verbs.h>
+#include <stdlib.h>
 #include "rdma/Network.hpp"
 
 using namespace std;
@@ -71,10 +71,9 @@ int main(int argc, char **argv) {
 
     auto sock = tcp_socket();
 
-    const size_t BUFFER_SIZE = 64;
-    uint8_t buffer[BUFFER_SIZE];
+    const size_t BUFFER_SIZE = 64 * 4; // TODO: buffersize, that forces wraparound
     const char DATA[] = "123456789012345678901234567890123456789012345678901234567890123";
-    static_assert(BUFFER_SIZE == sizeof(DATA), "DATA needs the right size ");
+    static_assert(64 == sizeof(DATA), "DATA needs the right size ");
 
     // RDMA networking. The queues are needed on both sides
     Network network;
@@ -90,41 +89,77 @@ int main(int argc, char **argv) {
         tcp_connect(sock, addr);
         exchangeQPNAndConnect(sock, network, queuePair);
 
-        copy(begin(DATA), end(DATA), begin(buffer)); // Send DATA
-        MemoryRegion sharedBuffer(buffer, BUFFER_SIZE, network.getProtectionDomain(), MemoryRegion::Permission::All);
-        RemoteMemoryRegion remoteBuffer;
+        const size_t completeBufferSize = BUFFER_SIZE;
         uint64_t writePos = 0;
-        uint64_t writeAdd = 0;
-        uint64_t unused = 0;
-        MemoryRegion sharedWritePos(&unused, sizeof(unused), network.getProtectionDomain(),
-                                    MemoryRegion::Permission::All);
-        RemoteMemoryRegion remoteWritePos;
+        volatile uint64_t readPos = 0;
+        uint8_t localBuffer[completeBufferSize]{};
+        uint64_t lastWrite = 0;
 
+        MemoryRegion sharedBuffer(localBuffer, completeBufferSize, network.getProtectionDomain(),
+                                  MemoryRegion::Permission::All);
+        RemoteMemoryRegion remoteBuffer;
+        MemoryRegion sharedWritePos(&lastWrite, sizeof(lastWrite), network.getProtectionDomain(),
+                                    MemoryRegion::Permission::All);
+        MemoryRegion sharedReadPos((void *) &readPos, sizeof(readPos), network.getProtectionDomain(),
+                                   MemoryRegion::Permission::All);
+        RemoteMemoryRegion remoteWritePos;
+        RemoteMemoryRegion remoteReadPos; // TODO: setup remote read pos
         receiveAndSetupRmr(sock, remoteBuffer, remoteWritePos);
 
-        // TODO: check if our write request still fits into the buffer, and / or do a wraparound with partial writes
-        WriteWorkRequest workRequest;
-        workRequest.setLocalAddress(sharedBuffer);
-        workRequest.setRemoteAddress(remoteBuffer); // TODO: probably create a new remoteBuffer for each write
-        workRequest.setCompletion(true);
-        queuePair.postWorkRequest(workRequest);
+        for (int i = 0; i < 4; ++i) {
+            // Send DATA
+            const size_t sizeToWrite = sizeof(DATA);
+            size_t safeToWrite = completeBufferSize - (writePos - readPos);
+            while (safeToWrite < sizeToWrite) {
+                ReadWorkRequest readWritePos;
+                readWritePos.setLocalAddress(sharedReadPos);
+                readWritePos.setRemoteAddress(remoteReadPos);
+                readWritePos.setCompletion(true);
+                queuePair.postWorkRequest(readWritePos);
+                completionQueue.waitForCompletionReceive(); // Synchronization point
+                safeToWrite = completeBufferSize - (writePos - readPos);
+            }
+            const size_t beginPos = writePos;
+            const size_t endPos = (writePos + sizeToWrite) % completeBufferSize;
+            if (endPos <= beginPos) {
+                // TODO: split and wraparound
+                // TODO: check if our write request still fits into the buffer, and / or do a wraparound with partial writes
+                throw runtime_error{"Can't cope with wraparound yet"};
+            } else { // Nice linear memory
+                uint8_t *begin = (uint8_t *) localBuffer;
+                begin += beginPos;
+                //uint8_t* end = (uint8_t*) localBuffer;
+                //end += endPos;
+                memcpy(begin, DATA, sizeToWrite);
+                MemoryRegion sendBuffer(begin, sizeToWrite, network.getProtectionDomain(),
+                                        MemoryRegion::Permission::All);
+                RemoteMemoryRegion receiveBuffer;
+                receiveBuffer.key = remoteBuffer.key;
+                receiveBuffer.address = remoteBuffer.address + sizeToWrite;
 
-        completionQueue.waitForCompletion();
+                WriteWorkRequest writeRequest;
+                writeRequest.setLocalAddress(sendBuffer);
+                writeRequest.setRemoteAddress(receiveBuffer);
+                writeRequest.setCompletion(false);
+                // Dont post yet, we can chain the WRs
 
-        // We probably don't need an explicit wraparound. The uint64_t will overflow, when we write more than
-        // 16384 Petabyte == 16 Exabyte. That probably "ought to be enough for anybody" in the near future.
-        // Assume we have 100Gb/s transfer, then we'll overflow in (16*1024*1024*1024/(100/8))s == 700 years
-        writeAdd = BUFFER_SIZE;
-        writePos += writeAdd;
-        // AtomicFetchAndAdd to update bytes to read / write count
-        AtomicFetchAndAddWorkRequest atomicAddWR;
-        atomicAddWR.setLocalAddress(sharedWritePos);
-        atomicAddWR.setAddValue(writeAdd);
-        atomicAddWR.setRemoteAddress(remoteWritePos);
-        atomicAddWR.setCompletion(false); // Don't care about the timing, we keep track of the position locally
-        queuePair.postWorkRequest(atomicAddWR);
+                AtomicFetchAndAddWorkRequest atomicAddRequest;
+                atomicAddRequest.setLocalAddress(sharedWritePos);
+                atomicAddRequest.setAddValue(sizeToWrite);
+                atomicAddRequest.setRemoteAddress(remoteWritePos);
+                atomicAddRequest.setCompletion(false);
 
-        cout << "Completed write. Current Pos: " << writePos << endl;
+                // We probably don't need an explicit wraparound. The uint64_t will overflow, when we write more than
+                // 16384 Petabyte == 16 Exabyte. That probably "ought to be enough for anybody" in the near future.
+                // Assume we have 100Gb/s transfer, then we'll overflow in (16*1024*1024*1024/(100/8))s == 700 years
+                writePos += sizeToWrite;
+
+                writeRequest.setNextWorkRequest(&atomicAddRequest);
+
+                queuePair.postWorkRequest(writeRequest); // Only one post for better performance
+                cout << "Posted write. Current Pos: " << writePos << endl;
+            }
+        }
     } else {
         sockaddr_in addr;
         addr.sin_family = AF_INET;
@@ -138,21 +173,38 @@ int main(int argc, char **argv) {
         auto acced = tcp_accept(sock, inAddr);
         exchangeQPNAndConnect(acced, network, queuePair);
 
-        MemoryRegion sharedMR(buffer, BUFFER_SIZE, network.getProtectionDomain(), MemoryRegion::Permission::All);
-        uint64_t bufferReadPosition = 0;
-        auto sharedBufferWritePosition = make_unique<volatile uint64_t>(0);
-        MemoryRegion sharedWritePosMR((void *) sharedBufferWritePosition.get(), sizeof(uint64_t),
-                                      network.getProtectionDomain(), MemoryRegion::Permission::All);
-        sendRmrInfo(acced, sharedMR, sharedWritePosMR);
+        const size_t completeBufferSize = BUFFER_SIZE;
+        uint8_t localBuffer[completeBufferSize]{};
+        MemoryRegion sharedMR(localBuffer, BUFFER_SIZE, network.getProtectionDomain(), MemoryRegion::Permission::All);
+        uint64_t readPosition = 0;
+        volatile uint64_t sharedBufferWritePosition = 0;
+        MemoryRegion sharedWritePos((void *) &sharedBufferWritePosition, sizeof(uint64_t),
+                                    network.getProtectionDomain(), MemoryRegion::Permission::All);
+        MemoryRegion sharedReadPos(&readPosition, sizeof(readPosition), network.getProtectionDomain(),
+                                   MemoryRegion::Permission::All);
+        // TODO: share readPos
+        sendRmrInfo(acced, sharedMR, sharedWritePos);
 
-        // Spin wait until we have some data
-        while (bufferReadPosition == *sharedBufferWritePosition) sched_yield();
+        for (int i = 0; i < 4; ++i) {
+            const size_t sizeToRead = sizeof(DATA);
+            size_t beginPos = readPosition;
+            size_t endPos = (readPosition + sizeToRead) % completeBufferSize;
+            if (endPos < beginPos) {
+                // TODO: split and wraparound
+                // TODO: check if our read still fits into the buffer, and / or do a wraparound with partial reads
+                throw runtime_error{"Can't cope with wraparound yet"};
+            } else { // Nice linear data
+                // Spin wait until we have some data
+                while (readPosition == sharedBufferWritePosition) sched_yield();
+                const size_t begin = readPosition % completeBufferSize;
+                readPosition += sizeToRead;
 
-        // TODO: do the wraparound
-        for (char c : buffer) {
-            cout << c;
+                for (size_t j = 0; j < sizeToRead; ++j) {
+                    cout << localBuffer[begin + j];
+                }
+                cout << endl;
+            }
         }
-        bufferReadPosition = *sharedBufferWritePosition;
 
         close(acced);
     }
