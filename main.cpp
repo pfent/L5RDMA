@@ -48,9 +48,9 @@ void tcp_bind(int sock, sockaddr_in &addr) {
 
 void exchangeQPNAndConnect(int sock, Network &network, QueuePair &queuePair);
 
-void receiveAndSetupRmr(int sock, RemoteMemoryRegion &remoteMemoryRegion);
+void receiveAndSetupRmr(int sock, RemoteMemoryRegion &remoteMemoryRegion, RemoteMemoryRegion &remoteWritePos);
 
-void sendRmrInfo(int sock, MemoryRegion &sharedMemoryRegion);
+void sendRmrInfo(int sock, MemoryRegion &sharedMemoryRegion, MemoryRegion &sharedWritePos);
 
 int tcp_accept(int sock, sockaddr_in &inAddr) {
     socklen_t inAddrLen = sizeof inAddr;
@@ -91,21 +91,38 @@ int main(int argc, char **argv) {
         exchangeQPNAndConnect(sock, network, queuePair);
 
         copy(begin(DATA), end(DATA), begin(buffer)); // Send DATA
-        MemoryRegion sharedMR(buffer, BUFFER_SIZE, network.getProtectionDomain(), MemoryRegion::Permission::All);
-        RemoteMemoryRegion remoteMemoryRegion;
-        receiveAndSetupRmr(sock, remoteMemoryRegion);
+        MemoryRegion sharedBuffer(buffer, BUFFER_SIZE, network.getProtectionDomain(), MemoryRegion::Permission::All);
+        RemoteMemoryRegion remoteBuffer;
+        uint64_t writePos = 0;
+        uint64_t writeAdd = 0;
+        MemoryRegion sharedWritePos(&writeAdd, sizeof(writeAdd), network.getProtectionDomain(),
+                                    MemoryRegion::Permission::All);
+        RemoteMemoryRegion remoteWritePos;
 
+        receiveAndSetupRmr(sock, remoteBuffer, remoteWritePos);
+
+        // TODO: check if our write request still fits into the buffer, and / or do a wraparound with partial writes
         WriteWorkRequest workRequest;
-        workRequest.setLocalAddress(sharedMR);
-        workRequest.setRemoteAddress(remoteMemoryRegion);
+        workRequest.setLocalAddress(sharedBuffer);
+        workRequest.setRemoteAddress(remoteBuffer); // TODO: probably create a new remoteBuffer for each write
         workRequest.setCompletion(true);
-
         queuePair.postWorkRequest(workRequest);
-        auto a = completionQueue.waitForCompletion();
 
-        // TODO: Network::postFetchAdd() to update bytes to read / write count
+        completionQueue.waitForCompletion();
 
-        cout << "Completed: " << a.first << " " << a.second << endl;
+        // We probably don't need an explicit wraparound. The uint64_t will overflow, when we write more than
+        // 16384 Petabyte == 16 Exabyte. That probably "ought to be enough for anybody" in the near future.
+        // Assume we have 100Gb/s transfer, then we'll overflow in (16*1024*1024*1024/(100/8))s == 700 years
+        writeAdd = BUFFER_SIZE;
+        writePos += writeAdd;
+        // AtomicFetchAndAdd to update bytes to read / write count
+        AtomicFetchAndAddWorkRequest atomicAddWR;
+        atomicAddWR.setLocalAddress(sharedWritePos);
+        atomicAddWR.setRemoteAddress(remoteWritePos);
+        atomicAddWR.setCompletion(false); // Don't care about the timing, we keep track of the position locally
+        queuePair.postWorkRequest(atomicAddWR);
+
+        cout << "Completed write. Current Pos: " << writePos << endl;
     } else {
         sockaddr_in addr;
         addr.sin_family = AF_INET;
@@ -120,16 +137,20 @@ int main(int argc, char **argv) {
         exchangeQPNAndConnect(acced, network, queuePair);
 
         MemoryRegion sharedMR(buffer, BUFFER_SIZE, network.getProtectionDomain(), MemoryRegion::Permission::All);
-        sendRmrInfo(acced, sharedMR);
+        uint64_t bufferReadPosition = 0;
+        volatile uint64_t sharedBufferWritePosition = 0;
+        MemoryRegion sharedWritePosMR((void *) &sharedBufferWritePosition, sizeof(sharedBufferWritePosition),
+                                      network.getProtectionDomain(), MemoryRegion::Permission::All);
+        sendRmrInfo(acced, sharedMR, sharedWritePosMR);
 
-        // TODO: maintain a bytes to read / bytes to write count
-        int qwe;
-        cout << "waiting for data ..." << endl;
-        cin >> qwe;
+        // Spin wait until we have some data
+        while(bufferReadPosition == sharedBufferWritePosition) sched_yield();
 
+        // TODO: do the wraparound
         for (char c : buffer) {
             cout << c;
         }
+        bufferReadPosition = sharedBufferWritePosition;
 
         close(acced);
     }
@@ -139,24 +160,32 @@ int main(int argc, char **argv) {
 }
 
 struct RmrInfo {
-    uint32_t key;
-    uintptr_t address;
+    uint32_t bufferKey;
+    uintptr_t bufferAddress;
     static_assert(sizeof(uintptr_t) == sizeof(uint64_t), "Only 64bit platforms supported");
+    uint32_t writePosKey;
+    uintptr_t writePosAddress;
 };
 
-void receiveAndSetupRmr(int sock, RemoteMemoryRegion &remoteMemoryRegion) {
+void receiveAndSetupRmr(int sock, RemoteMemoryRegion &remoteMemoryRegion, RemoteMemoryRegion &remoteWritePos) {
     RmrInfo rmrInfo;
     tcp_read(sock, &rmrInfo, sizeof(rmrInfo));
-    rmrInfo.key = ntohl(rmrInfo.key);
-    rmrInfo.address = be64toh(rmrInfo.address);
-    remoteMemoryRegion.key = rmrInfo.key;
-    remoteMemoryRegion.address = rmrInfo.address;
+    rmrInfo.bufferKey = ntohl(rmrInfo.bufferKey);
+    rmrInfo.bufferAddress = be64toh(rmrInfo.bufferAddress);
+    rmrInfo.writePosKey = ntohl(rmrInfo.writePosKey);
+    rmrInfo.writePosAddress = be64toh(rmrInfo.writePosAddress);
+    remoteMemoryRegion.key = rmrInfo.bufferKey;
+    remoteMemoryRegion.address = rmrInfo.bufferAddress;
+    remoteWritePos.key = rmrInfo.writePosKey;
+    remoteWritePos.address = rmrInfo.writePosAddress;
 }
 
-void sendRmrInfo(int sock, MemoryRegion &sharedMemoryRegion) {
+void sendRmrInfo(int sock, MemoryRegion &sharedMemoryRegion, MemoryRegion &sharedWritePos) {
     RmrInfo rmrInfo;
-    rmrInfo.key = htonl(sharedMemoryRegion.key->rkey);
-    rmrInfo.address = htobe64((uint64_t) sharedMemoryRegion.address);
+    rmrInfo.bufferKey = htonl(sharedMemoryRegion.key->rkey);
+    rmrInfo.bufferAddress = htobe64((uint64_t) sharedMemoryRegion.address);
+    rmrInfo.writePosKey = htonl(sharedWritePos.key->rkey);
+    rmrInfo.writePosAddress = htobe64((uint64_t) sharedMemoryRegion.address);
     tcp_write(sock, &rmrInfo, sizeof(rmrInfo));
 }
 
