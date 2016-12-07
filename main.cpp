@@ -3,6 +3,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <unistd.h>
+#include <cstring>
 #include <rdma_tests/rdma/CompletionQueuePair.hpp>
 #include <rdma_tests/rdma/QueuePair.hpp>
 #include <rdma_tests/rdma/MemoryRegion.hpp>
@@ -48,9 +49,10 @@ void tcp_bind(int sock, sockaddr_in &addr) {
 
 void exchangeQPNAndConnect(int sock, Network &network, QueuePair &queuePair);
 
-void receiveAndSetupRmr(int sock, RemoteMemoryRegion &remoteMemoryRegion, RemoteMemoryRegion &remoteWritePos);
+void receiveAndSetupRmr(int sock, RemoteMemoryRegion &remoteMemoryRegion, RemoteMemoryRegion &remoteWritePos,
+                        RemoteMemoryRegion &remoteReadPos);
 
-void sendRmrInfo(int sock, MemoryRegion &sharedMemoryRegion, MemoryRegion &sharedWritePos);
+void sendRmrInfo(int sock, MemoryRegion &sharedMemoryRegion, MemoryRegion &sharedWritePos, MemoryRegion &sharedReadPos);
 
 int tcp_accept(int sock, sockaddr_in &inAddr) {
     socklen_t inAddrLen = sizeof inAddr;
@@ -103,8 +105,8 @@ int main(int argc, char **argv) {
         MemoryRegion sharedReadPos((void *) &readPos, sizeof(readPos), network.getProtectionDomain(),
                                    MemoryRegion::Permission::All);
         RemoteMemoryRegion remoteWritePos;
-        RemoteMemoryRegion remoteReadPos; // TODO: setup remote read pos
-        receiveAndSetupRmr(sock, remoteBuffer, remoteWritePos);
+        RemoteMemoryRegion remoteReadPos;
+        receiveAndSetupRmr(sock, remoteBuffer, remoteWritePos, remoteReadPos);
 
         for (int i = 0; i < 4; ++i) {
             // Send DATA
@@ -182,8 +184,7 @@ int main(int argc, char **argv) {
                                     network.getProtectionDomain(), MemoryRegion::Permission::All);
         MemoryRegion sharedReadPos(&readPosition, sizeof(readPosition), network.getProtectionDomain(),
                                    MemoryRegion::Permission::All);
-        // TODO: share readPos
-        sendRmrInfo(acced, sharedMR, sharedWritePos);
+        sendRmrInfo(acced, sharedMR, sharedWritePos, sharedReadPos);
 
         for (int i = 0; i < 4; ++i) {
             const size_t sizeToRead = sizeof(DATA);
@@ -219,27 +220,37 @@ struct RmrInfo {
     static_assert(sizeof(uintptr_t) == sizeof(uint64_t), "Only 64bit platforms supported");
     uint32_t writePosKey;
     uintptr_t writePosAddress;
+    uint32_t readPosKey;
+    uintptr_t readPosAddress;
 };
 
-void receiveAndSetupRmr(int sock, RemoteMemoryRegion &remoteMemoryRegion, RemoteMemoryRegion &remoteWritePos) {
+void receiveAndSetupRmr(int sock, RemoteMemoryRegion &remoteMemoryRegion, RemoteMemoryRegion &remoteWritePos,
+                        RemoteMemoryRegion &remoteReadPos) {
     RmrInfo rmrInfo;
     tcp_read(sock, &rmrInfo, sizeof(rmrInfo));
     rmrInfo.bufferKey = ntohl(rmrInfo.bufferKey);
-    rmrInfo.bufferAddress = be64toh(rmrInfo.bufferAddress);
     rmrInfo.writePosKey = ntohl(rmrInfo.writePosKey);
+    rmrInfo.readPosKey = ntohl(rmrInfo.readPosKey);
+    rmrInfo.bufferAddress = be64toh(rmrInfo.bufferAddress);
     rmrInfo.writePosAddress = be64toh(rmrInfo.writePosAddress);
+    rmrInfo.readPosAddress = be64toh(rmrInfo.readPosAddress);
     remoteMemoryRegion.key = rmrInfo.bufferKey;
-    remoteMemoryRegion.address = rmrInfo.bufferAddress;
     remoteWritePos.key = rmrInfo.writePosKey;
+    remoteReadPos.key = rmrInfo.readPosKey;
+    remoteMemoryRegion.address = rmrInfo.bufferAddress;
     remoteWritePos.address = rmrInfo.writePosAddress;
+    remoteReadPos.address = rmrInfo.readPosAddress;
 }
 
-void sendRmrInfo(int sock, MemoryRegion &sharedMemoryRegion, MemoryRegion &sharedWritePos) {
+void
+sendRmrInfo(int sock, MemoryRegion &sharedMemoryRegion, MemoryRegion &sharedWritePos, MemoryRegion &sharedReadPos) {
     RmrInfo rmrInfo;
     rmrInfo.bufferKey = htonl(sharedMemoryRegion.key->rkey);
-    rmrInfo.bufferAddress = htobe64((uint64_t) sharedMemoryRegion.address);
     rmrInfo.writePosKey = htonl(sharedWritePos.key->rkey);
+    rmrInfo.readPosKey = htonl(sharedReadPos.key->rkey);
+    rmrInfo.bufferAddress = htobe64((uint64_t) sharedMemoryRegion.address);
     rmrInfo.writePosAddress = htobe64((uint64_t) sharedWritePos.address);
+    rmrInfo.readPosAddress = htobe64((uint64_t) sharedReadPos.address);
     tcp_write(sock, &rmrInfo, sizeof(rmrInfo));
 }
 
