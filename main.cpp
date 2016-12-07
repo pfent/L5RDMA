@@ -138,19 +138,19 @@ int main(int argc, char **argv) {
 
         MemoryRegion sharedMR(buffer, BUFFER_SIZE, network.getProtectionDomain(), MemoryRegion::Permission::All);
         uint64_t bufferReadPosition = 0;
-        volatile uint64_t sharedBufferWritePosition = 0;
-        MemoryRegion sharedWritePosMR((void *) &sharedBufferWritePosition, sizeof(sharedBufferWritePosition),
+        auto sharedBufferWritePosition = make_unique<volatile uint64_t>(0);
+        MemoryRegion sharedWritePosMR((void *) sharedBufferWritePosition.get(), sizeof(uint64_t),
                                       network.getProtectionDomain(), MemoryRegion::Permission::All);
         sendRmrInfo(acced, sharedMR, sharedWritePosMR);
 
         // Spin wait until we have some data
-        while(bufferReadPosition == sharedBufferWritePosition) sched_yield();
+        while (bufferReadPosition == *sharedBufferWritePosition) sched_yield();
 
         // TODO: do the wraparound
         for (char c : buffer) {
             cout << c;
         }
-        bufferReadPosition = sharedBufferWritePosition;
+        bufferReadPosition = *sharedBufferWritePosition;
 
         close(acced);
     }
