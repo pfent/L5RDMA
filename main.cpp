@@ -95,7 +95,8 @@ int main(int argc, char **argv) {
         RemoteMemoryRegion remoteBuffer;
         uint64_t writePos = 0;
         uint64_t writeAdd = 0;
-        MemoryRegion sharedWritePos(&writeAdd, sizeof(writeAdd), network.getProtectionDomain(),
+        uint64_t unused = 0;
+        MemoryRegion sharedWritePos(&unused, sizeof(unused), network.getProtectionDomain(),
                                     MemoryRegion::Permission::All);
         RemoteMemoryRegion remoteWritePos;
 
@@ -118,6 +119,7 @@ int main(int argc, char **argv) {
         // AtomicFetchAndAdd to update bytes to read / write count
         AtomicFetchAndAddWorkRequest atomicAddWR;
         atomicAddWR.setLocalAddress(sharedWritePos);
+        atomicAddWR.setAddValue(writeAdd);
         atomicAddWR.setRemoteAddress(remoteWritePos);
         atomicAddWR.setCompletion(false); // Don't care about the timing, we keep track of the position locally
         queuePair.postWorkRequest(atomicAddWR);
