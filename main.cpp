@@ -187,7 +187,7 @@ void sendRmrInfo(int sock, MemoryRegion &sharedMemoryRegion, MemoryRegion &share
     rmrInfo.bufferKey = htonl(sharedMemoryRegion.key->rkey);
     rmrInfo.bufferAddress = htobe64((uint64_t) sharedMemoryRegion.address);
     rmrInfo.writePosKey = htonl(sharedWritePos.key->rkey);
-    rmrInfo.writePosAddress = htobe64((uint64_t) sharedMemoryRegion.address);
+    rmrInfo.writePosAddress = htobe64((uint64_t) sharedWritePos.address);
     tcp_write(sock, &rmrInfo, sizeof(rmrInfo));
 }
 
