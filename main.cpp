@@ -112,7 +112,7 @@ int main(int argc, char **argv) {
             // Send DATA
             const size_t sizeToWrite = sizeof(DATA);
             size_t safeToWrite = completeBufferSize - (writePos - readPos);
-            while (safeToWrite < sizeToWrite) {
+            while (safeToWrite < sizeToWrite) { // Only synchronize with sever when necessary
                 ReadWorkRequest readWritePos;
                 readWritePos.setLocalAddress(sharedReadPos);
                 readWritePos.setRemoteAddress(remoteReadPos);
@@ -124,10 +124,13 @@ int main(int argc, char **argv) {
             const size_t beginPos = writePos;
             const size_t endPos = (writePos + sizeToWrite) % completeBufferSize;
             if (endPos <= beginPos) {
+                cout << "Write to    [" << beginPos << ", " << completeBufferSize << "]\n";
+                cout << "split write [" << 0 << ", " << endPos << "]" << endl;
                 // TODO: split and wraparound
                 // TODO: check if our write request still fits into the buffer, and / or do a wraparound with partial writes
                 throw runtime_error{"Can't cope with wraparound yet"};
             } else { // Nice linear memory
+                cout << "Write to [" << beginPos << ", " << endPos << "]";
                 uint8_t *begin = (uint8_t *) localBuffer;
                 begin += beginPos;
                 //uint8_t* end = (uint8_t*) localBuffer;
@@ -190,13 +193,17 @@ int main(int argc, char **argv) {
             const size_t sizeToRead = sizeof(DATA);
             size_t beginPos = readPosition;
             size_t endPos = (readPosition + sizeToRead) % completeBufferSize;
+            // Spin wait until we have some data
+            while (readPosition == sharedBufferWritePosition) sched_yield();
             if (endPos < beginPos) {
+                cout << "Read from  [" << beginPos << ", " << completeBufferSize << "]\n";
+                cout << "split read [" << 0 << ", " << endPos << "]" << endl;
                 // TODO: split and wraparound
                 // TODO: check if our read still fits into the buffer, and / or do a wraparound with partial reads
                 throw runtime_error{"Can't cope with wraparound yet"};
             } else { // Nice linear data
-                // Spin wait until we have some data
-                while (readPosition == sharedBufferWritePosition) sched_yield();
+                cout << "Read from [" << beginPos << ", " << endPos << "]";
+
                 const size_t begin = readPosition % completeBufferSize;
                 readPosition += sizeToRead;
 
