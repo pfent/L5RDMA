@@ -121,7 +121,7 @@ int main(int argc, char **argv) {
                 completionQueue.waitForCompletionReceive(); // Synchronization point
                 safeToWrite = completeBufferSize - (writePos - readPos);
             }
-            const size_t beginPos = writePos;
+            const size_t beginPos = writePos % completeBufferSize;
             const size_t endPos = (writePos + sizeToWrite - 1) % completeBufferSize;
             if (endPos <= beginPos) {
                 cout << "Write to    [" << beginPos << ", " << completeBufferSize << "]\n";
@@ -136,6 +136,10 @@ int main(int argc, char **argv) {
                 //uint8_t* end = (uint8_t*) localBuffer;
                 //end += endPos;
                 memcpy(begin, DATA, sizeToWrite);
+                for (size_t j = 0; j < sizeToWrite; ++j) {
+                    cout << localBuffer[beginPos + j];
+                }
+                cout << endl;
                 MemoryRegion sendBuffer(begin, sizeToWrite, network.getProtectionDomain(),
                                         MemoryRegion::Permission::All);
                 RemoteMemoryRegion receiveBuffer;
@@ -191,7 +195,7 @@ int main(int argc, char **argv) {
 
         for (int i = 0; i < 4; ++i) {
             const size_t sizeToRead = sizeof(DATA);
-            size_t beginPos = readPosition;
+            size_t beginPos = readPosition % completeBufferSize;
             size_t endPos = (readPosition + sizeToRead - 1) % completeBufferSize;
             // Spin wait until we have some data
             while (readPosition == sharedBufferWritePosition) sched_yield();
