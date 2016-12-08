@@ -122,7 +122,7 @@ int main(int argc, char **argv) {
                 safeToWrite = completeBufferSize - (writePos - readPos);
             }
             const size_t beginPos = writePos;
-            const size_t endPos = (writePos + sizeToWrite) % completeBufferSize;
+            const size_t endPos = (writePos + sizeToWrite - 1) % completeBufferSize;
             if (endPos <= beginPos) {
                 cout << "Write to    [" << beginPos << ", " << completeBufferSize << "]\n";
                 cout << "split write [" << 0 << ", " << endPos << "]" << endl;
@@ -130,7 +130,7 @@ int main(int argc, char **argv) {
                 // TODO: check if our write request still fits into the buffer, and / or do a wraparound with partial writes
                 throw runtime_error{"Can't cope with wraparound yet"};
             } else { // Nice linear memory
-                cout << "Write to [" << beginPos << ", " << endPos << "]";
+                cout << "Write to [" << beginPos << ", " << endPos << "]" << endl;
                 uint8_t *begin = (uint8_t *) localBuffer;
                 begin += beginPos;
                 //uint8_t* end = (uint8_t*) localBuffer;
@@ -192,7 +192,7 @@ int main(int argc, char **argv) {
         for (int i = 0; i < 4; ++i) {
             const size_t sizeToRead = sizeof(DATA);
             size_t beginPos = readPosition;
-            size_t endPos = (readPosition + sizeToRead) % completeBufferSize;
+            size_t endPos = (readPosition + sizeToRead - 1) % completeBufferSize;
             // Spin wait until we have some data
             while (readPosition == sharedBufferWritePosition) sched_yield();
             if (endPos < beginPos) {
@@ -202,7 +202,7 @@ int main(int argc, char **argv) {
                 // TODO: check if our read still fits into the buffer, and / or do a wraparound with partial reads
                 throw runtime_error{"Can't cope with wraparound yet"};
             } else { // Nice linear data
-                cout << "Read from [" << beginPos << ", " << endPos << "]";
+                cout << "Read from [" << beginPos << ", " << endPos << "]" << endl;
 
                 const size_t begin = readPosition % completeBufferSize;
                 readPosition += sizeToRead;
