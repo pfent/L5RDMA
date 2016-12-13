@@ -9,7 +9,6 @@
 #include <rdma_tests/rdma/MemoryRegion.hpp>
 #include <rdma_tests/rdma/WorkRequest.hpp>
 #include <infiniband/verbs.h>
-#include <stdlib.h>
 #include "rdma/Network.hpp"
 
 using namespace std;
@@ -63,6 +62,8 @@ int tcp_accept(int sock, sockaddr_in &inAddr) {
     return acced;
 }
 
+static const size_t MESSAGES = 100;
+
 int main(int argc, char **argv) {
     if (argc < 3 || (argv[1][0] == 'c' && argc < 4)) {
         cout << "Usage: " << argv[0] << " <client / server> <Port> [IP (if client)]" << endl;
@@ -108,7 +109,7 @@ int main(int argc, char **argv) {
         RemoteMemoryRegion remoteReadPos;
         receiveAndSetupRmr(sock, remoteBuffer, remoteWritePos, remoteReadPos);
 
-        for (int i = 0; i < 4; ++i) {
+        for (size_t i = 0; i < MESSAGES; ++i) {
             // Send DATA
             const size_t sizeToWrite = sizeof(DATA);
             size_t safeToWrite = completeBufferSize - (writePos - readPos);
@@ -140,11 +141,12 @@ int main(int argc, char **argv) {
                     cout << localBuffer[beginPos + j];
                 }
                 cout << endl;
+                // TODO: I don't constantly allocate new MRs, since that's a context switch
                 MemoryRegion sendBuffer(begin, sizeToWrite, network.getProtectionDomain(),
                                         MemoryRegion::Permission::All);
                 RemoteMemoryRegion receiveBuffer;
                 receiveBuffer.key = remoteBuffer.key;
-                receiveBuffer.address = remoteBuffer.address + sizeToWrite;
+                receiveBuffer.address = remoteBuffer.address + beginPos;
 
                 WriteWorkRequest writeRequest;
                 writeRequest.setLocalAddress(sendBuffer);
@@ -165,10 +167,21 @@ int main(int argc, char **argv) {
 
                 writeRequest.setNextWorkRequest(&atomicAddRequest);
 
-                queuePair.postWorkRequest(writeRequest); // Only one post for better performance
+                queuePair.postWorkRequest(writeRequest); // Only one post
                 cout << "Posted write. Current Pos: " << writePos << endl;
             }
         }
+
+        while (writePos != readPos) {
+            ReadWorkRequest readWritePos;
+            readWritePos.setLocalAddress(sharedReadPos);
+            readWritePos.setRemoteAddress(remoteReadPos);
+            readWritePos.setCompletion(true);
+            queuePair.postWorkRequest(readWritePos);
+            completionQueue.waitForCompletionReceive();
+        }
+
+        cout << "wrote " << sizeof(DATA) * MESSAGES << " Bytes of data" << endl;
     } else {
         sockaddr_in addr;
         addr.sin_family = AF_INET;
@@ -193,7 +206,7 @@ int main(int argc, char **argv) {
                                    MemoryRegion::Permission::All);
         sendRmrInfo(acced, sharedMR, sharedWritePos, sharedReadPos);
 
-        for (int i = 0; i < 4; ++i) {
+        for (size_t i = 0; i < MESSAGES; ++i) {
             const size_t sizeToRead = sizeof(DATA);
             size_t beginPos = readPosition % completeBufferSize;
             size_t endPos = (readPosition + sizeToRead - 1) % completeBufferSize;
