@@ -74,11 +74,8 @@ int main(int argc, char **argv) {
 
     auto sock = tcp_socket();
 
-    const size_t BUFFER_SIZE = 64 * 4; // TODO: buffersize, that forces wraparound
     const char DATA[] = "123456789012345678901234567890123456789012345678901234567890123";
-    static_assert(64 == sizeof(DATA), "DATA needs the right size ");
 
-    // RDMA networking. The queues are needed on both sides
     Network network;
     CompletionQueuePair completionQueue(network);
     QueuePair queuePair(network, completionQueue);
@@ -92,13 +89,10 @@ int main(int argc, char **argv) {
         tcp_connect(sock, addr);
         exchangeQPNAndConnect(sock, network, queuePair);
 
-        const size_t completeBufferSize = BUFFER_SIZE;
-        uint64_t writePos = 0;
-        volatile uint64_t readPos = 0;
-        uint8_t localBuffer[completeBufferSize]{};
-        uint64_t lastWrite = 0;
+        uint64_t readPos = 0;
+        uint8_t localBuffer[sizeof(DATA)]{};
 
-        MemoryRegion sharedBuffer(localBuffer, completeBufferSize, network.getProtectionDomain(),
+        MemoryRegion sharedBuffer(localBuffer, sizeof(DATA), network.getProtectionDomain(),
                                   MemoryRegion::Permission::All);
         RemoteMemoryRegion remoteBuffer;
         MemoryRegion sharedWritePos(&lastWrite, sizeof(lastWrite), network.getProtectionDomain(),
@@ -113,7 +107,7 @@ int main(int argc, char **argv) {
         for (size_t i = 0; i < MESSAGES; ++i) {
             // Send DATA
             const size_t sizeToWrite = sizeof(DATA);
-            size_t safeToWrite = completeBufferSize - (writePos - readPos);
+            size_t safeToWrite = sizeof(DATA) - (writePos - readPos);
             while (safeToWrite < sizeToWrite) { // Only synchronize with sever when necessary
                 ReadWorkRequest readWritePos;
                 readWritePos.setLocalAddress(sharedReadPos);
@@ -121,12 +115,12 @@ int main(int argc, char **argv) {
                 readWritePos.setCompletion(true);
                 queuePair.postWorkRequest(readWritePos);
                 completionQueue.waitForCompletion(); // Synchronization point
-                safeToWrite = completeBufferSize - (writePos - readPos);
+                safeToWrite = sizeof(DATA) - (writePos - readPos);
             }
-            const size_t beginPos = writePos % completeBufferSize;
-            const size_t endPos = (writePos + sizeToWrite - 1) % completeBufferSize;
+            const size_t beginPos = writePos % sizeof(DATA);
+            const size_t endPos = (writePos + sizeToWrite - 1) % sizeof(DATA);
             if (endPos <= beginPos) {
-                cout << "Write to    [" << beginPos << ", " << completeBufferSize << "]\n";
+                cout << "Write to    [" << beginPos << ", " << sizeof(DATA) << "]\n";
                 cout << "split write [" << 0 << ", " << endPos << "]" << endl;
                 // TODO: split and wraparound
                 // TODO: check if our write request still fits into the buffer, and / or do a wraparound with partial writes
@@ -160,30 +154,17 @@ int main(int argc, char **argv) {
                 atomicAddRequest.setRemoteAddress(remoteWritePos);
                 atomicAddRequest.setCompletion(false);
 
-                // We probably don't need an explicit wraparound. The uint64_t will overflow, when we write more than
-                // 16384 Petabyte == 16 Exabyte. That probably "ought to be enough for anybody" in the near future.
-                // Assume we have 100Gb/s transfer, then we'll overflow in (16*1024*1024*1024/(100/8))s == 700 years
-                writePos += sizeToWrite;
-
                 writeRequest.setNextWorkRequest(&atomicAddRequest);
 
                 queuePair.postWorkRequest(writeRequest); // Only one post
             }
         }
 
-        while (writePos != readPos) {
-            ReadWorkRequest readWritePos;
-            readWritePos.setLocalAddress(sharedReadPos);
-            readWritePos.setRemoteAddress(remoteReadPos);
-            readWritePos.setCompletion(true);
-            queuePair.postWorkRequest(readWritePos);
-            completionQueue.waitForCompletion();
-        }
         const auto endTime = chrono::steady_clock::now();
         const auto msTaken = chrono::duration<double, milli>(endTime - startTime).count();
         const auto totallyWritten = sizeof(DATA) * MESSAGES;
         cout << "wrote " << totallyWritten << " Bytes of data (" << MESSAGES << "x" << sizeof(DATA) << ")" << endl;
-        cout << "with a buffer size of " << completeBufferSize << endl;
+        cout << "with a buffer size of " << sizeof(DATA) << endl;
         const auto bytesPerms = ((double) totallyWritten) / msTaken;
         cout << "that's " << ((bytesPerms / 1024) / 1024) * 1000 << "MByte/s" << endl;
     } else {
@@ -199,9 +180,9 @@ int main(int argc, char **argv) {
         auto acced = tcp_accept(sock, inAddr);
         exchangeQPNAndConnect(acced, network, queuePair);
 
-        const size_t completeBufferSize = BUFFER_SIZE;
+        const size_t completeBufferSize = sizeof(DATA);
         uint8_t localBuffer[completeBufferSize]{};
-        MemoryRegion sharedMR(localBuffer, BUFFER_SIZE, network.getProtectionDomain(), MemoryRegion::Permission::All);
+        MemoryRegion sharedMR(localBuffer, sizeof(DATA), network.getProtectionDomain(), MemoryRegion::Permission::All);
         uint64_t readPosition = 0;
         volatile uint64_t sharedBufferWritePosition = 0;
         MemoryRegion sharedWritePos((void *) &sharedBufferWritePosition, sizeof(uint64_t),
