@@ -119,7 +119,7 @@ int main(int argc, char **argv) {
                 readWritePos.setRemoteAddress(remoteReadPos);
                 readWritePos.setCompletion(true);
                 queuePair.postWorkRequest(readWritePos);
-                completionQueue.waitForCompletionReceive(); // Synchronization point
+                completionQueue.waitForCompletion(); // Synchronization point
                 safeToWrite = completeBufferSize - (writePos - readPos);
             }
             const size_t beginPos = writePos % completeBufferSize;
@@ -178,7 +178,7 @@ int main(int argc, char **argv) {
             readWritePos.setRemoteAddress(remoteReadPos);
             readWritePos.setCompletion(true);
             queuePair.postWorkRequest(readWritePos);
-            completionQueue.waitForCompletionReceive();
+            completionQueue.waitForCompletion();
         }
 
         cout << "wrote " << sizeof(DATA) * MESSAGES << " Bytes of data" << endl;
