@@ -62,7 +62,7 @@ int tcp_accept(int sock, sockaddr_in &inAddr) {
     return acced;
 }
 
-static const size_t MESSAGES = 100;
+static const size_t MESSAGES = 1024 * 1024;
 
 int main(int argc, char **argv) {
     if (argc < 3 || (argv[1][0] == 'c' && argc < 4)) {
@@ -109,6 +109,7 @@ int main(int argc, char **argv) {
         RemoteMemoryRegion remoteReadPos;
         receiveAndSetupRmr(sock, remoteBuffer, remoteWritePos, remoteReadPos);
 
+        const auto startTime = chrono::steady_clock::now();
         for (size_t i = 0; i < MESSAGES; ++i) {
             // Send DATA
             const size_t sizeToWrite = sizeof(DATA);
@@ -131,7 +132,6 @@ int main(int argc, char **argv) {
                 // TODO: check if our write request still fits into the buffer, and / or do a wraparound with partial writes
                 throw runtime_error{"Can't cope with wraparound yet"};
             } else { // Nice linear memory
-                cout << "Write to [" << beginPos << ", " << endPos << "]" << endl;
                 uint8_t *begin = (uint8_t *) localBuffer;
                 begin += beginPos;
                 //uint8_t* end = (uint8_t*) localBuffer;
@@ -168,7 +168,6 @@ int main(int argc, char **argv) {
                 writeRequest.setNextWorkRequest(&atomicAddRequest);
 
                 queuePair.postWorkRequest(writeRequest); // Only one post
-                cout << "Posted write. Current Pos: " << writePos << endl;
             }
         }
 
@@ -180,8 +179,13 @@ int main(int argc, char **argv) {
             queuePair.postWorkRequest(readWritePos);
             completionQueue.waitForCompletion();
         }
-
-        cout << "wrote " << sizeof(DATA) * MESSAGES << " Bytes of data" << endl;
+        const auto endTime = chrono::steady_clock::now();
+        const auto msTaken = chrono::duration<double, milli>(endTime - startTime).count();
+        const auto totallyWritten = sizeof(DATA) * MESSAGES;
+        cout << "wrote " << totallyWritten << " Bytes of data (" << MESSAGES << "x" << sizeof(DATA) << ")" << endl;
+        cout << "with a buffer size of " << completeBufferSize << endl;
+        const auto bytesPerms = ((double) totallyWritten) / msTaken;
+        cout << "that's " << ((bytesPerms / 1024) / 1024) * 1000 << "MByte/s" << endl;
     } else {
         sockaddr_in addr;
         addr.sin_family = AF_INET;
@@ -219,15 +223,13 @@ int main(int argc, char **argv) {
                 // TODO: check if our read still fits into the buffer, and / or do a wraparound with partial reads
                 throw runtime_error{"Can't cope with wraparound yet"};
             } else { // Nice linear data
-                cout << "Read from [" << beginPos << ", " << endPos << "]" << endl;
-
-                const size_t begin = readPosition % completeBufferSize;
+                //const size_t begin = readPosition % completeBufferSize;
                 readPosition += sizeToRead;
 
-                for (size_t j = 0; j < sizeToRead; ++j) {
-                    cout << localBuffer[begin + j];
-                }
-                cout << endl;
+                //for (size_t j = 0; j < sizeToRead; ++j) {
+                //    cout << localBuffer[begin + j];
+                //}
+                //cout << endl;
             }
         }
 
