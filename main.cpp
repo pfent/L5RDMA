@@ -169,17 +169,9 @@ int main(int argc, char **argv) {
             } else { // Nice linear memory
                 uint8_t *begin = (uint8_t *) localBuffer;
                 begin += beginPos;
-                //uint8_t* end = (uint8_t*) localBuffer;
-                //end += endPos;
                 memcpy(begin, DATA, sizeToWrite);
-                for (size_t j = 0; j < sizeToWrite; ++j) {
-                    cout << localBuffer[beginPos + j];
-                }
-                cout << endl;
-                // TODO: Don't constantly allocate new MRs, since that's a context switch
+                // Only slice the MR instead of creating a new one
                 auto sendBuffer = sharedBuffer.slice(beginPos, sizeToWrite);
-                //MemoryRegion sendBuffer(begin, sizeToWrite, network.getProtectionDomain(),
-                //                        MemoryRegion::Permission::All);
                 RemoteMemoryRegion receiveBuffer;
                 receiveBuffer.key = remoteBuffer.key;
                 receiveBuffer.address = remoteBuffer.address + beginPos;
