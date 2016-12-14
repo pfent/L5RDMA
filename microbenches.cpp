@@ -90,6 +90,8 @@ int main(int argc, char **argv) {
         exchangeQPNAndConnect(sock, network, queuePair);
 
         uint64_t readPos = 0;
+        uint64_t writePos = 0;
+        uint64_t lastWrite = 0;
         uint8_t localBuffer[sizeof(DATA)]{};
 
         MemoryRegion sharedBuffer(localBuffer, sizeof(DATA), network.getProtectionDomain(),
@@ -103,70 +105,86 @@ int main(int argc, char **argv) {
         RemoteMemoryRegion remoteReadPos;
         receiveAndSetupRmr(sock, remoteBuffer, remoteWritePos, remoteReadPos);
 
-        const auto startTime = chrono::steady_clock::now();
+        auto startTime = chrono::steady_clock::now();
         for (size_t i = 0; i < MESSAGES; ++i) {
-            // Send DATA
-            const size_t sizeToWrite = sizeof(DATA);
-            size_t safeToWrite = sizeof(DATA) - (writePos - readPos);
-            while (safeToWrite < sizeToWrite) { // Only synchronize with sever when necessary
-                ReadWorkRequest readWritePos;
-                readWritePos.setLocalAddress(sharedReadPos);
-                readWritePos.setRemoteAddress(remoteReadPos);
-                readWritePos.setCompletion(true);
-                queuePair.postWorkRequest(readWritePos);
-                completionQueue.waitForCompletion(); // Synchronization point
-                safeToWrite = sizeof(DATA) - (writePos - readPos);
-            }
-            const size_t beginPos = writePos % sizeof(DATA);
-            const size_t endPos = (writePos + sizeToWrite - 1) % sizeof(DATA);
-            if (endPos <= beginPos) {
-                cout << "Write to    [" << beginPos << ", " << sizeof(DATA) << "]\n";
-                cout << "split write [" << 0 << ", " << endPos << "]" << endl;
-                // TODO: split and wraparound
-                // TODO: check if our write request still fits into the buffer, and / or do a wraparound with partial writes
-                throw runtime_error{"Can't cope with wraparound yet"};
-            } else { // Nice linear memory
-                uint8_t *begin = (uint8_t *) localBuffer;
-                begin += beginPos;
-                //uint8_t* end = (uint8_t*) localBuffer;
-                //end += endPos;
-                memcpy(begin, DATA, sizeToWrite);
-                for (size_t j = 0; j < sizeToWrite; ++j) {
-                    cout << localBuffer[beginPos + j];
-                }
-                cout << endl;
-                // TODO: Don't constantly allocate new MRs, since that's a context switch
-                MemoryRegion sendBuffer(begin, sizeToWrite, network.getProtectionDomain(),
-                                        MemoryRegion::Permission::All);
-                RemoteMemoryRegion receiveBuffer;
-                receiveBuffer.key = remoteBuffer.key;
-                receiveBuffer.address = remoteBuffer.address + beginPos;
-
-                WriteWorkRequest writeRequest;
-                writeRequest.setLocalAddress(sendBuffer);
-                writeRequest.setRemoteAddress(receiveBuffer);
-                writeRequest.setCompletion(false);
-                // Dont post yet, we can chain the WRs
-
-                AtomicFetchAndAddWorkRequest atomicAddRequest;
-                atomicAddRequest.setLocalAddress(sharedWritePos);
-                atomicAddRequest.setAddValue(sizeToWrite);
-                atomicAddRequest.setRemoteAddress(remoteWritePos);
-                atomicAddRequest.setCompletion(false);
-
-                writeRequest.setNextWorkRequest(&atomicAddRequest);
-
-                queuePair.postWorkRequest(writeRequest); // Only one post
-            }
+            ReadWorkRequest readWritePos;
+            readWritePos.setLocalAddress(sharedReadPos);
+            readWritePos.setRemoteAddress(remoteReadPos);
+            readWritePos.setCompletion(true);
+            queuePair.postWorkRequest(readWritePos);
+            completionQueue.waitForCompletion(); // Synchronize every time
         }
+        auto endTime = chrono::steady_clock::now();
+        auto msTaken = chrono::duration<double, milli>(endTime - startTime).count();
+        cout << "Reading " << MESSAGES << " messages of size " << sizeof(readPos) << " took " << msTaken << "ms"
+             << endl;
 
-        const auto endTime = chrono::steady_clock::now();
-        const auto msTaken = chrono::duration<double, milli>(endTime - startTime).count();
-        const auto totallyWritten = sizeof(DATA) * MESSAGES;
-        cout << "wrote " << totallyWritten << " Bytes of data (" << MESSAGES << "x" << sizeof(DATA) << ")" << endl;
-        cout << "with a buffer size of " << sizeof(DATA) << endl;
-        const auto bytesPerms = ((double) totallyWritten) / msTaken;
-        cout << "that's " << ((bytesPerms / 1024) / 1024) * 1000 << "MByte/s" << endl;
+        startTime = chrono::steady_clock::now();
+        for (size_t i = 0; i < MESSAGES - 1; ++i) {
+            WriteWorkRequest writeRequest;
+            writeRequest.setLocalAddress(sharedBuffer);
+            writeRequest.setRemoteAddress(remoteBuffer);
+            writeRequest.setCompletion(false);
+            queuePair.postWorkRequest(writeRequest);
+        }
+        {
+            WriteWorkRequest writeRequest;
+            writeRequest.setLocalAddress(sharedBuffer);
+            writeRequest.setRemoteAddress(remoteBuffer);
+            writeRequest.setCompletion(true);
+            queuePair.postWorkRequest(writeRequest);
+            completionQueue.waitForCompletion();
+        }
+        endTime = chrono::steady_clock::now();
+        msTaken = chrono::duration<double, milli>(endTime - startTime).count();
+        cout << "Writing " << MESSAGES << " messages of size " << sizeof(DATA) << " took " << msTaken << "ms" << endl;
+
+        startTime = chrono::steady_clock::now();
+        for (size_t i = 0; i < MESSAGES - 1; ++i) {
+            AtomicFetchAndAddWorkRequest atomicAddRequest;
+            atomicAddRequest.setLocalAddress(sharedWritePos);
+            atomicAddRequest.setAddValue(1);
+            atomicAddRequest.setRemoteAddress(remoteWritePos);
+            atomicAddRequest.setCompletion(false);
+            queuePair.postWorkRequest(atomicAddRequest);
+        }
+        {
+            AtomicFetchAndAddWorkRequest atomicAddRequest;
+            atomicAddRequest.setLocalAddress(sharedWritePos);
+            atomicAddRequest.setAddValue(1);
+            atomicAddRequest.setRemoteAddress(remoteWritePos);
+            atomicAddRequest.setCompletion(true);
+            queuePair.postWorkRequest(atomicAddRequest);
+            lastWrite++;
+            completionQueue.waitForCompletion();
+        }
+        endTime = chrono::steady_clock::now();
+        msTaken = chrono::duration<double, milli>(endTime - startTime).count();
+        cout << "AtomicInc " << MESSAGES << " times took " << msTaken << "ms" << endl;
+
+        startTime = chrono::steady_clock::now();
+        for (size_t i = 0; i < MESSAGES - 1; ++i) { // TODO: test if this actually works
+            AtomicCompareAndSwapWorkRequest atomicCasRequest;
+            atomicCasRequest.setLocalAddress(sharedWritePos);
+            atomicCasRequest.setCompareValue(lastWrite);
+            atomicCasRequest.setSwapValue(--lastWrite);
+            atomicCasRequest.setRemoteAddress(remoteWritePos);
+            atomicCasRequest.setCompletion(false);
+            queuePair.postWorkRequest(atomicCasRequest);
+        }
+        {
+            AtomicCompareAndSwapWorkRequest atomicCasRequest;
+            atomicCasRequest.setLocalAddress(sharedWritePos);
+            atomicCasRequest.setCompareValue(lastWrite);
+            atomicCasRequest.setSwapValue(--lastWrite);
+            atomicCasRequest.setRemoteAddress(remoteWritePos);
+            atomicCasRequest.setCompletion(true);
+            queuePair.postWorkRequest(atomicCasRequest);
+            completionQueue.waitForCompletion();
+        }
+        endTime = chrono::steady_clock::now();
+        msTaken = chrono::duration<double, milli>(endTime - startTime).count();
+        cout << "AtomicCas " << MESSAGES << " times took " << msTaken << "ms" << endl;
     } else {
         sockaddr_in addr;
         addr.sin_family = AF_INET;
@@ -191,23 +209,9 @@ int main(int argc, char **argv) {
                                    MemoryRegion::Permission::All);
         sendRmrInfo(acced, sharedMR, sharedWritePos, sharedReadPos);
 
-        for (size_t i = 0; i < MESSAGES; ++i) {
-            const size_t sizeToRead = sizeof(DATA);
-            size_t beginPos = readPosition % completeBufferSize;
-            size_t endPos = (readPosition + sizeToRead - 1) % completeBufferSize;
-            // Spin wait until we have some data
-            while (readPosition == sharedBufferWritePosition) sched_yield();
-            if (endPos < beginPos) {
-                cout << "Read from  [" << beginPos << ", " << completeBufferSize << "]\n";
-                cout << "split read [" << 0 << ", " << endPos << "]" << endl;
-                // TODO: split and wraparound
-                // TODO: check if our read still fits into the buffer, and / or do a wraparound with partial reads
-                throw runtime_error{"Can't cope with wraparound yet"};
-            } else { // Nice linear data
-                //const size_t begin = readPosition % completeBufferSize;
-                readPosition += sizeToRead;
-            }
-        }
+        int ignored;
+        cout << "Is client finished?" << endl;
+        cin >> ignored;
 
         close(acced);
     }
