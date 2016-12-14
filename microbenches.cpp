@@ -90,7 +90,6 @@ int main(int argc, char **argv) {
         exchangeQPNAndConnect(sock, network, queuePair);
 
         uint64_t readPos = 0;
-        uint64_t writePos = 0;
         uint64_t lastWrite = 0;
         uint8_t localBuffer[sizeof(DATA)]{};
 

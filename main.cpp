@@ -126,10 +126,45 @@ int main(int argc, char **argv) {
             const size_t beginPos = writePos % completeBufferSize;
             const size_t endPos = (writePos + sizeToWrite - 1) % completeBufferSize;
             if (endPos <= beginPos) {
+                uint8_t *begin1 = (uint8_t *) localBuffer;
+                begin1 += beginPos;
+                size_t bytesToWrite1 = completeBufferSize - beginPos;
+                uint8_t *begin2 = (uint8_t *) localBuffer;
+                size_t bytesToWrite2 = endPos;
                 cout << "Write to    [" << beginPos << ", " << completeBufferSize << "]\n";
                 cout << "split write [" << 0 << ", " << endPos << "]" << endl;
-                // TODO: split and wraparound
-                // TODO: check if our write request still fits into the buffer, and / or do a wraparound with partial writes
+
+                MemoryRegion sendBuffer1(begin1, bytesToWrite1, network.getProtectionDomain(),
+                                         MemoryRegion::Permission::All);
+                RemoteMemoryRegion receiveBuffer1;
+                receiveBuffer1.key = remoteBuffer.key;
+                receiveBuffer1.address = remoteBuffer.address + beginPos;
+                MemoryRegion sendBuffer2(begin2, bytesToWrite2, network.getProtectionDomain(),
+                                         MemoryRegion::Permission::All);
+                RemoteMemoryRegion receiveBuffer2;
+                receiveBuffer2.key = remoteBuffer.key;
+                receiveBuffer2.address = remoteBuffer.address/* + 0*/;
+                WriteWorkRequest wr1;
+                wr1.setLocalAddress(sendBuffer1);
+                wr1.setRemoteAddress(receiveBuffer1);
+                wr1.setCompletion(false);
+                WriteWorkRequest wr2;
+                wr2.setLocalAddress(sendBuffer2);
+                wr2.setRemoteAddress(receiveBuffer2);
+                wr2.setCompletion(false);
+
+                AtomicFetchAndAddWorkRequest atomicAddRequest;
+                atomicAddRequest.setLocalAddress(sharedWritePos);
+                atomicAddRequest.setAddValue(sizeToWrite);
+                atomicAddRequest.setRemoteAddress(remoteWritePos);
+                atomicAddRequest.setCompletion(false);
+
+                writePos += sizeToWrite;
+                wr1.setNextWorkRequest(&wr2);
+                wr2.setNextWorkRequest(&atomicAddRequest);
+
+                queuePair.postWorkRequest(wr1); // only one post
+
                 throw runtime_error{"Can't cope with wraparound yet"};
             } else { // Nice linear memory
                 uint8_t *begin = (uint8_t *) localBuffer;
@@ -217,11 +252,10 @@ int main(int argc, char **argv) {
             // Spin wait until we have some data
             while (readPosition == sharedBufferWritePosition) sched_yield();
             if (endPos < beginPos) {
-                cout << "Read from  [" << beginPos << ", " << completeBufferSize << "]\n";
-                cout << "split read [" << 0 << ", " << endPos << "]" << endl;
-                // TODO: split and wraparound
-                // TODO: check if our read still fits into the buffer, and / or do a wraparound with partial reads
-                throw runtime_error{"Can't cope with wraparound yet"};
+                //cout << "Read from  [" << beginPos << ", " << completeBufferSize << "]\n";
+                //cout << "split read [" << 0 << ", " << endPos << "]" << endl;
+                //throw runtime_error{"Can't cope with wraparound yet"};
+                readPosition += sizeToRead;
             } else { // Nice linear data
                 //const size_t begin = readPosition % completeBufferSize;
                 readPosition += sizeToRead;
