@@ -21,13 +21,13 @@
 #pragma once
 //---------------------------------------------------------------------------
 #include <memory>
+#include "MemoryRegion.hpp"
 //---------------------------------------------------------------------------
 struct ibv_send_wr;
 //---------------------------------------------------------------------------
 namespace rdma {
 //---------------------------------------------------------------------------
 struct RemoteMemoryRegion;
-struct MemoryRegion;
 //---------------------------------------------------------------------------
 class WorkRequest {
    friend class Network;
@@ -74,6 +74,8 @@ public:
    /// For READ: location to be written to
    /// For WRITE: location to be read from
    void setLocalAddress(const MemoryRegion &localAddress);
+
+    void setLocalAddress(const MemoryRegion::Slice &localAddress);
 };
 //---------------------------------------------------------------------------
 class ReadWorkRequest : public RDMAWorkRequest {
@@ -95,6 +97,8 @@ public:
 
    /// Local memory address (location to write what was at the remote )
    void setLocalAddress(const MemoryRegion &localAddress);
+
+    void setLocalAddress(const MemoryRegion::Slice &localAdddress);
 };
 //---------------------------------------------------------------------------
 class AtomicFetchAndAddWorkRequest : public AtomicWorkRequest {

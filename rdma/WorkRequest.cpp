@@ -97,6 +97,14 @@ void RDMAWorkRequest::setLocalAddress(const MemoryRegion &localAddress)
    wr->sg_list->length = localAddress.size;
    wr->sg_list->lkey = localAddress.key->lkey;
 }
+
+//---------------------------------------------------------------------------
+    void RDMAWorkRequest::setLocalAddress(const MemoryRegion::Slice &localAddress) {
+        wr->sg_list->addr = reinterpret_cast<uintptr_t>(localAddress.address);
+        wr->sg_list->length = localAddress.size;
+        wr->sg_list->lkey = localAddress.lkey;
+    }
+
 //---------------------------------------------------------------------------
 void RDMAWorkRequest::setRemoteAddress(const RemoteMemoryRegion &remoteAddress)
 {

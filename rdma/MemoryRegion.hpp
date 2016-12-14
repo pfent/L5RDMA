@@ -44,6 +44,16 @@ public:
       All = LocalWrite | RemoteWrite | RemoteRead | RemoteAtomic | MemoryWindowBind
    };
 
+    struct Slice {
+        friend class MemoryRegion;
+
+        void *address;
+        size_t size;
+        uint32_t lkey;
+    private:
+        Slice(void *address, size_t size, uint32_t lkey) : address(address), size(size), lkey(lkey) {};
+    };
+
    ibv_mr *key;
    const void *address;
    const size_t size;
@@ -52,6 +62,9 @@ public:
    MemoryRegion(void *address, size_t size, ibv_pd *protectionDomain, Permission permissions);
    /// Destructor
    ~MemoryRegion();
+
+    /// Get a slice of the memory to pass on
+    Slice slice(size_t offset, size_t size);
 
    MemoryRegion(MemoryRegion const &) = delete;
    void operator=(MemoryRegion const &) = delete;

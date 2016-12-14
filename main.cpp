@@ -177,8 +177,9 @@ int main(int argc, char **argv) {
                 }
                 cout << endl;
                 // TODO: Don't constantly allocate new MRs, since that's a context switch
-                MemoryRegion sendBuffer(begin, sizeToWrite, network.getProtectionDomain(),
-                                        MemoryRegion::Permission::All);
+                auto sendBuffer = sharedBuffer.slice(beginPos, sizeToWrite);
+                //MemoryRegion sendBuffer(begin, sizeToWrite, network.getProtectionDomain(),
+                //                        MemoryRegion::Permission::All);
                 RemoteMemoryRegion receiveBuffer;
                 receiveBuffer.key = remoteBuffer.key;
                 receiveBuffer.address = remoteBuffer.address + beginPos;
