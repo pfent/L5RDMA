@@ -15,3 +15,5 @@ target_link_libraries(minimal pthread ibverbs)
 
 add_executable(microbenches microbenches.cpp "${SOURCE_FILES}")
 target_link_libraries(microbenches pthread ibverbs)
+
+add_executable(tcpPingPong tcpPingPong.cpp)
