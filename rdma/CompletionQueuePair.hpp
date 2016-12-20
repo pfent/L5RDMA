@@ -66,6 +66,9 @@ namespace rdma {
         /// Poll the send completion queue
         uint64_t pollSendCompletionQueue();
 
+        /// Poll the send completion queue with a user defined type
+        uint64_t pollSendCompletionQueue(int type);
+
         /// Poll the receive completion queue
         uint64_t pollRecvCompletionQueue();
 

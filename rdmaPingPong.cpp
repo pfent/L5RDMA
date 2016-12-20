@@ -111,7 +111,7 @@ int main(int argc, char **argv) {
                     .send(queuePair);
             AtomicFetchAndAddWorkRequestBuilder(localFetchResult, remoteMessageCount, 1, true)
                     .send(queuePair);
-            completionQueue.waitForCompletion();
+            completionQueue.pollSendCompletionQueue(IBV_WC_FETCH_ADD);
             while (messages == i) sched_yield(); // sync with response
             for (size_t j = 0; j < BUFFER_SIZE; ++j) {
                 if (buffer[j] != DATA[j]) {
@@ -153,7 +153,7 @@ int main(int argc, char **argv) {
                     .send(queuePair);
             AtomicFetchAndAddWorkRequestBuilder(localFetchResult, remoteMessageCount, 1, true)
                     .send(queuePair);
-            completionQueue.waitForCompletion();
+            completionQueue.pollSendCompletionQueue(IBV_WC_FETCH_ADD);
         }
 
         close(acced);

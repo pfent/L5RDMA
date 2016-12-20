@@ -20,7 +20,6 @@
 // ---------------------------------------------------------------------------
 #include "CompletionQueuePair.hpp"
 #include "WorkRequest.hpp"
-#include "MemoryRegion.hpp"
 #include "Network.hpp"
 //---------------------------------------------------------------------------
 #include <infiniband/verbs.h>
@@ -244,6 +243,10 @@ uint64_t CompletionQueuePair::pollSendCompletionQueue()
 {
    return pollCompletionQueue(sendQueue, IBV_WC_SEND);
 }
+
+    uint64_t CompletionQueuePair::pollSendCompletionQueue(int type) {
+        return pollCompletionQueue(sendQueue, type);
+    }
 //---------------------------------------------------------------------------
 uint64_t CompletionQueuePair::pollRecvCompletionQueue()
 /// Poll the receive completion queue
