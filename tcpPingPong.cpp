@@ -23,7 +23,7 @@ int main(int argc, char **argv) {
         throw runtime_error{"Could not open socket"};
     }
 
-    static const size_t MESSAGES = 1024;
+    static const size_t MESSAGES = 1024 * 128;
     static const size_t BUFFER_SIZE = 64;
     uint8_t buffer[BUFFER_SIZE];
     uint8_t DATA[] = "123456789012345678901234567890123456789012345678901234567890123";
@@ -40,7 +40,7 @@ int main(int argc, char **argv) {
         }
         const auto start = chrono::steady_clock::now();
         for (size_t i = 0; i < MESSAGES; ++i) {
-            if (write(sock, buffer, BUFFER_SIZE) < 0) {
+            if (write(sock, DATA, BUFFER_SIZE) < 0) {
                 throw runtime_error{"error write'ing"};
             }
             fill(begin(buffer), end(buffer), 0);
@@ -57,7 +57,7 @@ int main(int argc, char **argv) {
         const auto msTaken = chrono::duration<double, milli>(end - start).count();
         const auto sTaken = msTaken / 1000;
         cout << MESSAGES << " messages exchanged in " << msTaken << "ms" << endl;
-        cout << MESSAGES / sTaken << " msg/s";
+        cout << MESSAGES / sTaken << " msg/s" << endl;
     } else {
         sockaddr_in addr;
         addr.sin_family = AF_INET;
