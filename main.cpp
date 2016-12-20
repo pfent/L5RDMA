@@ -115,11 +115,9 @@ int main(int argc, char **argv) {
             const size_t sizeToWrite = sizeof(DATA);
             size_t safeToWrite = completeBufferSize - (writePos - readPos);
             while (safeToWrite < sizeToWrite) { // Only synchronize with sever when necessary
-                ReadWorkRequest readWritePos;
-                readWritePos.setLocalAddress(sharedReadPos);
-                readWritePos.setRemoteAddress(remoteReadPos);
-                readWritePos.setCompletion(true);
-                queuePair.postWorkRequest(readWritePos);
+                ReadWorkRequestBuilder(
+                        sharedReadPos, remoteReadPos, true)
+                        .send(queuePair);
                 completionQueue.waitForCompletion(); // Synchronization point
                 safeToWrite = completeBufferSize - (writePos - readPos);
             }
@@ -134,36 +132,20 @@ int main(int argc, char **argv) {
                 cout << "Write to    [" << beginPos << ", " << completeBufferSize << "]\n";
                 cout << "split write [" << 0 << ", " << endPos << "]" << endl;
 
-                MemoryRegion sendBuffer1(begin1, bytesToWrite1, network.getProtectionDomain(),
-                                         MemoryRegion::Permission::All);
-                RemoteMemoryRegion receiveBuffer1;
-                receiveBuffer1.key = remoteBuffer.key;
-                receiveBuffer1.address = remoteBuffer.address + beginPos;
-                MemoryRegion sendBuffer2(begin2, bytesToWrite2, network.getProtectionDomain(),
-                                         MemoryRegion::Permission::All);
-                RemoteMemoryRegion receiveBuffer2;
-                receiveBuffer2.key = remoteBuffer.key;
-                receiveBuffer2.address = remoteBuffer.address/* + 0*/;
-                WriteWorkRequest wr1;
-                wr1.setLocalAddress(sendBuffer1);
-                wr1.setRemoteAddress(receiveBuffer1);
-                wr1.setCompletion(false);
-                WriteWorkRequest wr2;
-                wr2.setLocalAddress(sendBuffer2);
-                wr2.setRemoteAddress(receiveBuffer2);
-                wr2.setCompletion(false);
+                auto sendBuffer1 = sharedBuffer.slice(beginPos, bytesToWrite1);
+                RemoteMemoryRegion receiveBuffer1(remoteBuffer.key, remoteBuffer.address + beginPos);
 
-                AtomicFetchAndAddWorkRequest atomicAddRequest;
-                atomicAddRequest.setLocalAddress(sharedWritePos);
-                atomicAddRequest.setAddValue(sizeToWrite);
-                atomicAddRequest.setRemoteAddress(remoteWritePos);
-                atomicAddRequest.setCompletion(false);
+                auto sendBuffer2 = sharedBuffer.slice(0, bytesToWrite2);
+                RemoteMemoryRegion receiveBuffer2(remoteBuffer.key, remoteBuffer.address);
+                WriteWorkRequestBuilder(sendBuffer1, receiveBuffer1, false)
+                        .send(queuePair);
+                WriteWorkRequestBuilder(sendBuffer2, receiveBuffer2, false)
+                        .send(queuePair);
+
+                AtomicFetchAndAddWorkRequestBuilder(sharedWritePos, remoteWritePos, sizeToWrite, false)
+                        .send(queuePair);
 
                 writePos += sizeToWrite;
-                wr1.setNextWorkRequest(&wr2);
-                wr2.setNextWorkRequest(&atomicAddRequest);
-
-                queuePair.postWorkRequest(wr1); // only one post
 
                 throw runtime_error{"Can't cope with wraparound yet"};
             } else { // Nice linear memory
@@ -172,39 +154,24 @@ int main(int argc, char **argv) {
                 memcpy(begin, DATA, sizeToWrite);
                 // Only slice the MR instead of creating a new one
                 auto sendBuffer = sharedBuffer.slice(beginPos, sizeToWrite);
-                RemoteMemoryRegion receiveBuffer;
-                receiveBuffer.key = remoteBuffer.key;
-                receiveBuffer.address = remoteBuffer.address + beginPos;
+                RemoteMemoryRegion receiveBuffer(remoteBuffer.key, remoteBuffer.address + beginPos);
 
-                WriteWorkRequest writeRequest;
-                writeRequest.setLocalAddress(sendBuffer);
-                writeRequest.setRemoteAddress(receiveBuffer);
-                writeRequest.setCompletion(false);
-                // Dont post yet, we can chain the WRs
+                WriteWorkRequestBuilder(sendBuffer, receiveBuffer, false)
+                        .send(queuePair);
 
-                AtomicFetchAndAddWorkRequest atomicAddRequest;
-                atomicAddRequest.setLocalAddress(sharedWritePos);
-                atomicAddRequest.setAddValue(sizeToWrite);
-                atomicAddRequest.setRemoteAddress(remoteWritePos);
-                atomicAddRequest.setCompletion(false);
+                AtomicFetchAndAddWorkRequestBuilder(sharedWritePos, remoteWritePos, sizeToWrite, false)
+                        .send(queuePair);
 
                 // We probably don't need an explicit wraparound. The uint64_t will overflow, when we write more than
                 // 16384 Petabyte == 16 Exabyte. That probably "ought to be enough for anybody" in the near future.
                 // Assume we have 100Gb/s transfer, then we'll overflow in (16*1024*1024*1024/(100/8))s == 700 years
                 writePos += sizeToWrite;
-
-                writeRequest.setNextWorkRequest(&atomicAddRequest);
-
-                queuePair.postWorkRequest(writeRequest); // Only one post
             }
         }
 
         while (writePos != readPos) {
-            ReadWorkRequest readWritePos;
-            readWritePos.setLocalAddress(sharedReadPos);
-            readWritePos.setRemoteAddress(remoteReadPos);
-            readWritePos.setCompletion(true);
-            queuePair.postWorkRequest(readWritePos);
+            ReadWorkRequestBuilder(sharedReadPos, remoteReadPos, true)
+                    .send(queuePair);
             completionQueue.waitForCompletion();
         }
         const auto endTime = chrono::steady_clock::now();

@@ -24,6 +24,7 @@
 #include <stdexcept>
 #include <vector>
 #include <memory>
+
 //---------------------------------------------------------------------------
 struct ibv_comp_channel;
 struct ibv_context;
@@ -36,69 +37,85 @@ struct ibv_srq;
 //---------------------------------------------------------------------------
 namespace rdma {
 //---------------------------------------------------------------------------
-class WorkRequest;
-class MemoryRegion;
-class CompletionQueuePair;
-class ReceiveQueue;
+    class WorkRequest;
+
+    class MemoryRegion;
+
+    class CompletionQueuePair;
+
+    class ReceiveQueue;
+
 //---------------------------------------------------------------------------
 /// A network exception
-class NetworkException : public std::runtime_error {
-public:
-   NetworkException(const std::string &reason)
-           : std::runtime_error(reason) { }
-};
+    class NetworkException : public std::runtime_error {
+    public:
+        NetworkException(const std::string &reason)
+                : std::runtime_error(reason) {}
+    };
+
 //---------------------------------------------------------------------------
-struct RemoteMemoryRegion {
-   uintptr_t address;
-   uint32_t key;
-};
-std::ostream &operator<<(std::ostream &os, const RemoteMemoryRegion &remoteMemoryRegion);
+    struct RemoteMemoryRegion {
+        uintptr_t address;
+        uint32_t key;
+
+        RemoteMemoryRegion() = default;
+
+        RemoteMemoryRegion(uintptr_t address, uint32_t key) : address(address), key(key) {};
+    };
+
+    std::ostream &operator<<(std::ostream &os, const RemoteMemoryRegion &remoteMemoryRegion);
+
 //---------------------------------------------------------------------------
 /// The LID and QPN uniquely address a queue pair
-struct Address {
-   uint16_t lid;
-   uint32_t qpn;
-};
-std::ostream &operator<<(std::ostream &os, const Address &address);
+    struct Address {
+        uint16_t lid;
+        uint32_t qpn;
+    };
+
+    std::ostream &operator<<(std::ostream &os, const Address &address);
+
 //---------------------------------------------------------------------------
 /// Abstracts a global rdma context
-class Network {
-   friend class CompletionQueuePair;
-   friend class ReceiveQueue;
-   friend class QueuePair;
+    class Network {
+        friend class CompletionQueuePair;
 
-   /// The minimal number of entries for the completion queue
-   static const int CQ_SIZE = 100;
+        friend class ReceiveQueue;
 
-   /// The port of the Infiniband device
-   uint8_t ibport;
+        friend class QueuePair;
 
-   /// The Infiniband devices
-   ibv_device **devices;
-   /// The verbs context
-   ibv_context *context;
-   /// The global protection domain
-   ibv_pd *protectionDomain;
+        /// The minimal number of entries for the completion queue
+        static const int CQ_SIZE = 100;
 
-   /// Shared Queues
-   std::unique_ptr <CompletionQueuePair> sharedCompletionQueuePair;
-   std::unique_ptr <ReceiveQueue> sharedReceiveQueue;
+        /// The port of the Infiniband device
+        uint8_t ibport;
 
-public:
-   /// Constructor
-   Network();
-   /// Destructor
-   ~Network();
+        /// The Infiniband devices
+        ibv_device **devices;
+        /// The verbs context
+        ibv_context *context;
+        /// The global protection domain
+        ibv_pd *protectionDomain;
 
-   /// Get the LID
-   uint16_t getLID();
+        /// Shared Queues
+        std::unique_ptr<CompletionQueuePair> sharedCompletionQueuePair;
+        std::unique_ptr<ReceiveQueue> sharedReceiveQueue;
 
-   /// Get the protection domain
-   ibv_pd *getProtectionDomain() { return protectionDomain; }
+    public:
+        /// Constructor
+        Network();
 
-   /// Print the capabilities of the RDMA host channel adapter
-   void printCapabilities();
-};
+        /// Destructor
+        ~Network();
+
+        /// Get the LID
+        uint16_t getLID();
+
+        /// Get the protection domain
+        ibv_pd *getProtectionDomain() { return protectionDomain; }
+
+        /// Print the capabilities of the RDMA host channel adapter
+        void printCapabilities();
+    };
 //---------------------------------------------------------------------------
 }
 //---------------------------------------------------------------------------

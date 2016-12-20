@@ -22,109 +22,182 @@
 //---------------------------------------------------------------------------
 #include <memory>
 #include "MemoryRegion.hpp"
+
 //---------------------------------------------------------------------------
 struct ibv_send_wr;
 //---------------------------------------------------------------------------
 namespace rdma {
+    class QueuePair;
+
 //---------------------------------------------------------------------------
-struct RemoteMemoryRegion;
+    struct RemoteMemoryRegion;
+
 //---------------------------------------------------------------------------
-class WorkRequest {
-   friend class Network;
-   friend class QueuePair;
+    class WorkRequest {
+        friend class Network;
 
-protected:
-   std::unique_ptr<ibv_send_wr> wr;
-   const WorkRequest *next;
+        friend class QueuePair;
 
-   WorkRequest();
-   WorkRequest(const WorkRequest &) = delete;
-   WorkRequest(WorkRequest &&) = delete;
-   const WorkRequest &operator=(const WorkRequest &) = delete;
-   ~WorkRequest();
+    protected:
+        std::unique_ptr<ibv_send_wr> wr;
+        const WorkRequest *next;
 
-public:
+        WorkRequest();
 
-   /// Clear all set data and restore to original state after construction
-   void reset();
+        WorkRequest(const WorkRequest &) = delete;
 
-   /// Assign an arbitrary id (not used, only for 'recognizing' it)
-   void setId(uint64_t id);
-   uint64_t getId() const;
+        WorkRequest(WorkRequest &&) = default;
 
-   /// Should the work request produce a completion event
-   void setCompletion(bool flag);
-   bool getCompletion() const;
+        WorkRequest &operator=(WorkRequest &&) = default;
 
-   /// Build a chain of work requests
-   void setNextWorkRequest(const WorkRequest *workRequest);
-   const WorkRequest *getNextWorkRequest();
-};
+        const WorkRequest &operator=(const WorkRequest &) = delete;
+
+        ~WorkRequest();
+
+    public:
+
+        /// Clear all set data and restore to original state after construction
+        void reset();
+
+        /// Assign an arbitrary id (not used, only for 'recognizing' it)
+        void setId(uint64_t id);
+
+        uint64_t getId() const;
+
+        /// Should the work request produce a completion event
+        void setCompletion(bool flag);
+
+        bool getCompletion() const;
+
+        /// Build a chain of work requests
+        void setNextWorkRequest(const WorkRequest *workRequest);
+
+        const WorkRequest *getNextWorkRequest();
+    };
+
 //---------------------------------------------------------------------------
-class RDMAWorkRequest : public WorkRequest { // Read & Write
-public:
-   RDMAWorkRequest();
+    class RDMAWorkRequest : public WorkRequest { // Read & Write
+    public:
+        RDMAWorkRequest();
 
-   /// Remote memory address
-   /// For READ: location to be read from
-   /// For WRITE: location to be written to
-   void setRemoteAddress(const RemoteMemoryRegion &remoteAddress);
+        /// Remote memory address
+        /// For READ: location to be read from
+        /// For WRITE: location to be written to
+        void setRemoteAddress(const RemoteMemoryRegion &remoteAddress);
 
-   /// Local memory address
-   /// For READ: location to be written to
-   /// For WRITE: location to be read from
-   void setLocalAddress(const MemoryRegion &localAddress);
+        /// Local memory address
+        /// For READ: location to be written to
+        /// For WRITE: location to be read from
+        void setLocalAddress(const MemoryRegion &localAddress);
 
-    void setLocalAddress(const MemoryRegion::Slice &localAddress);
-};
+        void setLocalAddress(const MemoryRegion::Slice &localAddress);
+    };
+
 //---------------------------------------------------------------------------
-class ReadWorkRequest : public RDMAWorkRequest {
-public:
-   ReadWorkRequest();
-};
+    class ReadWorkRequest : public RDMAWorkRequest {
+    public:
+        ReadWorkRequest();
+    };
+
+    class ReadWorkRequestBuilder {
+        ReadWorkRequest wr;
+    public:
+        ReadWorkRequestBuilder(const MemoryRegion &localAddress, const RemoteMemoryRegion &remoteAddress,
+                               bool completion);
+
+        ReadWorkRequestBuilder(const MemoryRegion::Slice &localAddress, const RemoteMemoryRegion &remoteAddress,
+                               bool completion);
+
+        ReadWorkRequestBuilder &setNextWorkRequest(const WorkRequest *workRequest);
+
+        void send(QueuePair &qp);
+
+        ReadWorkRequest build();
+    };
+
 //---------------------------------------------------------------------------
-class WriteWorkRequest : public RDMAWorkRequest {
-public:
-   WriteWorkRequest();
-};
+    class WriteWorkRequest : public RDMAWorkRequest {
+    public:
+        WriteWorkRequest();
+    };
+
+    class WriteWorkRequestBuilder {
+        WriteWorkRequest wr;
+    public:
+        WriteWorkRequestBuilder(const MemoryRegion &localAddress, const RemoteMemoryRegion &remoteAddress,
+                                bool completion);
+
+        WriteWorkRequestBuilder(const MemoryRegion::Slice &localAddress, const RemoteMemoryRegion &remoteAddress,
+                                bool completion);
+
+        void setNextWorkRequest(const WorkRequest *workRequest);
+
+        WriteWorkRequestBuilder &send(QueuePair &qp);
+
+        WriteWorkRequest build();
+    };
+
 //---------------------------------------------------------------------------
-class AtomicWorkRequest : public WorkRequest { // Fetch_Add & Compare_Swap
-public:
-   AtomicWorkRequest();
+    class AtomicWorkRequest : public WorkRequest { // Fetch_Add & Compare_Swap
+    public:
+        AtomicWorkRequest();
 
-   /// Remote memory address (location of the add value)
-   void setRemoteAddress(const RemoteMemoryRegion &remoteAddress);
+        /// Remote memory address (location of the add value)
+        void setRemoteAddress(const RemoteMemoryRegion &remoteAddress);
 
-   /// Local memory address (location to write what was at the remote )
-   void setLocalAddress(const MemoryRegion &localAddress);
+        /// Local memory address (location to write what was at the remote )
+        void setLocalAddress(const MemoryRegion &localAddress);
 
-    void setLocalAddress(const MemoryRegion::Slice &localAdddress);
-};
+        void setLocalAddress(const MemoryRegion::Slice &localAddress);
+    };
+
 //---------------------------------------------------------------------------
-class AtomicFetchAndAddWorkRequest : public AtomicWorkRequest {
-public:
-   AtomicFetchAndAddWorkRequest();
+    class AtomicFetchAndAddWorkRequest : public AtomicWorkRequest {
+    public:
+        AtomicFetchAndAddWorkRequest();
 
-   /// The number to be added to the remote address
-   void setAddValue(uint64_t value);
-   uint64_t getAddValue() const;
-};
+        /// The number to be added to the remote address
+        void setAddValue(uint64_t value);
+
+        uint64_t getAddValue() const;
+    };
+
+    class AtomicFetchAndAddWorkRequestBuilder {
+        AtomicFetchAndAddWorkRequest wr;
+    public:
+        AtomicFetchAndAddWorkRequestBuilder(const MemoryRegion &localAddress, const RemoteMemoryRegion &remoteAddress,
+                                            uint64_t addValue,
+                                            bool completion);
+
+        AtomicFetchAndAddWorkRequestBuilder(const MemoryRegion::Slice &localAddress,
+                                            const RemoteMemoryRegion &remoteAddress, uint64_t addValue,
+                                            bool completion);
+
+        AtomicFetchAndAddWorkRequestBuilder &setNextWorkRequest(const WorkRequest *workRequest);
+
+        void send(QueuePair &qp);
+
+        AtomicFetchAndAddWorkRequest build();
+    };
+
 //---------------------------------------------------------------------------
-class AtomicCompareAndSwapWorkRequest : public AtomicWorkRequest {
-public:
-   AtomicCompareAndSwapWorkRequest();
+    class AtomicCompareAndSwapWorkRequest : public AtomicWorkRequest {
+    public:
+        AtomicCompareAndSwapWorkRequest();
 
-   /// The number to be compared against
-   void setCompareValue(uint64_t value);
-   uint64_t getCompareValue() const;
+        /// The number to be compared against
+        void setCompareValue(uint64_t value);
 
-   /// The number to be swapped in
-   void setSwapValue(uint64_t value);
-   uint64_t getSwapValue() const;
-};
+        uint64_t getCompareValue() const;
+
+        /// The number to be swapped in
+        void setSwapValue(uint64_t value);
+
+        uint64_t getSwapValue() const;
+    };
 //---------------------------------------------------------------------------
-static_assert(sizeof(rdma::WorkRequest) == sizeof(rdma::AtomicCompareAndSwapWorkRequest), "");
-static_assert(sizeof(rdma::WorkRequest) == sizeof(rdma::ReadWorkRequest), "");
+    static_assert(sizeof(rdma::WorkRequest) == sizeof(rdma::AtomicCompareAndSwapWorkRequest), "");
+    static_assert(sizeof(rdma::WorkRequest) == sizeof(rdma::ReadWorkRequest), "");
 
 //---------------------------------------------------------------------------
 } // End of namespace rdma
