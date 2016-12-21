@@ -63,7 +63,7 @@ int main(int argc, char **argv) {
         for (size_t i = 0; i < MESSAGES; ++i) {
             WriteWorkRequestBuilder(localSend, remoteSend, true)
                     .send(queuePair);
-            completionQueue.pollSendCompletionQueue();
+            completionQueue.pollSendCompletionQueue(IBV_WC_RDMA_WRITE);
             while (buffer[BUFFER_SIZE] != 0xfe && buffer[BUFFER_SIZE + 1] != 0xfe) sched_yield(); // sync with response
             for (size_t j = 0; j < BUFFER_SIZE; ++j) {
                 if (buffer[j] != DATA[j]) {
@@ -103,7 +103,7 @@ int main(int argc, char **argv) {
             fill(begin(buffer), end(buffer), 0);  // clear buffer, so we can reuse the magic bytes
             WriteWorkRequestBuilder(sndMR, remoteBuffer, false)
                     .send(queuePair);
-            completionQueue.pollSendCompletionQueue(IBV_WC_FETCH_ADD);
+            completionQueue.pollSendCompletionQueue(IBV_WC_RDMA_WRITE);
         }
 
         close(acced);
