@@ -1,5 +1,4 @@
 #include <iostream>
-#include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <unistd.h>
@@ -9,58 +8,16 @@
 #include <rdma_tests/rdma/WorkRequest.hpp>
 #include <infiniband/verbs.h>
 #include "rdma/Network.hpp"
+#include "tcpWrapper.h"
 
 using namespace std;
 using namespace rdma;
-
-int tcp_socket() {
-    auto sock = socket(AF_INET, SOCK_STREAM, 0);
-    if (sock < 0) {
-        throw runtime_error{"Could not open socket"};
-    }
-    return sock;
-}
-
-void tcp_connect(int sock, sockaddr_in &addr) {
-    if (connect(sock, (sockaddr *) &addr, sizeof addr) < 0) {
-        throw runtime_error{"error connect'ing"};
-    }
-}
-
-void tcp_write(int sock, void *buffer, size_t size) {
-    if (write(sock, buffer, size) < 0) {
-        throw runtime_error{"error write'ing"};
-    }
-}
-
-void tcp_read(int sock, void *buffer, size_t size) {
-    if (read(sock, buffer, size) < 0) {
-        throw runtime_error{"error read'ing"};
-    }
-}
-
-void tcp_bind(int sock, sockaddr_in &addr) {
-    if (bind(sock, (sockaddr *) &addr, sizeof addr) < 0) {
-        throw runtime_error{"error bind'ing"};
-    }
-}
 
 void exchangeQPNAndConnect(int sock, Network &network, QueuePair &queuePair);
 
 void receiveAndSetupRmr(int sock, RemoteMemoryRegion &buffer, RemoteMemoryRegion &messageCount);
 
 void sendRmrInfo(int sock, MemoryRegion &buffer, MemoryRegion &messageCount);
-
-int tcp_accept(int sock, sockaddr_in &inAddr) {
-    socklen_t inAddrLen = sizeof inAddr;
-    auto acced = accept(sock, (sockaddr *) &inAddr, &inAddrLen);
-    if (acced < 0) {
-        throw runtime_error{"error accept'ing"};
-    }
-    return acced;
-}
-
-static const size_t MESSAGES = 1024 * 1024;
 
 int main(int argc, char **argv) {
     if (argc < 3 || (argv[1][0] == 'c' && argc < 4)) {
