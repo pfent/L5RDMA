@@ -7,6 +7,7 @@
 #include <rdma_tests/rdma/MemoryRegion.hpp>
 #include <rdma_tests/rdma/WorkRequest.hpp>
 #include <infiniband/verbs.h>
+#include <stdlib.h>
 #include "rdma/Network.hpp"
 #include "tcpWrapper.h"
 
@@ -15,9 +16,9 @@ using namespace rdma;
 
 void exchangeQPNAndConnect(int sock, Network &network, QueuePair &queuePair);
 
-void receiveAndSetupRmr(int sock, RemoteMemoryRegion &buffer, RemoteMemoryRegion &messageCount);
+void receiveAndSetupRmr(int sock, RemoteMemoryRegion &buffer);
 
-void sendRmrInfo(int sock, MemoryRegion &buffer, MemoryRegion &messageCount);
+void sendRmrInfo(int sock, MemoryRegion &buffer);
 
 int main(int argc, char **argv) {
     if (argc < 3 || (argv[1][0] == 'c' && argc < 4)) {
@@ -31,11 +32,11 @@ int main(int argc, char **argv) {
 
     static const size_t MESSAGES = 1024 * 128;
     static const size_t BUFFER_SIZE = 64;
-    uint8_t buffer[BUFFER_SIZE];
-    uint8_t DATA[] = "123456789012345678901234567890123456789012345678901234567890123";
-    size_t messages = 0;
-    size_t fetchResult;
-    static_assert(BUFFER_SIZE == sizeof(buffer), "DATA needs the right size ");
+    uint8_t buffer[BUFFER_SIZE + 2]{0}; // 2 magic bytes at the end
+    uint8_t DATA[] = "123456789012345678901234567890123456789012345678901234567890123  ";
+    static_assert(BUFFER_SIZE + 2 == sizeof(DATA), "DATA needs the right size ");
+    DATA[BUFFER_SIZE] = 0xfe;
+    DATA[BUFFER_SIZE + 1] = 0xfe;
 
     // RDMA networking. The queues are needed on both sides
     Network network;
@@ -51,30 +52,25 @@ int main(int argc, char **argv) {
         tcp_connect(sock, addr);
         exchangeQPNAndConnect(sock, network, queuePair);
 
-        MemoryRegion localSend(DATA, BUFFER_SIZE, network.getProtectionDomain(), MemoryRegion::Permission::All);
+        MemoryRegion localSend(DATA, BUFFER_SIZE + 2, network.getProtectionDomain(), MemoryRegion::Permission::All);
         RemoteMemoryRegion remoteSend;
-        MemoryRegion localRecBuffer(buffer, BUFFER_SIZE, network.getProtectionDomain(), MemoryRegion::Permission::All);
-        MemoryRegion localMessageCount(&messages, sizeof(messages), network.getProtectionDomain(),
-                                       MemoryRegion::Permission::All);
-        MemoryRegion localFetchResult(&fetchResult, sizeof(fetchResult), network.getProtectionDomain(),
-                                      MemoryRegion::Permission::All);
-        RemoteMemoryRegion remoteMessageCount;
-        sendRmrInfo(sock, localRecBuffer, localMessageCount);
-        receiveAndSetupRmr(sock, remoteSend, remoteMessageCount);
+        MemoryRegion localRecBuffer(buffer, BUFFER_SIZE + 2, network.getProtectionDomain(),
+                                    MemoryRegion::Permission::All);
+        sendRmrInfo(sock, localRecBuffer);
+        receiveAndSetupRmr(sock, remoteSend);
 
         const auto start = chrono::steady_clock::now();
         for (size_t i = 0; i < MESSAGES; ++i) {
-            WriteWorkRequestBuilder(localSend, remoteSend, false)
+            WriteWorkRequestBuilder(localSend, remoteSend, true)
                     .send(queuePair);
-            AtomicFetchAndAddWorkRequestBuilder(localFetchResult, remoteMessageCount, 1, true)
-                    .send(queuePair);
-            completionQueue.pollSendCompletionQueue(IBV_WC_FETCH_ADD);
-            while (messages == i) sched_yield(); // sync with response
+            completionQueue.pollSendCompletionQueue();
+            while (buffer[BUFFER_SIZE] != 0xfe && buffer[BUFFER_SIZE + 1] != 0xfe) sched_yield(); // sync with response
             for (size_t j = 0; j < BUFFER_SIZE; ++j) {
                 if (buffer[j] != DATA[j]) {
                     throw runtime_error{"expected '1~9', received " + string(begin(buffer), end(buffer))};
                 }
             }
+            fill(begin(buffer), end(buffer), 0); // clear buffer, so we can reuse the magic bytes
         }
         const auto end = chrono::steady_clock::now();
         const auto msTaken = chrono::duration<double, milli>(end - start).count();
@@ -94,21 +90,18 @@ int main(int argc, char **argv) {
         auto acced = tcp_accept(sock, inAddr);
         exchangeQPNAndConnect(acced, network, queuePair);
 
-        MemoryRegion localBuffer(buffer, BUFFER_SIZE, network.getProtectionDomain(), MemoryRegion::Permission::All);
+        MemoryRegion localBuffer(buffer, BUFFER_SIZE + 2, network.getProtectionDomain(), MemoryRegion::Permission::All);
+        uint8_t sndBuffer[BUFFER_SIZE + 2];
+        MemoryRegion sndMR(sndBuffer, BUFFER_SIZE + 2, network.getProtectionDomain(), MemoryRegion::Permission::All);
         RemoteMemoryRegion remoteBuffer;
-        MemoryRegion localMessageCount(&messages, sizeof(messages), network.getProtectionDomain(),
-                                       MemoryRegion::Permission::All);
-        MemoryRegion localFetchResult(&fetchResult, sizeof(fetchResult), network.getProtectionDomain(),
-                                      MemoryRegion::Permission::All);
-        RemoteMemoryRegion remoteMessageCount;
-        receiveAndSetupRmr(acced, remoteBuffer, remoteMessageCount);
-        sendRmrInfo(acced, localBuffer, localMessageCount);
+        receiveAndSetupRmr(acced, remoteBuffer);
+        sendRmrInfo(acced, localBuffer);
 
         for (size_t i = 0; i < MESSAGES; ++i) {
-            while (messages == i) sched_yield();
-            WriteWorkRequestBuilder(localBuffer, remoteBuffer, false)
-                    .send(queuePair);
-            AtomicFetchAndAddWorkRequestBuilder(localFetchResult, remoteMessageCount, 1, true)
+            while (buffer[BUFFER_SIZE] != 0xfe && buffer[BUFFER_SIZE + 1] != 0xfe) sched_yield();
+            copy(begin(buffer), end(buffer), begin(sndBuffer));
+            fill(begin(buffer), end(buffer), 0);  // clear buffer, so we can reuse the magic bytes
+            WriteWorkRequestBuilder(sndMR, remoteBuffer, false)
                     .send(queuePair);
             completionQueue.pollSendCompletionQueue(IBV_WC_FETCH_ADD);
         }
@@ -123,29 +116,21 @@ int main(int argc, char **argv) {
 struct RmrInfo {
     uint32_t bufferKey;
     uintptr_t bufferAddress;
-    uint32_t messageCountKey;
-    uintptr_t messageCountAddress;
 };
 
-void receiveAndSetupRmr(int sock, RemoteMemoryRegion &buffer, RemoteMemoryRegion &messageCount) {
+void receiveAndSetupRmr(int sock, RemoteMemoryRegion &buffer) {
     RmrInfo rmrInfo;
     tcp_read(sock, &rmrInfo, sizeof(rmrInfo));
     rmrInfo.bufferKey = ntohl(rmrInfo.bufferKey);
-    rmrInfo.messageCountKey = ntohl(rmrInfo.messageCountKey);
     rmrInfo.bufferAddress = be64toh(rmrInfo.bufferAddress);
-    rmrInfo.messageCountAddress = be64toh(rmrInfo.messageCountAddress);
     buffer.key = rmrInfo.bufferKey;
-    messageCount.key = rmrInfo.messageCountKey;
     buffer.address = rmrInfo.bufferAddress;
-    messageCount.address = rmrInfo.messageCountAddress;
 }
 
-void sendRmrInfo(int sock, MemoryRegion &buffer, MemoryRegion &messageCount) {
+void sendRmrInfo(int sock, MemoryRegion &buffer) {
     RmrInfo rmrInfo;
     rmrInfo.bufferKey = htonl(buffer.key->rkey);
-    rmrInfo.messageCountKey = htonl(messageCount.key->rkey);
     rmrInfo.bufferAddress = htobe64((uint64_t) buffer.address);
-    rmrInfo.messageCountAddress = htobe64((uint64_t) messageCount.address);
     tcp_write(sock, &rmrInfo, sizeof(rmrInfo));
 }
 
