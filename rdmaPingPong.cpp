@@ -31,9 +31,6 @@ int main(int argc, char **argv) {
 
     static const size_t MESSAGES = 1024 * 128;
     static const size_t BUFFER_SIZE = 64;
-    uint8_t buffer[BUFFER_SIZE]{0};
-    uint8_t DATA[] = "123456789012345678901234567890123456789012345678901234567890123";
-    static_assert(BUFFER_SIZE == sizeof(buffer), "DATA needs the right size ");
 
     // RDMA networking. The queues are needed on both sides
     Network network;
@@ -49,29 +46,33 @@ int main(int argc, char **argv) {
         tcp_connect(sock, addr);
         exchangeQPNAndConnect(sock, network, queuePair);
 
-        MemoryRegion localSend(DATA, BUFFER_SIZE, network.getProtectionDomain(), MemoryRegion::Permission::All);
-        RemoteMemoryRegion remoteSend;
-        MemoryRegion localRecBuffer(buffer, BUFFER_SIZE, network.getProtectionDomain(), MemoryRegion::Permission::All);
-        sendRmrInfo(sock, localRecBuffer);
-        receiveAndSetupRmr(sock, remoteSend);
+        uint8_t receiveBuffer[BUFFER_SIZE]{0};
+        uint8_t sendBuffer[] = "123456789012345678901234567890123456789012345678901234567890123";
+        static_assert(BUFFER_SIZE == sizeof(sendBuffer), "sendBuffer needs the right size ");
+        MemoryRegion localSend(sendBuffer, BUFFER_SIZE, network.getProtectionDomain(), MemoryRegion::Permission::All);
+        MemoryRegion localReceive(receiveBuffer, BUFFER_SIZE, network.getProtectionDomain(),
+                                  MemoryRegion::Permission::All);
+        RemoteMemoryRegion remoteReceive;
+        sendRmrInfo(sock, localReceive);
+        receiveAndSetupRmr(sock, remoteReceive);
 
         const auto start = chrono::steady_clock::now();
         for (size_t i = 0; i < MESSAGES; ++i) {
-            WriteWorkRequestBuilder(localSend, remoteSend, true)
+            WriteWorkRequestBuilder(localSend, remoteReceive, true)
                     .send(queuePair);
             completionQueue.pollSendCompletionQueue(IBV_WC_RDMA_WRITE);
-            while (buffer[BUFFER_SIZE - 2] == 0) sched_yield(); // sync with response
+            while (receiveBuffer[BUFFER_SIZE - 2] == 0) sched_yield(); // sync with response
             for (size_t j = 0; j < BUFFER_SIZE; ++j) {
-                if (buffer[j] != DATA[j]) {
-                    throw runtime_error{"expected '1~9', received " + string(begin(buffer), end(buffer))};
+                if (receiveBuffer[j] != sendBuffer[j]) {
+                    throw runtime_error{"expected '1~9', received " + string(begin(receiveBuffer), end(receiveBuffer))};
                 }
             }
-            fill(begin(buffer), end(buffer), 0);
+            fill(begin(receiveBuffer), end(receiveBuffer), 0);
         }
         const auto end = chrono::steady_clock::now();
         const auto msTaken = chrono::duration<double, milli>(end - start).count();
         const auto sTaken = msTaken / 1000;
-        cout << MESSAGES << " messages exchanged in " << msTaken << "ms" << endl;
+        cout << MESSAGES << " " << sizeof(sendBuffer) << "B messages exchanged in " << msTaken << "ms" << endl;
         cout << MESSAGES / sTaken << " msg/s" << endl;
     } else {
         sockaddr_in addr;
@@ -86,18 +87,20 @@ int main(int argc, char **argv) {
         auto acced = tcp_accept(sock, inAddr);
         exchangeQPNAndConnect(acced, network, queuePair);
 
-        MemoryRegion localBuffer(buffer, BUFFER_SIZE, network.getProtectionDomain(), MemoryRegion::Permission::All);
-        uint8_t toSend[BUFFER_SIZE];
-        MemoryRegion toSendMR(toSend, BUFFER_SIZE, network.getProtectionDomain(), MemoryRegion::Permission::All);
-        RemoteMemoryRegion remoteBuffer;
-        receiveAndSetupRmr(acced, remoteBuffer);
-        sendRmrInfo(acced, localBuffer);
+        uint8_t receiveBuffer[BUFFER_SIZE];
+        uint8_t sendBuffer[BUFFER_SIZE];
+        MemoryRegion localReceive(receiveBuffer, BUFFER_SIZE, network.getProtectionDomain(),
+                                  MemoryRegion::Permission::All);
+        MemoryRegion localSend(sendBuffer, BUFFER_SIZE, network.getProtectionDomain(), MemoryRegion::Permission::All);
+        RemoteMemoryRegion remoteReceive;
+        sendRmrInfo(acced, localReceive);
+        receiveAndSetupRmr(acced, remoteReceive);
 
         for (size_t i = 0; i < MESSAGES; ++i) {
-            while (buffer[BUFFER_SIZE - 2] == 0) sched_yield();
-            copy(begin(buffer), end(buffer), begin(toSend));
-            fill(begin(buffer), end(buffer), 0);
-            WriteWorkRequestBuilder(toSendMR, remoteBuffer, true)
+            while (receiveBuffer[BUFFER_SIZE - 2] == 0) sched_yield();
+            copy(begin(receiveBuffer), end(receiveBuffer), begin(sendBuffer));
+            fill(begin(receiveBuffer), end(receiveBuffer), 0);
+            WriteWorkRequestBuilder(localSend, remoteReceive, true)
                     .send(queuePair);
             completionQueue.pollSendCompletionQueue(IBV_WC_RDMA_WRITE);
         }
