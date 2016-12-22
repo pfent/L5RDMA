@@ -134,13 +134,12 @@ void sendRmrInfo(int sock, MemoryRegion &buffer) {
 }
 
 void exchangeQPNAndConnect(int sock, Network &network, QueuePair &queuePair) {
-    uint32_t qpn = queuePair.getQPN();
-    uint32_t qPNbuffer = htonl(qpn);
-    tcp_write(sock, &qPNbuffer, sizeof(qPNbuffer)); // Send own qpn to server
-    tcp_read(sock, &qPNbuffer, sizeof(qPNbuffer)); // receive qpn
-    qpn = ntohl(qPNbuffer);
-    const Address address{network.getLID(), qpn};
-    queuePair.connect(address);
-    cout << "connected to qpn " << qpn << endl;
+    rdma::Address addr;
+    addr.lid = network.getLID();
+    addr.qpn = queuePair.getQPN();
+    tcp_write(sock, &addr, sizeof(addr)); // Send own qpn to server
+    tcp_read(sock, &addr, sizeof(addr)); // receive qpn
+    queuePair.connect(addr);
+    cout << "connected to qpn " << addr.qpn << " lid: " << addr.lid << endl;
 }
 
