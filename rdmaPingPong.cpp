@@ -46,11 +46,11 @@ int main(int argc, char **argv) {
         tcp_connect(sock, addr);
         exchangeQPNAndConnect(sock, network, queuePair);
 
-        uint8_t receiveBuffer[BUFFER_SIZE]{0};
+        volatile uint8_t receiveBuffer[BUFFER_SIZE]{0};
         uint8_t sendBuffer[] = "123456789012345678901234567890123456789012345678901234567890123";
         static_assert(BUFFER_SIZE == sizeof(sendBuffer), "sendBuffer needs the right size ");
         MemoryRegion localSend(sendBuffer, BUFFER_SIZE, network.getProtectionDomain(), MemoryRegion::Permission::All);
-        MemoryRegion localReceive(receiveBuffer, BUFFER_SIZE, network.getProtectionDomain(),
+        MemoryRegion localReceive((void *) receiveBuffer, BUFFER_SIZE, network.getProtectionDomain(),
                                   MemoryRegion::Permission::All);
         RemoteMemoryRegion remoteReceive;
         sendRmrInfo(sock, localReceive);
@@ -61,7 +61,7 @@ int main(int argc, char **argv) {
             WriteWorkRequestBuilder(localSend, remoteReceive, true)
                     .send(queuePair);
             completionQueue.pollSendCompletionQueue(IBV_WC_RDMA_WRITE);
-            while (receiveBuffer[BUFFER_SIZE - 2] == 0) sched_yield(); // sync with response
+            while (receiveBuffer[BUFFER_SIZE - 2] == 0); // sync with response
             for (size_t j = 0; j < BUFFER_SIZE; ++j) {
                 if (receiveBuffer[j] != sendBuffer[j]) {
                     throw runtime_error{"expected '1~9', received " + string(begin(receiveBuffer), end(receiveBuffer))};
@@ -87,9 +87,9 @@ int main(int argc, char **argv) {
         auto acced = tcp_accept(sock, inAddr);
         exchangeQPNAndConnect(acced, network, queuePair);
 
-        uint8_t receiveBuffer[BUFFER_SIZE];
-        uint8_t sendBuffer[BUFFER_SIZE];
-        MemoryRegion localReceive(receiveBuffer, BUFFER_SIZE, network.getProtectionDomain(),
+        volatile uint8_t receiveBuffer[BUFFER_SIZE]{0};
+        uint8_t sendBuffer[BUFFER_SIZE]{0};
+        MemoryRegion localReceive((void *) receiveBuffer, BUFFER_SIZE, network.getProtectionDomain(),
                                   MemoryRegion::Permission::All);
         MemoryRegion localSend(sendBuffer, BUFFER_SIZE, network.getProtectionDomain(), MemoryRegion::Permission::All);
         RemoteMemoryRegion remoteReceive;
@@ -97,7 +97,7 @@ int main(int argc, char **argv) {
         receiveAndSetupRmr(acced, remoteReceive);
 
         for (size_t i = 0; i < MESSAGES; ++i) {
-            while (receiveBuffer[BUFFER_SIZE - 2] == 0) sched_yield();
+            while (receiveBuffer[BUFFER_SIZE - 2] == 0);
             copy(begin(receiveBuffer), end(receiveBuffer), begin(sendBuffer));
             fill(begin(receiveBuffer), end(receiveBuffer), 0);
             WriteWorkRequestBuilder(localSend, remoteReceive, true)
