@@ -8,6 +8,10 @@ int tcp_socket() {
     if (sock < 0) {
         throw std::runtime_error{"Could not open socket"};
     }
+    const int enable = 1;
+    if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int)) < 0) {
+        throw std::runtime_error{"Could not set SO_REUSEADDR"};
+    }
     return sock;
 }
 
