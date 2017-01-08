@@ -9,7 +9,7 @@
 using namespace std;
 using namespace rdma;
 
-inline void receiveAndSetupRmr(int sock, RemoteMemoryRegion &buffer) {
+static inline void receiveAndSetupRmr(int sock, RemoteMemoryRegion &buffer) {
     struct {
         uint32_t bufferKey;
         uintptr_t bufferAddress;
@@ -21,7 +21,7 @@ inline void receiveAndSetupRmr(int sock, RemoteMemoryRegion &buffer) {
     buffer.address = rmrInfo.bufferAddress;
 }
 
-inline void sendRmrInfo(int sock, MemoryRegion &buffer) {
+static inline void sendRmrInfo(int sock, MemoryRegion &buffer) {
     struct {
         uint32_t bufferKey;
         uintptr_t bufferAddress;
@@ -31,7 +31,7 @@ inline void sendRmrInfo(int sock, MemoryRegion &buffer) {
     tcp_write(sock, &rmrInfo, sizeof(rmrInfo));
 }
 
-inline void exchangeQPNAndConnect(int sock, Network &network, QueuePair &queuePair) {
+static inline void exchangeQPNAndConnect(int sock, Network &network, QueuePair &queuePair) {
     Address addr;
     addr.lid = network.getLID();
     addr.qpn = queuePair.getQPN();
