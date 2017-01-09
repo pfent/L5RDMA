@@ -15,7 +15,6 @@ struct RDMANetworking {
 };
 
 class RDMAMessageBuffer {
-    static const size_t validity = 0xDEADDEADBEEFBEEF;
 public:
     void send(uint8_t *data, size_t length);
 
@@ -27,10 +26,18 @@ private:
     const size_t size;
     RDMANetworking net;
     std::unique_ptr<volatile uint8_t[]> receiveBuffer;
+    size_t currentReceive = 0;
     std::unique_ptr<uint8_t> sendBuffer;
+    size_t currentSend = 0;
     rdma::MemoryRegion localSend;
     rdma::MemoryRegion localReceive;
     rdma::RemoteMemoryRegion remoteReceive;
+
+    void writeToSendBuffer(uint8_t *data, size_t sizeToWrite);
+
+    void readFromReceiveBuffer(uint8_t *whereTo, size_t sizeToRead);
+
+    void zeroReceiveBuffer(size_t beginReceiveCount, size_t sizeToZero);
 };
 
 #endif //RDMA_HASH_MAP_RDMAMESSAGEBUFFER_H
