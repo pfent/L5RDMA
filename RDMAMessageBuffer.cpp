@@ -57,7 +57,6 @@ vector<uint8_t> RDMAMessageBuffer::receive() {
         readFromReceiveBuffer((uint8_t *) &receiveValidity, sizeof(receiveValidity));
     } while (receiveValidity == 0);
 
-    cout << string(receiveBuffer.get(), receiveBuffer.get() + size) << endl;
     if (receiveValidity != validity) throw runtime_error{"unexpected validity " + receiveValidity};
 
     auto result = vector<uint8_t>(receiveSize);
@@ -90,8 +89,7 @@ void RDMAMessageBuffer::send(uint8_t *data, size_t length) {
     writeToSendBuffer(data, length);
     writeToSendBuffer((uint8_t *) &validity, sizeof(validity));
 
-    cout << string(sendBuffer.get(), sendBuffer.get() + size) << endl;
-    // TODO: maybe build two WriteWorkRequests
+    // TODO: build two WriteWorkRequests
     WriteWorkRequestBuilder(localSend, remoteReceive, true)
             .send(net.queuePair);
     net.completionQueue.pollSendCompletionQueue(IBV_WC_RDMA_WRITE); // This probably leaves one completion in the CQ
@@ -107,9 +105,9 @@ void RDMAMessageBuffer::writeToSendBuffer(uint8_t *data, size_t sizeToWrite) {
     const size_t beginPos = currentSend % size;
     const size_t endPos = (currentSend + sizeToWrite - 1) % size;
     if (endPos >= beginPos) {
-        copy(data, data + sizeToWrite, sendBuffer.get() + currentSend);
+        copy(data, data + sizeToWrite, sendBuffer.get() + beginPos);
     } else {
-        auto fst = sendBuffer.get() + currentSend;
+        auto fst = sendBuffer.get() + beginPos;
         auto fstToWrite = size - beginPos;
         auto snd = sendBuffer.get() + 0;
         auto sndToWrite = sizeToWrite - fstToWrite;
@@ -123,9 +121,9 @@ void RDMAMessageBuffer::readFromReceiveBuffer(uint8_t *whereTo, size_t sizeToRea
     const size_t beginPos = currentReceive % size;
     const size_t endPos = (currentReceive + sizeToRead - 1) % size;
     if (endPos >= beginPos) {
-        copy(receiveBuffer.get(), receiveBuffer.get() + sizeToRead, whereTo);
+        copy(receiveBuffer.get() + beginPos, receiveBuffer.get() + beginPos + sizeToRead, whereTo);
     } else {
-        auto fst = receiveBuffer.get() + currentReceive;
+        auto fst = receiveBuffer.get() + beginPos;
         auto fstToRead = size - beginPos;
         auto snd = receiveBuffer.get() + 0;
         auto sndToRead = sizeToRead - fstToRead;
@@ -139,7 +137,7 @@ void RDMAMessageBuffer::zeroReceiveBuffer(size_t beginReceiveCount, size_t sizeT
     const size_t beginPos = beginReceiveCount % size;
     const size_t endPos = (beginReceiveCount + sizeToZero - 1) % size;
     if (endPos >= beginPos) {
-        fill(receiveBuffer.get(), receiveBuffer.get() + sizeToZero, 0);
+        fill(receiveBuffer.get() + beginPos, receiveBuffer.get() + beginPos + sizeToZero, 0);
     } else {
         auto fst = receiveBuffer.get() + beginReceiveCount;
         auto fstToRead = size - beginPos;
