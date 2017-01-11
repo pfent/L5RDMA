@@ -22,7 +22,6 @@
 //---------------------------------------------------------------------------
 #include "WorkRequest.hpp"
 #include "QueuePair.hpp"
-#include "MemoryRegion.hpp"
 #include "ReceiveQueue.hpp"
 #include "CompletionQueuePair.hpp"
 //---------------------------------------------------------------------------
@@ -30,8 +29,6 @@
 #include <infiniband/verbs.h>
 #include <iostream>
 #include <iomanip>
-#include <limits>
-#include <unistd.h>
 //---------------------------------------------------------------------------
 using namespace std;
 //---------------------------------------------------------------------------
@@ -280,5 +277,8 @@ void Network::printCapabilities()
    }
 }
 //---------------------------------------------------------------------------
+    RemoteMemoryRegion RemoteMemoryRegion::slice(size_t offset) {
+        return RemoteMemoryRegion(this->address + offset, this->key);
+    }
 }
 //---------------------------------------------------------------------------

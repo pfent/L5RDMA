@@ -61,6 +61,8 @@ namespace rdma {
         RemoteMemoryRegion() = default;
 
         RemoteMemoryRegion(uintptr_t address, uint32_t key) : address(address), key(key) {};
+
+        RemoteMemoryRegion slice(size_t offset);
     };
 
     std::ostream &operator<<(std::ostream &os, const RemoteMemoryRegion &remoteMemoryRegion);

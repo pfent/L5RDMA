@@ -85,13 +85,32 @@ void RDMAMessageBuffer::send(uint8_t *data, size_t length) {
     const size_t sizeToWrite = sizeof(length) + length + sizeof(validity);
     if (sizeToWrite > size) throw runtime_error{"data > buffersize!"};
 
+    const size_t beginPos = currentSend % size;
+    const size_t endPos = (currentSend + sizeToWrite - 1) % size;
+
     writeToSendBuffer((uint8_t *) &length, sizeof(length));
     writeToSendBuffer(data, length);
     writeToSendBuffer((uint8_t *) &validity, sizeof(validity));
 
-    // TODO: build two WriteWorkRequests
-    WriteWorkRequestBuilder(localSend, remoteReceive, true)
-            .send(net.queuePair);
+    if (endPos >= beginPos) {
+        auto sendSlice = localSend.slice(beginPos, sizeToWrite);
+        auto remoteSlice = remoteReceive.slice(beginPos);
+        WriteWorkRequestBuilder(sendSlice, remoteSlice, true)
+                .send(net.queuePair);
+    } else {
+        // beginPos ~ buffer end
+        auto sendSlice1 = localSend.slice(beginPos, size - beginPos);
+        auto remoteSlice1 = remoteReceive.slice(beginPos);
+        // buffer start ~ endpos
+        auto sendSlice2 = localSend.slice(0, endPos);
+        auto remoteSlice2 = remoteReceive.slice(0);
+
+        WriteWorkRequestBuilder(sendSlice1, remoteSlice1, true)
+                .send(net.queuePair);
+        WriteWorkRequestBuilder(sendSlice2, remoteSlice2, true)
+                .send(net.queuePair);
+        net.completionQueue.pollSendCompletionQueue(IBV_WC_RDMA_WRITE);
+    }
     net.completionQueue.pollSendCompletionQueue(IBV_WC_RDMA_WRITE); // This probably leaves one completion in the CQ
     currentSend = 0; // TODO: remove
 }
