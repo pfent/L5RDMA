@@ -26,9 +26,10 @@ private:
     const size_t size;
     RDMANetworking net;
     std::unique_ptr<volatile uint8_t[]> receiveBuffer;
-    size_t currentReceive = 0;
-    std::unique_ptr<uint8_t> sendBuffer;
-    size_t currentSend = 0;
+    size_t readPos = 0;
+    std::unique_ptr<uint8_t[]> sendBuffer;
+    size_t sendPos = 0;
+    size_t currentRemoteReceive = 0;
     rdma::MemoryRegion localSend;
     rdma::MemoryRegion localReceive;
     rdma::RemoteMemoryRegion remoteReceive;

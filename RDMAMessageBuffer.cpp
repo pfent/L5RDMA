@@ -16,10 +16,8 @@ static inline void receiveAndSetupRmr(int sock, RemoteMemoryRegion &buffer) {
         uintptr_t bufferAddress;
     } rmrInfo;
     tcp_read(sock, &rmrInfo, sizeof(rmrInfo));
-    rmrInfo.bufferKey = ntohl(rmrInfo.bufferKey);
-    rmrInfo.bufferAddress = be64toh(rmrInfo.bufferAddress);
-    buffer.key = rmrInfo.bufferKey;
-    buffer.address = rmrInfo.bufferAddress;
+    buffer.key = ntohl(rmrInfo.bufferKey);
+    buffer.address = be64toh(rmrInfo.bufferAddress);
 }
 
 static inline void sendRmrInfo(int sock, MemoryRegion &buffer) {
@@ -43,15 +41,15 @@ static inline void exchangeQPNAndConnect(int sock, Network &network, QueuePair &
 }
 
 vector<uint8_t> RDMAMessageBuffer::receive() {
-    const auto begin = currentReceive;
+    const auto begin = readPos;
     size_t receiveSize;
     do {
         readFromReceiveBuffer((uint8_t *) &receiveSize, sizeof(receiveSize));
     } while (receiveSize == 0);
-    currentReceive += sizeof(receiveSize);
+    readPos += sizeof(receiveSize);
 
     // Read the validity @end of message
-    currentReceive += receiveSize;
+    readPos += receiveSize;
     auto receiveValidity = (decltype(validity)) 0;
     do {
         readFromReceiveBuffer((uint8_t *) &receiveValidity, sizeof(receiveValidity));
@@ -60,20 +58,19 @@ vector<uint8_t> RDMAMessageBuffer::receive() {
     if (receiveValidity != validity) throw runtime_error{"unexpected validity " + receiveValidity};
 
     auto result = vector<uint8_t>(receiveSize);
-    currentReceive -= receiveSize;
+    readPos -= receiveSize;
     readFromReceiveBuffer(result.data(), receiveSize);
-    currentReceive += receiveSize + sizeof(receiveValidity);
+    readPos += receiveSize + sizeof(receiveValidity);
 
     zeroReceiveBuffer(begin, sizeof(receiveSize) + receiveSize + sizeof(validity));
-    currentReceive = 0; // TODO: remove
     return move(result);
 }
 
 RDMAMessageBuffer::RDMAMessageBuffer(size_t size, int sock) :
         size(size),
         net(sock),
-        receiveBuffer(new volatile uint8_t[size]()),
-        sendBuffer(new uint8_t[size]()),
+        receiveBuffer(new volatile uint8_t[size]{}),
+        sendBuffer(new uint8_t[size]{}),
         localSend(sendBuffer.get(), size, net.network.getProtectionDomain(), MemoryRegion::Permission::All),
         localReceive((void *) receiveBuffer.get(), size, net.network.getProtectionDomain(),
                      MemoryRegion::Permission::All) {
@@ -85,8 +82,8 @@ void RDMAMessageBuffer::send(uint8_t *data, size_t length) {
     const size_t sizeToWrite = sizeof(length) + length + sizeof(validity);
     if (sizeToWrite > size) throw runtime_error{"data > buffersize!"};
 
-    const size_t beginPos = currentSend % size;
-    const size_t endPos = (currentSend + sizeToWrite - 1) % size;
+    const size_t beginPos = sendPos % size;
+    const size_t endPos = (sendPos + sizeToWrite - 1) % size;
 
     writeToSendBuffer((uint8_t *) &length, sizeof(length));
     writeToSendBuffer(data, length);
@@ -112,17 +109,16 @@ void RDMAMessageBuffer::send(uint8_t *data, size_t length) {
         net.completionQueue.pollSendCompletionQueue(IBV_WC_RDMA_WRITE);
     }
     net.completionQueue.pollSendCompletionQueue(IBV_WC_RDMA_WRITE); // This probably leaves one completion in the CQ
-    currentSend = 0; // TODO: remove
 }
 
 void RDMAMessageBuffer::writeToSendBuffer(uint8_t *data, size_t sizeToWrite) {
-    const size_t safeToWrite = size - (currentSend - currentReceive);
+    size_t safeToWrite = size - (sendPos - currentRemoteReceive);
     if (sizeToWrite > safeToWrite) {
         // TODO
         throw runtime_error{"can't sync yet"};
     }
-    const size_t beginPos = currentSend % size;
-    const size_t endPos = (currentSend + sizeToWrite - 1) % size;
+    const size_t beginPos = sendPos % size;
+    const size_t endPos = (sendPos + sizeToWrite - 1) % size;
     if (endPos >= beginPos) {
         copy(data, data + sizeToWrite, sendBuffer.get() + beginPos);
     } else {
@@ -133,12 +129,12 @@ void RDMAMessageBuffer::writeToSendBuffer(uint8_t *data, size_t sizeToWrite) {
         copy(fst, fst + fstToWrite, data);
         copy(snd, snd + sndToWrite, data + fstToWrite);
     }
-    currentSend += sizeToWrite;
+    sendPos += sizeToWrite;
 }
 
 void RDMAMessageBuffer::readFromReceiveBuffer(uint8_t *whereTo, size_t sizeToRead) {
-    const size_t beginPos = currentReceive % size;
-    const size_t endPos = (currentReceive + sizeToRead - 1) % size;
+    const size_t beginPos = readPos % size;
+    const size_t endPos = (readPos + sizeToRead - 1) % size;
     if (endPos >= beginPos) {
         copy(receiveBuffer.get() + beginPos, receiveBuffer.get() + beginPos + sizeToRead, whereTo);
     } else {
