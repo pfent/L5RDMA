@@ -114,13 +114,9 @@ void RDMAMessageBuffer::send(const uint8_t *data, size_t length) {
     const size_t beginPos = sendPos % size;
     const size_t endPos = (sendPos + sizeToWrite - 1) % size;
 
-    cout << "writing length " << length << " to " << sendPos % size << endl;
     writeToSendBuffer((uint8_t *) &length, sizeof(length));
     writeToSendBuffer(data, length);
-    cout << "writing validity " << validity << " to " << sendPos % size << endl;
     writeToSendBuffer((uint8_t *) &validity, sizeof(validity));
-
-    dumpBuffer(sendBuffer.get(), sendBuffer.get() + size);
 
     if (endPos >= beginPos) {
         auto sendSlice = localSend.slice(beginPos, sizeToWrite);
@@ -188,7 +184,7 @@ void RDMAMessageBuffer::zeroReceiveBuffer(size_t beginReceiveCount, size_t sizeT
     if (endPos >= beginPos) {
         fill(receiveBuffer.get() + beginPos, receiveBuffer.get() + beginPos + sizeToZero, 0);
     } else {
-        auto fst = receiveBuffer.get() + beginReceiveCount;
+        auto fst = receiveBuffer.get() + beginPos;
         auto fstToRead = size - beginPos;
         auto snd = receiveBuffer.get() + 0;
         auto sndToRead = sizeToZero - fstToRead;
