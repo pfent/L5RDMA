@@ -68,20 +68,14 @@ vector<uint8_t> RDMAMessageBuffer::receive() {
     do {
         readFromReceiveBuffer(readPos, (uint8_t *) &receiveSize, sizeof(receiveSize));
     } while (receiveSize == 0);
-    cout << "read length " << receiveSize << " from " << readPos % size << endl;
 
     // Read the validity @end of message
     auto receiveValidity = (decltype(validity)) 0;
     do {
         readFromReceiveBuffer(readPos + sizeof(receiveSize) + receiveSize, (uint8_t *) &receiveValidity,
                               sizeof(receiveValidity));
-    } while (receiveValidity == 0);
-    cout << "read validity " << receiveValidity << " from " << readPos % size << endl;
-
-    if (receiveValidity != validity) {
-        cerr << "received: " << string(receiveBuffer.get(), receiveBuffer.get() + size) << endl;
-        throw runtime_error{"unexpected validity"};
-    }
+    } while (receiveValidity != validity);
+    // TODO: probably also read the size again, since when we get a race, the size may not have been written fully.
 
     auto result = vector<uint8_t>(receiveSize);
     readFromReceiveBuffer(readPos + sizeof(receiveSize), result.data(), receiveSize);
