@@ -241,7 +241,24 @@ pair<bool, uint64_t> CompletionQueuePair::waitForCompletion(bool restricted, boo
 uint64_t CompletionQueuePair::pollSendCompletionQueue()
 /// Poll the send completion queue
 {
-   return pollCompletionQueue(sendQueue, IBV_WC_SEND);
+    int status;
+
+    // Poll for a work completion
+    ibv_wc completion;
+    status = ::ibv_poll_cq(sendQueue, 1, &completion);
+    if (status == 0) {
+        return numeric_limits<uint64_t>::max();
+    }
+
+    // Check status and opcode
+    if (completion.status == IBV_WC_SUCCESS) {
+        return completion.wr_id;
+    } else {
+        string reason = "unexpected completion status " + to_string(completion.status) + ": " +
+                        ibv_wc_status_str(completion.status);
+        cerr << reason << endl;
+        throw NetworkException(reason);
+    }
 }
 
     uint64_t CompletionQueuePair::pollSendCompletionQueue(int type) {

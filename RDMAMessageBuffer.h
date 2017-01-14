@@ -16,7 +16,7 @@ struct RDMANetworking {
 
 class RDMAMessageBuffer {
 public:
-    void send(uint8_t *data, size_t length);
+    void send(const uint8_t *data, size_t length);
 
     std::vector<uint8_t> receive();
 
@@ -29,14 +29,17 @@ private:
     size_t readPos = 0;
     std::unique_ptr<uint8_t[]> sendBuffer;
     size_t sendPos = 0;
-    size_t currentRemoteReceive = 0;
+    volatile size_t currentRemoteReceive = 0;
     rdma::MemoryRegion localSend;
     rdma::MemoryRegion localReceive;
+    rdma::MemoryRegion localReadPos;
+    rdma::MemoryRegion localCurrentRemoteReceive;
     rdma::RemoteMemoryRegion remoteReceive;
+    rdma::RemoteMemoryRegion remoteReadPos;
 
-    void writeToSendBuffer(uint8_t *data, size_t sizeToWrite);
+    void writeToSendBuffer(const uint8_t *data, size_t sizeToWrite);
 
-    void readFromReceiveBuffer(uint8_t *whereTo, size_t sizeToRead);
+    void readFromReceiveBuffer(size_t readPos, uint8_t *whereTo, size_t sizeToRead);
 
     void zeroReceiveBuffer(size_t beginReceiveCount, size_t sizeToZero);
 };

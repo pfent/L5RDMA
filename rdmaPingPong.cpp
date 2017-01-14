@@ -18,7 +18,6 @@ int main(int argc, char **argv) {
     const auto port = ::atoi(argv[2]);
 
     static const size_t MESSAGES = 1024 * 128;
-    static const size_t BUFFER_SIZE = 64;
 
     if (isClient) {
         sockaddr_in addr;
@@ -39,7 +38,7 @@ int main(int argc, char **argv) {
             if (answer.size() != sendData.size()) {
                 throw runtime_error{"answer has wrong size!"};
             }
-            for (size_t j = 0; j < BUFFER_SIZE; ++j) {
+            for (size_t j = 0; j < sendData.size(); ++j) {
                 if (answer[j] != sendData[j]) {
                     throw runtime_error{"expected '1~9', received " + string(answer.begin(), answer.end())};
                 }

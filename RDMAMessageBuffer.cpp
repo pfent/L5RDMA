@@ -2,6 +2,7 @@
 #include <iostream>
 #include <infiniband/verbs.h>
 #include <netinet/in.h>
+#include <iomanip>
 #include "rdma/WorkRequest.hpp"
 #include "tcpWrapper.h"
 
@@ -10,23 +11,45 @@ using namespace rdma;
 
 static const size_t validity = 0xDEADDEADBEEFBEEF;
 
-static inline void receiveAndSetupRmr(int sock, RemoteMemoryRegion &buffer) {
+template<typename T>
+void dumpBuffer(T begin, T end) {
+    for (int i = 0; begin != end; ++begin, ++i) {
+        if (i % 8 == 0) {
+            cout << "\t";
+        }
+        if (i % 16 == 0) {
+            cout << "\n";
+        }
+        cout << hex << setw(2) << (int) *begin << " ";
+    }
+    cout << dec << endl;
+}
+
+static inline void receiveAndSetupRmr(int sock, RemoteMemoryRegion &buffer, RemoteMemoryRegion &readPos) {
     struct {
         uint32_t bufferKey;
         uintptr_t bufferAddress;
+        uint32_t readPosKey;
+        uintptr_t readPosAddress;
     } rmrInfo;
     tcp_read(sock, &rmrInfo, sizeof(rmrInfo));
     buffer.key = ntohl(rmrInfo.bufferKey);
     buffer.address = be64toh(rmrInfo.bufferAddress);
+    readPos.key = ntohl(rmrInfo.readPosKey);
+    readPos.address = be64toh(rmrInfo.readPosAddress);
 }
 
-static inline void sendRmrInfo(int sock, MemoryRegion &buffer) {
+static inline void sendRmrInfo(int sock, MemoryRegion &buffer, MemoryRegion &readPos) {
     struct {
         uint32_t bufferKey;
         uintptr_t bufferAddress;
+        uint32_t readPosKey;
+        uintptr_t readPosAddress;
     } rmrInfo;
     rmrInfo.bufferKey = htonl(buffer.key->rkey);
     rmrInfo.bufferAddress = htobe64((uint64_t) buffer.address);
+    rmrInfo.readPosKey = htonl(readPos.key->rkey);
+    rmrInfo.readPosAddress = htobe64((uint64_t) readPos.address);
     tcp_write(sock, &rmrInfo, sizeof(rmrInfo));
 }
 
@@ -41,28 +64,36 @@ static inline void exchangeQPNAndConnect(int sock, Network &network, QueuePair &
 }
 
 vector<uint8_t> RDMAMessageBuffer::receive() {
-    const auto begin = readPos;
     size_t receiveSize;
     do {
-        readFromReceiveBuffer((uint8_t *) &receiveSize, sizeof(receiveSize));
+        readFromReceiveBuffer(readPos, (uint8_t *) &receiveSize, sizeof(receiveSize));
     } while (receiveSize == 0);
-    readPos += sizeof(receiveSize);
+    cout << "read length " << receiveSize << " from " << readPos % size << endl;
 
     // Read the validity @end of message
-    readPos += receiveSize;
     auto receiveValidity = (decltype(validity)) 0;
     do {
-        readFromReceiveBuffer((uint8_t *) &receiveValidity, sizeof(receiveValidity));
+        readFromReceiveBuffer(readPos + sizeof(receiveSize) + receiveSize, (uint8_t *) &receiveValidity,
+                              sizeof(receiveValidity));
     } while (receiveValidity == 0);
+    cout << "read validity " << receiveValidity << " from " << readPos % size << endl;
 
-    if (receiveValidity != validity) throw runtime_error{"unexpected validity " + receiveValidity};
+    if (receiveValidity != validity) {
+        cerr << "received: " << string(receiveBuffer.get(), receiveBuffer.get() + size) << endl;
+        throw runtime_error{"unexpected validity"};
+    }
 
     auto result = vector<uint8_t>(receiveSize);
-    readPos -= receiveSize;
-    readFromReceiveBuffer(result.data(), receiveSize);
-    readPos += receiveSize + sizeof(receiveValidity);
+    readFromReceiveBuffer(readPos + sizeof(receiveSize), result.data(), receiveSize);
 
-    zeroReceiveBuffer(begin, sizeof(receiveSize) + receiveSize + sizeof(validity));
+    dumpBuffer(receiveBuffer.get(), receiveBuffer.get() + size);
+
+    zeroReceiveBuffer(readPos, sizeof(receiveSize) + receiveSize + sizeof(validity));
+
+    dumpBuffer(receiveBuffer.get(), receiveBuffer.get() + size);
+
+    readPos += sizeof(receiveSize) + receiveSize + sizeof(validity);
+
     return move(result);
 }
 
@@ -73,21 +104,28 @@ RDMAMessageBuffer::RDMAMessageBuffer(size_t size, int sock) :
         sendBuffer(new uint8_t[size]{}),
         localSend(sendBuffer.get(), size, net.network.getProtectionDomain(), MemoryRegion::Permission::All),
         localReceive((void *) receiveBuffer.get(), size, net.network.getProtectionDomain(),
-                     MemoryRegion::Permission::All) {
-    sendRmrInfo(sock, localReceive);
-    receiveAndSetupRmr(sock, remoteReceive);
+                     MemoryRegion::Permission::All),
+        localReadPos(&readPos, sizeof(readPos), net.network.getProtectionDomain(), MemoryRegion::Permission::All),
+        localCurrentRemoteReceive((void *) &currentRemoteReceive, sizeof(currentRemoteReceive),
+                                  net.network.getProtectionDomain(), MemoryRegion::Permission::All) {
+    sendRmrInfo(sock, localReceive, localReadPos);
+    receiveAndSetupRmr(sock, remoteReceive, remoteReadPos);
 }
 
-void RDMAMessageBuffer::send(uint8_t *data, size_t length) {
+void RDMAMessageBuffer::send(const uint8_t *data, size_t length) {
     const size_t sizeToWrite = sizeof(length) + length + sizeof(validity);
     if (sizeToWrite > size) throw runtime_error{"data > buffersize!"};
 
     const size_t beginPos = sendPos % size;
     const size_t endPos = (sendPos + sizeToWrite - 1) % size;
 
+    cout << "writing length " << length << " to " << sendPos % size << endl;
     writeToSendBuffer((uint8_t *) &length, sizeof(length));
     writeToSendBuffer(data, length);
+    cout << "writing validity " << validity << " to " << sendPos % size << endl;
     writeToSendBuffer((uint8_t *) &validity, sizeof(validity));
+
+    dumpBuffer(sendBuffer.get(), sendBuffer.get() + size);
 
     if (endPos >= beginPos) {
         auto sendSlice = localSend.slice(beginPos, sizeToWrite);
@@ -99,23 +137,25 @@ void RDMAMessageBuffer::send(uint8_t *data, size_t length) {
         auto sendSlice1 = localSend.slice(beginPos, size - beginPos);
         auto remoteSlice1 = remoteReceive.slice(beginPos);
         // buffer start ~ endpos
-        auto sendSlice2 = localSend.slice(0, endPos);
+        auto sendSlice2 = localSend.slice(0, endPos + 1);
         auto remoteSlice2 = remoteReceive.slice(0);
 
         WriteWorkRequestBuilder(sendSlice1, remoteSlice1, true)
                 .send(net.queuePair);
         WriteWorkRequestBuilder(sendSlice2, remoteSlice2, true)
                 .send(net.queuePair);
-        net.completionQueue.pollSendCompletionQueue(IBV_WC_RDMA_WRITE);
+        net.completionQueue.pollSendCompletionQueue();
     }
-    net.completionQueue.pollSendCompletionQueue(IBV_WC_RDMA_WRITE); // This probably leaves one completion in the CQ
+    net.completionQueue.pollSendCompletionQueue(); // This probably leaves one completion in the CQ
 }
 
-void RDMAMessageBuffer::writeToSendBuffer(uint8_t *data, size_t sizeToWrite) {
+void RDMAMessageBuffer::writeToSendBuffer(const uint8_t *data, size_t sizeToWrite) {
     size_t safeToWrite = size - (sendPos - currentRemoteReceive);
-    if (sizeToWrite > safeToWrite) {
-        // TODO
-        throw runtime_error{"can't sync yet"};
+    while (sizeToWrite > safeToWrite) {
+        ReadWorkRequestBuilder(localCurrentRemoteReceive, remoteReadPos, true)
+                .send(net.queuePair);
+        net.completionQueue.pollSendCompletionQueue();
+        safeToWrite = size - (sendPos - currentRemoteReceive);
     }
     const size_t beginPos = sendPos % size;
     const size_t endPos = (sendPos + sizeToWrite - 1) % size;
@@ -126,13 +166,13 @@ void RDMAMessageBuffer::writeToSendBuffer(uint8_t *data, size_t sizeToWrite) {
         auto fstToWrite = size - beginPos;
         auto snd = sendBuffer.get() + 0;
         auto sndToWrite = sizeToWrite - fstToWrite;
-        copy(fst, fst + fstToWrite, data);
-        copy(snd, snd + sndToWrite, data + fstToWrite);
+        copy(data, data + fstToWrite, fst);
+        copy(data, data + sndToWrite, snd);
     }
     sendPos += sizeToWrite;
 }
 
-void RDMAMessageBuffer::readFromReceiveBuffer(uint8_t *whereTo, size_t sizeToRead) {
+void RDMAMessageBuffer::readFromReceiveBuffer(size_t readPos, uint8_t *whereTo, size_t sizeToRead) {
     const size_t beginPos = readPos % size;
     const size_t endPos = (readPos + sizeToRead - 1) % size;
     if (endPos >= beginPos) {
