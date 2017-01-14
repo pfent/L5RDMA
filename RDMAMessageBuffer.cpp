@@ -85,12 +85,7 @@ vector<uint8_t> RDMAMessageBuffer::receive() {
 
     auto result = vector<uint8_t>(receiveSize);
     readFromReceiveBuffer(readPos + sizeof(receiveSize), result.data(), receiveSize);
-
-    dumpBuffer(receiveBuffer.get(), receiveBuffer.get() + size);
-
     zeroReceiveBuffer(readPos, sizeof(receiveSize) + receiveSize + sizeof(validity));
-
-    dumpBuffer(receiveBuffer.get(), receiveBuffer.get() + size);
 
     readPos += sizeof(receiveSize) + receiveSize + sizeof(validity);
 
@@ -165,9 +160,8 @@ void RDMAMessageBuffer::writeToSendBuffer(const uint8_t *data, size_t sizeToWrit
         auto fst = sendBuffer.get() + beginPos;
         auto fstToWrite = size - beginPos;
         auto snd = sendBuffer.get() + 0;
-        auto sndToWrite = sizeToWrite - fstToWrite;
         copy(data, data + fstToWrite, fst);
-        copy(data, data + sndToWrite, snd);
+        copy(data + fstToWrite, data + sizeToWrite, snd);
     }
     sendPos += sizeToWrite;
 }

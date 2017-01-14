@@ -28,7 +28,7 @@ int main(int argc, char **argv) {
         auto sock = tcp_socket();
         tcp_connect(sock, addr);
 
-        auto sendData = array<uint8_t, 64>{"123456789012345678901234567890123456789012345678901234567890123"};
+        auto sendData = array<uint8_t, 64>{"0123456789@ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"};
         RDMAMessageBuffer rdma(128, sock);
 
         const auto start = chrono::steady_clock::now();
