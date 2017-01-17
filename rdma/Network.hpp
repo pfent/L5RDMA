@@ -60,7 +60,7 @@ namespace rdma {
 
         RemoteMemoryRegion() = default;
 
-        RemoteMemoryRegion(uintptr_t address, uint32_t key) : address(address), key(key) {};
+        RemoteMemoryRegion(uintptr_t address, uint32_t key) : address(address), key(key) {}
 
         RemoteMemoryRegion slice(size_t offset);
     };

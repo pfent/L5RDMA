@@ -30,7 +30,7 @@ struct ibv_cq;
 //---------------------------------------------------------------------------
 namespace rdma {
 //---------------------------------------------------------------------------
-    struct WorkRequest;
+    class WorkRequest;
     struct Address;
 
     class Network;

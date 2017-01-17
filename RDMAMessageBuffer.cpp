@@ -83,7 +83,7 @@ vector<uint8_t> RDMAMessageBuffer::receive() {
 
     readPos += sizeof(receiveSize) + receiveSize + sizeof(validity);
 
-    return move(result);
+    return result;
 }
 
 RDMAMessageBuffer::RDMAMessageBuffer(size_t size, int sock) :
