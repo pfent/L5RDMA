@@ -130,7 +130,7 @@ namespace rdma {
         WriteWorkRequestBuilder(const MemoryRegion::Slice &localAddress, const RemoteMemoryRegion &remoteAddress,
                                 bool completion);
 
-        void setNextWorkRequest(const WorkRequest *workRequest);
+        WriteWorkRequestBuilder &setNextWorkRequest(const WorkRequest *workRequest);
 
         WriteWorkRequestBuilder &send(QueuePair &qp);
 

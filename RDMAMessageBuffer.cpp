@@ -65,17 +65,12 @@ static inline void exchangeQPNAndConnect(int sock, Network &network, QueuePair &
 
 vector<uint8_t> RDMAMessageBuffer::receive() {
     size_t receiveSize;
-    do {
-        readFromReceiveBuffer(readPos, (uint8_t *) &receiveSize, sizeof(receiveSize));
-    } while (receiveSize == 0);
-
-    // Read the validity @end of message
     auto receiveValidity = (decltype(validity)) 0;
     do {
+        readFromReceiveBuffer(readPos, (uint8_t *) &receiveSize, sizeof(receiveSize));
         readFromReceiveBuffer(readPos + sizeof(receiveSize) + receiveSize, (uint8_t *) &receiveValidity,
                               sizeof(receiveValidity));
     } while (receiveValidity != validity);
-    // TODO: probably also read the size again, since when we get a race, the size may not have been written fully.
 
     auto result = vector<uint8_t>(receiveSize);
     readFromReceiveBuffer(readPos + sizeof(receiveSize), result.data(), receiveSize);

@@ -19,7 +19,6 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 // ---------------------------------------------------------------------------
 #include "WorkRequest.hpp"
-#include "MemoryRegion.hpp"
 #include "Network.hpp"
 #include "QueuePair.hpp"
 //---------------------------------------------------------------------------
@@ -224,8 +223,9 @@ namespace rdma {
         return *this;
     }
 
-    void WriteWorkRequestBuilder::setNextWorkRequest(const WorkRequest *workRequest) {
+    WriteWorkRequestBuilder &WriteWorkRequestBuilder::setNextWorkRequest(const WorkRequest *workRequest) {
         wr.setNextWorkRequest(workRequest);
+        return *this;
     }
 
     WriteWorkRequest WriteWorkRequestBuilder::build() {
