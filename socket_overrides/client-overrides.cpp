@@ -34,10 +34,10 @@ int accept(int server_socket, sockaddr* address, socklen_t * length) {
     {
         socklen_t option;
         socklen_t option_length = sizeof(option);
-        socketType = real::getsockopt(server_socket, SOL_SOCKET, SO_TYPE, &option, &option_length);
-        if (socketType < 0) {
+        if (real::getsockopt(server_socket, SOL_SOCKET, SO_TYPE, &option, &option_length) < 0) {
             return ERROR;
         }
+        socketType = option;
     }
 
     int addressLocation;
@@ -77,10 +77,10 @@ int connect(int fd, const sockaddr *address, socklen_t length) {
     {
         socklen_t option;
         socklen_t option_length = sizeof(option);
-        socketType = real::getsockopt(fd, SOL_SOCKET, SO_TYPE, &option, &option_length);
-        if (socketType < 0) {
+        if (real::getsockopt(fd, SOL_SOCKET, SO_TYPE, &option, &option_length) < 0) {
             return ERROR;
         }
+        socketType = option;
     }
 
     int addressLocation;
