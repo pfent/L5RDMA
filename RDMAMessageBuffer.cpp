@@ -57,6 +57,7 @@ static inline void exchangeQPNAndConnect(int sock, Network &network, QueuePair &
     Address addr;
     addr.lid = network.getLID();
     addr.qpn = queuePair.getQPN();
+    // TODO: probably will run into troubles when linking in LD_PRELOAD library
     tcp_write(sock, &addr, sizeof(addr)); // Send own qpn to server
     tcp_read(sock, &addr, sizeof(addr)); // receive qpn
     queuePair.connect(addr);
