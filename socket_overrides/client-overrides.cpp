@@ -21,9 +21,50 @@ void warn(T msg) {
     std::cerr << msg << std::endl;
 }
 
-/******************** CLIENT OVERRIDES ********************/
+/******************** SERVER OVERRIDES ********************/
 
-// socket() will be directly called by the user, so we already start with a ready to use socket
+extern "C"
+int accept(int server_socket, sockaddr* address, socklen_t * length) {
+    int client_socket = real::accept(server_socket, address, length);
+    if (client_socket < 0) {
+        return ERROR;
+    }
+
+    int socketType;
+    {
+        socklen_t option;
+        socklen_t option_length = sizeof(option);
+        socketType = real::getsockopt(server_socket, SOL_SOCKET, SO_TYPE, &option, &option_length);
+        if (socketType < 0) {
+            return ERROR;
+        }
+    }
+
+    int addressLocation;
+    {
+        struct sockaddr_storage options;
+        socklen_t size = sizeof(options);
+        if (real::getsockname(server_socket, (struct sockaddr *) &options, &size) < 0) {
+            return ERROR;
+        }
+        addressLocation = options.ss_family;
+    }
+
+    if (not(socketType == SOCK_STREAM && addressLocation == AF_INET)) {
+        // only handle TCP network sockets with RDMA
+        // TODO: probably allow more fine grained control over which socket should be over RDMA
+        return SUCCESS;
+    }
+
+    try {
+        bridge[client_socket] = std::make_unique<RDMAMessageBuffer>(4 * 1024, client_socket);
+    } catch (...) {
+        return ERROR;
+    }
+    return SUCCESS;
+}
+
+/******************** CLIENT OVERRIDES ********************/
 
 extern "C"
 int connect(int fd, const sockaddr *address, socklen_t length) {
@@ -46,7 +87,7 @@ int connect(int fd, const sockaddr *address, socklen_t length) {
     {
         struct sockaddr_storage options;
         socklen_t size = sizeof(options);
-        if (real::getsockname(fd, (struct sockaddr *) &options, &size) < 0) {
+        if (getpeername(fd, (struct sockaddr *) &options, &size) < 0) {
             return ERROR;
         }
         addressLocation = options.ss_family;
@@ -90,21 +131,6 @@ ssize_t read(int fd, void *destination, size_t requested_bytes) {
 }
 
 /******************** COMMON OVERRIDES ********************/
-
-extern "C"
-int getsockopt(int fd, int level, int option_name, void *option_value, socklen_t *option_len) {
-    return real::getsockopt(fd, level, option_name, option_value, option_len);
-}
-
-extern "C"
-int getsockname(int fd, struct sockaddr *addr, socklen_t *addrlen) {
-    return real::getsockname(fd, addr, addrlen);
-}
-
-extern "C"
-int setsockopt(int fd, int level, int option_name, const void *option_value, socklen_t option_len) {
-    return real::setsockopt(fd, level, option_name, option_value, option_len);
-}
 
 extern "C"
 int close(int fd) {

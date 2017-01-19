@@ -30,5 +30,5 @@ add_executable(tcpPingPong tcpPingPong.cpp)
 add_executable(rdmaPingPong rdmaPingPong.cpp ${SOURCE_FILES})
 target_link_libraries(rdmaPingPong pthread ibverbs)
 
-add_library(Test socket_overrides/client-overrides.cpp ${SOURCE_FILES} socket_overrides/realFunctions.h)
+add_library(Test SHARED socket_overrides/client-overrides.cpp ${SOURCE_FILES} socket_overrides/realFunctions.h)
 target_link_libraries(Test pthread ibverbs)
