@@ -1,6 +1,7 @@
 #ifndef RDMA_HASH_MAP_RDMAMESSAGEBUFFER_H
 #define RDMA_HASH_MAP_RDMAMESSAGEBUFFER_H
 
+#include <atomic>
 #include "rdma/Network.hpp"
 #include "rdma/CompletionQueuePair.hpp"
 #include "rdma/QueuePair.hpp"
@@ -26,7 +27,8 @@ private:
     const size_t size;
     RDMANetworking net;
     std::unique_ptr<volatile uint8_t[]> receiveBuffer;
-    size_t readPos = 0;
+    std::atomic<size_t> readPos{0};
+    static_assert(sizeof(readPos) == 8, "blub");
     std::unique_ptr<uint8_t[]> sendBuffer;
     size_t sendPos = 0;
     volatile size_t currentRemoteReceive = 0;
