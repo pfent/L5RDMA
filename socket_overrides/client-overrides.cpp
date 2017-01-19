@@ -61,7 +61,7 @@ int accept(int server_socket, sockaddr* address, socklen_t * length) {
     } catch (...) {
         return ERROR;
     }
-    return SUCCESS;
+    return client_socket;
 }
 
 /******************** CLIENT OVERRIDES ********************/
