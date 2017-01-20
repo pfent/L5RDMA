@@ -17,10 +17,12 @@ struct RDMANetworking {
 
 class RDMAMessageBuffer {
 public:
+
     void send(const uint8_t *data, size_t length);
 
     std::vector<uint8_t> receive();
 
+    // Construct a message buffer of the given size, exchanging RDMA networking information over the given socket
     RDMAMessageBuffer(size_t size, int sock);
 
 private:
@@ -28,7 +30,6 @@ private:
     RDMANetworking net;
     std::unique_ptr<volatile uint8_t[]> receiveBuffer;
     std::atomic<size_t> readPos{0};
-    static_assert(sizeof(readPos) == 8, "blub");
     std::unique_ptr<uint8_t[]> sendBuffer;
     size_t sendPos = 0;
     volatile size_t currentRemoteReceive = 0;

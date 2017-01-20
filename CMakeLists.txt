@@ -25,7 +25,7 @@ include_directories(..)
 add_executable(minimal minimal.cpp ${SOURCE_FILES})
 target_link_libraries(minimal ibverbs)
 
-add_executable(tcpPingPong tcpPingPong.cpp)
+add_executable(tcpPingPong tcpPingPong.cpp tcpWrapper.cpp)
 
 add_executable(rdmaPingPong rdmaPingPong.cpp ${SOURCE_FILES})
 target_link_libraries(rdmaPingPong ibverbs)

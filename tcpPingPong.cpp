@@ -1,11 +1,10 @@
 #include <iostream>
-#include <sys/socket.h>
-#include <netinet/in.h>
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <algorithm>
 #include <chrono>
 #include "rdma/Network.hpp"
+#include "tcpWrapper.h"
 
 using namespace std;
 using namespace rdma;
@@ -18,10 +17,7 @@ int main(int argc, char **argv) {
     const auto isClient = argv[1][0] == 'c';
     const auto port = atoi(argv[2]);
 
-    auto sock = socket(AF_INET, SOCK_STREAM, 0);
-    if (sock < 0) {
-        throw runtime_error{"Could not open socket"};
-    }
+    auto sock = tcp_socket();
 
     static const size_t MESSAGES = 1024 * 128;
     static const size_t BUFFER_SIZE = 64;
@@ -35,18 +31,15 @@ int main(int argc, char **argv) {
         addr.sin_port = htons(port);
         inet_pton(AF_INET, argv[3], &addr.sin_addr);
 
-        if (connect(sock, (sockaddr *) &addr, sizeof addr) < 0) {
-            throw runtime_error{"error connect'ing"};
-        }
+        tcp_connect(sock, addr);
         const auto start = chrono::steady_clock::now();
         for (size_t i = 0; i < MESSAGES; ++i) {
-            if (write(sock, DATA, BUFFER_SIZE) < 0) {
-                throw runtime_error{"error write'ing"};
-            }
+            tcp_write(sock, DATA, BUFFER_SIZE);
+
             fill(begin(buffer), end(buffer), 0);
-            if (read(sock, buffer, BUFFER_SIZE) < 0) {
-                throw runtime_error{"error read'ing"};
-            }
+
+            tcp_read(sock, buffer, BUFFER_SIZE);
+
             for (size_t j = 0; j < BUFFER_SIZE; ++j) {
                 if (buffer[j] != DATA[j]) {
                     throw runtime_error{"expected '1~9', received " + string(begin(buffer), end(buffer))};
@@ -63,24 +56,15 @@ int main(int argc, char **argv) {
         addr.sin_family = AF_INET;
         addr.sin_port = htons(port);
         addr.sin_addr.s_addr = INADDR_ANY;
-        if (bind(sock, (sockaddr *) &addr, sizeof addr) < 0) {
-            throw runtime_error{"error bind'ing"};
-        }
+
+        tcp_bind(sock, addr);
         listen(sock, SOMAXCONN);
         sockaddr_in inAddr;
-        socklen_t inAddrLen = sizeof inAddr;
         for (;;) {
-            auto acced = accept(sock, (sockaddr *) &inAddr, &inAddrLen);
-            if (acced < 0) {
-                throw runtime_error{"error accept'ing"};
-            }
+            const auto acced = tcp_accept(sock, inAddr);
             for (size_t i = 0; i < MESSAGES; ++i) {
-                if (read(acced, buffer, BUFFER_SIZE) < 0) {
-                    throw runtime_error{"error read'ing"};
-                }
-                if (write(acced, buffer, BUFFER_SIZE) < 0) {
-                    throw runtime_error{"error write'ing"};
-                }
+                tcp_read(acced, buffer, BUFFER_SIZE);
+                tcp_write(acced, buffer, BUFFER_SIZE);
             }
             close(acced);
         }
