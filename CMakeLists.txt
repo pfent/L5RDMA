@@ -4,7 +4,7 @@ project(rdma_hash_map)
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pedantic -Wall -Wextra -Wnon-virtual-dtor -fshow-column -pipe -march=native")
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -ggdb3 -O0 -DDEBUG -fsanitize=undefined -fsanitize=address -fsanitize=leak")
-set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -ggdb3 -O1 -DNDEBUG")
+set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3 -flto -DNDEBUG -fvisibility=hidden")
 
 set(SOURCE_FILES
         rdma/CompletionQueuePair.cpp
@@ -17,18 +17,18 @@ set(SOURCE_FILES
         RDMAMessageBuffer.cpp
         )
 set(OVERRIDES_FILES
-        socket_overrides/common-overrides.cpp
-        socket_overrides/client-overrides.cpp socket_overrides/server-overrides.cpp socket_overrides/socket-overrides.h)
+        fileDescriptorOverrides/overrides.cpp
+        fileDescriptorOverrides/realFunctions.cpp)
 
 include_directories(..)
 
 add_executable(minimal minimal.cpp ${SOURCE_FILES})
-target_link_libraries(minimal pthread ibverbs)
+target_link_libraries(minimal ibverbs)
 
 add_executable(tcpPingPong tcpPingPong.cpp)
 
 add_executable(rdmaPingPong rdmaPingPong.cpp ${SOURCE_FILES})
-target_link_libraries(rdmaPingPong pthread ibverbs)
+target_link_libraries(rdmaPingPong ibverbs)
 
-add_library(Test SHARED socket_overrides/client-overrides.cpp ${SOURCE_FILES} socket_overrides/realFunctions.h)
-target_link_libraries(Test pthread ibverbs)
+add_library(Test SHARED ${SOURCE_FILES} ${OVERRIDES_FILES})
+target_link_libraries(Test ibverbs)

@@ -1,30 +1,20 @@
-#include <stdio.h>
-#include <dlfcn.h>
 #include <sys/socket.h>
 #include <iostream>
 #include <unordered_map>
 #include <cstring>
 
-#include "socket-overrides.h"
 #include "rdma_tests/RDMAMessageBuffer.h"
 #include "realFunctions.h"
+#include "overrides.h"
 
-/**** GLOBAL *****/
-
-#define ERROR -1
-#define SUCCESS 0
-
-std::unordered_map<int, std::unique_ptr<RDMAMessageBuffer>> bridge;
+static std::unordered_map<int, std::unique_ptr<RDMAMessageBuffer>> bridge;
 
 template<typename T>
 void warn(T msg) {
     std::cerr << msg << std::endl;
 }
 
-/******************** SERVER OVERRIDES ********************/
-
-extern "C"
-int accept(int server_socket, sockaddr* address, socklen_t * length) {
+int accept(int server_socket, sockaddr *address, socklen_t *length) {
     int client_socket = real::accept(server_socket, address, length);
     if (client_socket < 0) {
         return ERROR;
@@ -64,9 +54,6 @@ int accept(int server_socket, sockaddr* address, socklen_t * length) {
     return client_socket;
 }
 
-/******************** CLIENT OVERRIDES ********************/
-
-extern "C"
 int connect(int fd, const sockaddr *address, socklen_t length) {
     if (real::connect(fd, address, length) == ERROR) {
         return ERROR;
@@ -106,7 +93,6 @@ int connect(int fd, const sockaddr *address, socklen_t length) {
     return SUCCESS;
 }
 
-extern "C"
 ssize_t write(int fd, const void *source, size_t requested_bytes) {
     if (bridge.find(fd) != bridge.end()) {
         // TODO: check if server is still alive
@@ -116,7 +102,6 @@ ssize_t write(int fd, const void *source, size_t requested_bytes) {
     return real::write(fd, source, requested_bytes);
 }
 
-extern "C"
 ssize_t read(int fd, void *destination, size_t requested_bytes) {
     if (bridge.find(fd) != bridge.end()) {
         // TODO: check if server is still alive
@@ -130,9 +115,6 @@ ssize_t read(int fd, void *destination, size_t requested_bytes) {
     return real::read(fd, destination, requested_bytes);
 }
 
-/******************** COMMON OVERRIDES ********************/
-
-extern "C"
 int close(int fd) {
 /* TODO
     // epoll is linux only
@@ -151,7 +133,6 @@ int close(int fd) {
     return real::close(fd);
 }
 
-extern "C"
 ssize_t send(int fd, const void *buffer, size_t length, int flags) {
 // For now: We forward the call to write for a certain set of
 // flags, which we chose to ignore. By putting them here explicitly,
@@ -169,7 +150,6 @@ ssize_t send(int fd, const void *buffer, size_t length, int flags) {
     }
 }
 
-extern "C"
 ssize_t recv(int fd, void *buffer, size_t length, int flags) {
 #ifdef __APPLE__
     if (flags == 0) {
@@ -183,30 +163,6 @@ ssize_t recv(int fd, void *buffer, size_t length, int flags) {
     }
 }
 
-extern "C"
-ssize_t
-sendto(int fd, const void *buffer, size_t length, int flags, const struct sockaddr *dest_addr, socklen_t addrlen) {
-    // When the destination address is null, then this should be a stream socket
-    if (dest_addr == NULL) {
-        return send(fd, buffer, length, flags);
-    } else {
-        // Connection-less sockets (UDP) sockets never use TSSX anyway
-        return real::sendto(fd, buffer, length, flags, dest_addr, addrlen);
-    }
-}
-
-extern "C"
-ssize_t recvfrom(int fd, void *buffer, size_t length, int flags, struct sockaddr *src_addr, socklen_t *addrlen) {
-    // When the destination address is null, then this should be a stream socket
-    if (src_addr == NULL) {
-        return recv(fd, buffer, length, flags);
-    } else {
-        // Connection-Less sockets (UDP) sockets never use TSSX anyway
-        return real::recvfrom(fd, buffer, length, flags, src_addr, addrlen);
-    }
-}
-
-extern "C"
 ssize_t sendmsg(int fd, const struct msghdr *msg, int flags) {
     // This one is hard to implemenet because the `msghdr` struct contains
     // an iovec pointer, which points to an array of iovec structs. Each such
@@ -224,7 +180,6 @@ ssize_t sendmsg(int fd, const struct msghdr *msg, int flags) {
     }
 }
 
-extern "C"
 ssize_t recvmsg(int fd, struct msghdr *msg, int flags) {
     if (msg->msg_iovlen == 1) {
         return recvfrom(fd, msg->msg_iov[0].iov_base, msg->msg_iov[0].iov_len, flags, (struct sockaddr *) msg->msg_name,
@@ -232,5 +187,26 @@ ssize_t recvmsg(int fd, struct msghdr *msg, int flags) {
     } else {
         warn("Routing recvmsg to socket (too many buffers)");
         return real::recvmsg(fd, msg, flags);
+    }
+}
+
+ssize_t
+sendto(int fd, const void *buffer, size_t length, int flags, const struct sockaddr *dest_addr, socklen_t addrlen) {
+    // When the destination address is null, then this should be a stream socket
+    if (dest_addr == NULL) {
+        return send(fd, buffer, length, flags);
+    } else {
+        // Connection-less sockets (UDP) sockets never use TSSX anyway
+        return real::sendto(fd, buffer, length, flags, dest_addr, addrlen);
+    }
+}
+
+ssize_t recvfrom(int fd, void *buffer, size_t length, int flags, struct sockaddr *src_addr, socklen_t *addrlen) {
+    // When the destination address is null, then this should be a stream socket
+    if (src_addr == NULL) {
+        return recv(fd, buffer, length, flags);
+    } else {
+        // Connection-Less sockets (UDP) sockets never use TSSX anyway
+        return real::recvfrom(fd, buffer, length, flags, src_addr, addrlen);
     }
 }

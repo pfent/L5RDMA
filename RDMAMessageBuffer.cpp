@@ -11,20 +11,6 @@ using namespace rdma;
 
 static const size_t validity = 0xDEADDEADBEEFBEEF;
 
-template<typename T>
-void dumpBuffer(T begin, T end) {
-    for (int i = 0; begin != end; ++begin, ++i) {
-        if (i % 8 == 0) {
-            cout << "\t";
-        }
-        if (i % 16 == 0) {
-            cout << "\n";
-        }
-        cout << hex << setw(2) << (int) *begin << " ";
-    }
-    cout << dec << endl;
-}
-
 static inline void receiveAndSetupRmr(int sock, RemoteMemoryRegion &buffer, RemoteMemoryRegion &readPos) {
     struct {
         uint32_t bufferKey;
