@@ -8,6 +8,7 @@
 #include "overrides.h"
 
 static std::unordered_map<int, std::unique_ptr<RDMAMessageBuffer>> bridge;
+static bool forked = false;
 
 template<typename T>
 void warn(T msg) {
@@ -127,7 +128,9 @@ int close(int fd) {
     }
 #else
  */
-    bridge.erase(fd);
+    if (not forked) {
+        bridge.erase(fd);
+    }
 //#endif
 
     return real::close(fd);
@@ -209,4 +212,9 @@ ssize_t recvfrom(int fd, void *buffer, size_t length, int flags, struct sockaddr
         // Connection-Less sockets (UDP) sockets never use TSSX anyway
         return real::recvfrom(fd, buffer, length, flags, src_addr, addrlen);
     }
+}
+
+pid_t fork(void) {
+    forked = true;
+    return real::fork();
 }

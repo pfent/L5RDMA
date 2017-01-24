@@ -36,6 +36,8 @@ ssize_t
 sendto(int fd, const void *buffer, size_t length, int flags, const struct sockaddr *dest_addr, socklen_t addrlen);
 
 ssize_t sendmsg(int fd, const struct msghdr *msg, int flags);
+
+pid_t fork(void);
 }
 
 #pragma GCC visibility pop
