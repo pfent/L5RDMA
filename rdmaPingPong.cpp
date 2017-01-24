@@ -18,6 +18,7 @@ int main(int argc, char **argv) {
     const auto port = ::atoi(argv[2]);
 
     static const size_t MESSAGES = 1024 * 128;
+    static const size_t BUFFERSIZE = 1024 * 16; // 16K
 
     if (isClient) {
         sockaddr_in addr;
@@ -29,7 +30,7 @@ int main(int argc, char **argv) {
         tcp_connect(sock, addr);
 
         auto sendData = array<uint8_t, 64>{"0123456789@ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"};
-        RDMAMessageBuffer rdma(128, sock);
+        RDMAMessageBuffer rdma(BUFFERSIZE, sock);
 
         const auto start = chrono::steady_clock::now();
         for (size_t i = 0; i < MESSAGES; ++i) {
@@ -62,7 +63,7 @@ int main(int argc, char **argv) {
 
         auto acced = tcp_accept(sock, inAddr);
 
-        RDMAMessageBuffer rdma(128, acced);
+        RDMAMessageBuffer rdma(BUFFERSIZE, acced);
 
         for (size_t i = 0; i < MESSAGES; ++i) {
             auto ping = rdma.receive();

@@ -241,7 +241,7 @@ void QueuePair::printQueuePairDetails()
    cout << left << setw(44) << "alt_timeout:" << static_cast<int>(attr.alt_timeout) << endl;
 }
 
-    size_t QueuePair::getMaxInlineSize() {
+    uint32_t QueuePair::getMaxInlineSize() {
         return maxInlineSize;
     }
 //---------------------------------------------------------------------------
