@@ -13,29 +13,30 @@
  * We don't need the socket() and listen() syscalls, since the default behaviour is perfectly fine.
  */
 
-extern "C" int accept(int server_socket, sockaddr *address, socklen_t *length);
+extern "C" {
+int accept(int server_socket, sockaddr *address, socklen_t *length);
 
-extern "C" int connect(int fd, const sockaddr *address, socklen_t length);
+int connect(int fd, const sockaddr *address, socklen_t length);
 
-extern "C" ssize_t write(int fd, const void *source, size_t requested_bytes);
+int close(int fd);
 
-extern "C" ssize_t read(int fd, void *destination, size_t requested_bytes);
+ssize_t write(int fd, const void *source, size_t requested_bytes);
 
-extern "C" int close(int fd);
+ssize_t read(int fd, void *destination, size_t requested_bytes);
 
-extern "C" ssize_t send(int fd, const void *buffer, size_t length, int flags);
+ssize_t recv(int fd, void *buffer, size_t length, int flags);
 
-extern "C" ssize_t
+ssize_t recvfrom(int fd, void *buffer, size_t length, int flags, struct sockaddr *src_addr, socklen_t *addrlen);
+
+ssize_t recvmsg(int fd, struct msghdr *msg, int flags);
+
+ssize_t send(int fd, const void *buffer, size_t length, int flags);
+
+ssize_t
 sendto(int fd, const void *buffer, size_t length, int flags, const struct sockaddr *dest_addr, socklen_t addrlen);
 
-extern "C" ssize_t
-recvfrom(int fd, void *buffer, size_t length, int flags, struct sockaddr *src_addr, socklen_t *addrlen);
-
-extern "C" ssize_t recv(int fd, void *buffer, size_t length, int flags);
-
-extern "C" ssize_t sendmsg(int fd, const struct msghdr *msg, int flags);
-
-extern "C" ssize_t recvmsg(int fd, struct msghdr *msg, int flags);
+ssize_t sendmsg(int fd, const struct msghdr *msg, int flags);
+}
 
 #pragma GCC visibility pop
 #endif //OVERRIDES_H

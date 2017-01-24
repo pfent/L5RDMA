@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.0)
-project(rdma_hash_map)
+project(rdma_sockets)
 
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pedantic -Wall -Wextra -Wnon-virtual-dtor -fshow-column -pipe -march=native")

@@ -115,6 +115,14 @@ namespace rdma {
         wr->opcode = IBV_WR_RDMA_WRITE;
     }
 
+    void WriteWorkRequest::setSendInline(bool flag) {
+        if (flag) {
+            wr->send_flags |= IBV_SEND_INLINE;
+        } else {
+            wr->send_flags &= not IBV_SEND_INLINE;
+        }
+    }
+
 //---------------------------------------------------------------------------
     ReadWorkRequest::ReadWorkRequest() {
         wr->opcode = IBV_WR_RDMA_READ;
@@ -213,12 +221,16 @@ namespace rdma {
 
     WriteWorkRequestBuilder::WriteWorkRequestBuilder(const MemoryRegion &localAddress, const RemoteMemoryRegion &remoteAddress,
                                        bool completion) {
+        size = localAddress.size;
         wr.setLocalAddress(localAddress);
         wr.setRemoteAddress(remoteAddress);
         wr.setCompletion(completion);
     }
 
     WriteWorkRequestBuilder& WriteWorkRequestBuilder::send(QueuePair &qp) {
+        if (qp.getMaxInlineSize() > size) {
+            wr.setSendInline(true);
+        }
         qp.postWorkRequest(wr);
         return *this;
     }

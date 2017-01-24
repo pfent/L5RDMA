@@ -20,7 +20,6 @@
 // ---------------------------------------------------------------------------
 #include "QueuePair.hpp"
 #include "WorkRequest.hpp"
-#include "MemoryRegion.hpp"
 #include "Network.hpp"
 #include "ReceiveQueue.hpp"
 #include "CompletionQueuePair.hpp"
@@ -33,6 +32,8 @@
 using namespace std;
 //---------------------------------------------------------------------------
 namespace rdma {
+
+    static const uint32_t maxInlineSize = 512;
 //---------------------------------------------------------------------------
 QueuePair::QueuePair(Network &network)
         : QueuePair(network, *network.sharedCompletionQueuePair, *network.sharedReceiveQueue)
@@ -63,7 +64,7 @@ QueuePair::QueuePair(Network &network, CompletionQueuePair &completionQueuePair,
    queuePairAttributes.cap.max_recv_wr = 16351;                    // Requested max number of outstanding WRs in the RQ
    queuePairAttributes.cap.max_send_sge = 1;                       // Requested max number of scatter/gather elements in a WR in the SQ
    queuePairAttributes.cap.max_recv_sge = 1;                       // Requested max number of scatter/gather elements in a WR in the RQ
-   queuePairAttributes.cap.max_inline_data = 512;                  // Requested max number of bytes that can be posted inline to the SQ, otherwise 0
+    queuePairAttributes.cap.max_inline_data = maxInlineSize;        // Requested max number of bytes that can be posted inline to the SQ, otherwise 0
    queuePairAttributes.qp_type = IBV_QPT_RC;                       // QP Transport Service Type: IBV_QPT_RC (reliable connection), IBV_QPT_UC (unreliable connection), or IBV_QPT_UD (unreliable datagram)
    queuePairAttributes.sq_sig_all = 0;                             // If set, each Work Request (WR) submitted to the SQ generates a completion entry
 
@@ -239,6 +240,10 @@ void QueuePair::printQueuePairDetails()
    cout << left << setw(44) << "alt_port_num:" << static_cast<int>(attr.alt_port_num) << endl;
    cout << left << setw(44) << "alt_timeout:" << static_cast<int>(attr.alt_timeout) << endl;
 }
+
+    size_t QueuePair::getMaxInlineSize() {
+        return maxInlineSize;
+    }
 //---------------------------------------------------------------------------
 } // End of namespace rdma
 //---------------------------------------------------------------------------

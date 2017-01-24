@@ -119,10 +119,17 @@ namespace rdma {
     class WriteWorkRequest : public RDMAWorkRequest {
     public:
         WriteWorkRequest();
+
+        /// Sets the IBV_SEND_INLINE flag.
+        /// Only set this flag, if you know that the total message size is below the maximum inline message size. This
+        /// depends on the QueuePair, specifically "qp_init_attr->cap->max_inline_data"
+        /// This flag can only be set on Write / Send requests
+        void setSendInline(bool flag);
     };
 
     class WriteWorkRequestBuilder {
         WriteWorkRequest wr;
+        size_t size;
     public:
         WriteWorkRequestBuilder(const MemoryRegion &localAddress, const RemoteMemoryRegion &remoteAddress,
                                 bool completion);
