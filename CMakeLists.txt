@@ -27,6 +27,9 @@ target_link_libraries(minimal ibverbs)
 
 add_executable(tcpPingPong tcpPingPong.cpp tcpWrapper.cpp)
 
+add_executable(rsocketsPingPong rsocketsPingPong.cpp)
+target_link_libraries(rsocketsPingPong rdmacm)
+
 add_executable(rdmaPingPong rdmaPingPong.cpp ${SOURCE_FILES})
 target_link_libraries(rdmaPingPong ibverbs)
 
