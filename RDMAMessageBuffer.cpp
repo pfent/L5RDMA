@@ -119,7 +119,7 @@ void RDMAMessageBuffer::writeToSendBuffer(const uint8_t *data, size_t sizeToWrit
     while (sizeToWrite > safeToWrite) {
         ReadWorkRequestBuilder(localCurrentRemoteReceive, remoteReadPos, true)
                 .send(net.queuePair);
-        net.completionQueue.pollSendCompletionQueue();
+        while (net.completionQueue.pollSendCompletionQueue() != 42);
         safeToWrite = size - (sendPos - currentRemoteReceive);
     }
     const size_t beginPos = sendPos % size;

@@ -201,6 +201,7 @@ namespace rdma {
         wr.setLocalAddress(localAddress);
         wr.setRemoteAddress(remoteAddress);
         wr.setCompletion(completion);
+        wr.setId(42);
     }
 
     ReadWorkRequestBuilder& ReadWorkRequestBuilder::setNextWorkRequest(const WorkRequest *workRequest) {
