@@ -1,5 +1,6 @@
 #include "realFunctions.h"
 #include <dlfcn.h>
+#include <cstdarg>
 
 long ::real::write(int fd, const void *data, size_t size) {
     using real_write_t = ssize_t (*)(int, const void *, size_t);
@@ -77,14 +78,15 @@ int ::real::getsockname(int fd, struct sockaddr *addr, socklen_t *addrlen) {
     return reinterpret_cast<real_getsockname_t>(dlsym(RTLD_NEXT, "getsockname"))(fd, addr, addrlen);
 }
 
-int ::real::fcntl_set_flags(int fd, int command, int flag) {
+int ::real::fcntl(int fd, int command, ...) {
+    va_list argument;
     using real_fcntl_t = int (*)(int, int, ...);
-    return reinterpret_cast<real_fcntl_t>(dlsym(RTLD_NEXT, "fcntl"))(fd, command, flag);
+    return reinterpret_cast<real_fcntl_t>(dlsym(RTLD_NEXT, "fcntl"))(fd, command, argument);
 }
 
-int ::real::fcntl_get_flags(int fd, int command) {
-    using real_fcntl_t = int (*)(int, int, ...);
-    return reinterpret_cast<real_fcntl_t>(dlsym(RTLD_NEXT, "fcntl"))(fd, command);
+int ::real::poll(struct pollfd fds[], nfds_t nfds, int timeout) {
+    using real_poll_t = int (*)(struct pollfd[], nfds_t, int);
+    return reinterpret_cast<real_poll_t>(dlsym(RTLD_NEXT, "poll"))(fds, nfds, timeout);
 }
 
 int ::real::fork() {

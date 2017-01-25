@@ -1,13 +1,14 @@
 #include <sys/socket.h>
 #include <iostream>
 #include <unordered_map>
+#include <map>
 #include <cstring>
 
 #include "rdma_tests/RDMAMessageBuffer.h"
 #include "realFunctions.h"
 #include "overrides.h"
 
-static std::unordered_map<int, std::unique_ptr<RDMAMessageBuffer>> bridge;
+static std::map<int, std::unique_ptr<RDMAMessageBuffer>> bridge;
 static bool forked = false;
 
 template<typename T>
@@ -48,6 +49,7 @@ int accept(int server_socket, sockaddr *address, socklen_t *length) {
     }
 
     try {
+        warn("RDMA accept");
         bridge[client_socket] = std::make_unique<RDMAMessageBuffer>(4 * 1024, client_socket);
     } catch (...) {
         return ERROR;
@@ -87,7 +89,8 @@ int connect(int fd, const sockaddr *address, socklen_t length) {
     }
 
     try {
-        bridge[fd] = std::make_unique<RDMAMessageBuffer>(4 * 1024, fd);
+        warn("RDMA connect");
+        bridge[fd] = std::make_unique<RDMAMessageBuffer>(16 * 1024, fd);
     } catch (...) {
         return ERROR;
     }
@@ -96,6 +99,7 @@ int connect(int fd, const sockaddr *address, socklen_t length) {
 
 ssize_t write(int fd, const void *source, size_t requested_bytes) {
     if (bridge.find(fd) != bridge.end()) {
+        warn("RDMA write");
         // TODO: check if server is still alive
         bridge[fd]->send((uint8_t *) source, requested_bytes);
         return SUCCESS;
@@ -105,6 +109,7 @@ ssize_t write(int fd, const void *source, size_t requested_bytes) {
 
 ssize_t read(int fd, void *destination, size_t requested_bytes) {
     if (bridge.find(fd) != bridge.end()) {
+        warn("RDMA read");
         // TODO: check if server is still alive
         auto res = bridge[fd]->receive();
         if (res.size() > requested_bytes) {
@@ -217,4 +222,55 @@ ssize_t recvfrom(int fd, void *buffer, size_t length, int flags, struct sockaddr
 pid_t fork(void) {
     forked = true;
     return real::fork();
+}
+
+int poll(struct pollfd *fds, nfds_t nfds, int timeout) {
+    auto start = std::chrono::steady_clock::now();
+    if (nfds == 0) return 0;
+
+    int event_count = 0;
+    std::vector<size_t> tssx_fds, normal_fds;
+    for (nfds_t index = 0; index < nfds; ++index) {
+        if (bridge.find(fds[index].fd) != bridge.end()) {
+            tssx_fds.push_back(index);
+        } else {
+            normal_fds.push_back(index);
+        }
+    }
+
+    if (tssx_fds.size() == 0) {
+        event_count = real::poll(fds, nfds, timeout);
+    } else if (normal_fds.size() == 0) {
+        warn("RDMA poll");
+        do {
+            // Do a full loop over all FDs
+            for (auto &i : tssx_fds) {
+                auto &msgBuf = bridge[i];
+                if (msgBuf->hasData()) {
+                    auto inFlag = fds[i].events & POLLIN;
+                    if (inFlag != 0) ++event_count;
+                    fds[i].revents |= inFlag;
+                }
+                auto outFlag = fds[i].events & POLLOUT;
+                if (outFlag != 0) ++event_count;
+                fds[i].revents |= outFlag;
+            }
+            if (event_count > 0) break;
+        } while (std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count() > timeout);
+    } else {
+        warn("can't do mixed RDMA / TCP yet");
+        return ERROR;
+    }
+
+    return event_count;
+}
+
+int fcntl(int fd, int command, ...) {
+    va_list args;
+    if (bridge.find(fd) != bridge.end()) {
+        warn("RDMA fcntl");
+        // we can probably support O_NONBLOCK
+        return ERROR;
+    }
+    return real::fcntl(fd, command, args);
 }

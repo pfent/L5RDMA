@@ -25,6 +25,8 @@ public:
     // Construct a message buffer of the given size, exchanging RDMA networking information over the given socket
     RDMAMessageBuffer(size_t size, int sock);
 
+    bool hasData();
+
 private:
     const size_t size;
     RDMANetworking net;

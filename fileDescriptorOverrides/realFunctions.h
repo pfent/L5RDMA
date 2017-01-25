@@ -1,8 +1,8 @@
 #ifndef REALFUNCTIONS_H
 #define REALFUNCTIONS_H
 
-#include <stdio.h>
 #include <sys/socket.h>
+#include <poll.h>
 
 namespace real {
     ssize_t write(int fd, const void *data, size_t size);
@@ -35,9 +35,9 @@ namespace real {
 
     int getsockname(int fd, struct sockaddr *addr, socklen_t *addrlen);
 
-    int fcntl_set_flags(int fd, int command, int flag);
+    int fcntl(int fd, int command, ...);
 
-    int fcntl_get_flags(int fd, int command);
+    int poll(struct pollfd fds[], nfds_t nfds, int timeout);
 
     pid_t fork();
 }

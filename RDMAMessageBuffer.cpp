@@ -164,6 +164,15 @@ void RDMAMessageBuffer::zeroReceiveBuffer(size_t beginReceiveCount, size_t sizeT
     }
 }
 
+bool RDMAMessageBuffer::hasData() {
+    size_t receiveSize;
+    auto receiveValidity = (decltype(validity)) 0;
+        readFromReceiveBuffer(readPos, (uint8_t *) &receiveSize, sizeof(receiveSize));
+        readFromReceiveBuffer(readPos + sizeof(receiveSize) + receiveSize, (uint8_t *) &receiveValidity,
+                              sizeof(receiveValidity));
+    return (receiveValidity == validity);
+}
+
 RDMANetworking::RDMANetworking(int sock) :
         completionQueue(network),
         queuePair(network, completionQueue) {
