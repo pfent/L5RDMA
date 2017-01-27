@@ -22,6 +22,8 @@ public:
 
     std::vector<uint8_t> receive();
 
+    size_t receive(void *whereTo, size_t maxSize);
+
     // Construct a message buffer of the given size, exchanging RDMA networking information over the given socket
     RDMAMessageBuffer(size_t size, int sock);
 

@@ -65,6 +65,25 @@ vector<uint8_t> RDMAMessageBuffer::receive() {
     return result;
 }
 
+size_t RDMAMessageBuffer::receive(void *whereTo, size_t maxSize) {
+    size_t receiveSize;
+    auto receiveValidity = (decltype(validity)) 0;
+    do {
+        readFromReceiveBuffer(readPos, (uint8_t *) &receiveSize, sizeof(receiveSize));
+        readFromReceiveBuffer(readPos + sizeof(receiveSize) + receiveSize, (uint8_t *) &receiveValidity,
+                              sizeof(receiveValidity));
+    } while (receiveValidity != validity);
+
+    if (receiveSize > maxSize)
+        throw runtime_error{"plz only read whole messages for now!"}; // probably buffer partially read msgs
+    readFromReceiveBuffer(readPos + sizeof(receiveSize), (uint8_t *) whereTo, receiveSize);
+    zeroReceiveBuffer(readPos, sizeof(receiveSize) + receiveSize + sizeof(validity));
+
+    readPos += sizeof(receiveSize) + receiveSize + sizeof(validity);
+
+    return receiveSize;
+}
+
 RDMAMessageBuffer::RDMAMessageBuffer(size_t size, int sock) :
         size(size),
         bitmask(size - 1),
@@ -90,6 +109,8 @@ RDMAMessageBuffer::RDMAMessageBuffer(size_t size, int sock) :
 void RDMAMessageBuffer::send(const uint8_t *data, size_t length) {
     const size_t sizeToWrite = sizeof(length) + length + sizeof(validity);
     if (sizeToWrite > size) throw runtime_error{"data > buffersize!"};
+
+    // TODO: we can probably do a IBV_SEND_INLINE without actually writing to the sendbuffer
 
     const size_t beginPos = sendPos & bitmask;
     const size_t endPos = (sendPos + sizeToWrite - 1) & bitmask;
@@ -173,9 +194,9 @@ void RDMAMessageBuffer::zeroReceiveBuffer(size_t beginReceiveCount, size_t sizeT
 bool RDMAMessageBuffer::hasData() {
     size_t receiveSize;
     auto receiveValidity = (decltype(validity)) 0;
-        readFromReceiveBuffer(readPos, (uint8_t *) &receiveSize, sizeof(receiveSize));
-        readFromReceiveBuffer(readPos + sizeof(receiveSize) + receiveSize, (uint8_t *) &receiveValidity,
-                              sizeof(receiveValidity));
+    readFromReceiveBuffer(readPos, (uint8_t *) &receiveSize, sizeof(receiveSize));
+    readFromReceiveBuffer(readPos + sizeof(receiveSize) + receiveSize, (uint8_t *) &receiveValidity,
+                          sizeof(receiveValidity));
     return (receiveValidity == validity);
 }
 

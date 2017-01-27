@@ -102,7 +102,6 @@ int connect(int fd, const sockaddr *address, socklen_t length) {
 
 ssize_t write(int fd, const void *source, size_t requested_bytes) {
     if (bridge.find(fd) != bridge.end()) {
-        // warn("RDMA write");
         // TODO: check if server is still alive
         bridge[fd]->send((uint8_t *) source, requested_bytes);
         return SUCCESS;
@@ -112,14 +111,13 @@ ssize_t write(int fd, const void *source, size_t requested_bytes) {
 
 ssize_t read(int fd, void *destination, size_t requested_bytes) {
     if (bridge.find(fd) != bridge.end()) {
-        // warn("RDMA read");
         // TODO: check if server is still alive
-        auto res = bridge[fd]->receive();
-        if (res.size() > requested_bytes) {
-            return ERROR; // TODO
+        try {
+            return bridge[fd]->receive(destination, requested_bytes);
+        } catch (...) {
+            warn("something went wrong RDMA reading");
         }
-        memcpy(destination, res.data(), res.size());
-        return res.size();
+        return ERROR;
     }
     return real::read(fd, destination, requested_bytes);
 }
