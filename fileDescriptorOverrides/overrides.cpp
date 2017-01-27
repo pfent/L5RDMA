@@ -12,6 +12,8 @@
 static std::map<int, std::unique_ptr<RDMAMessageBuffer>> bridge;
 static bool forked = false;
 
+static const size_t BUFFER_SIZE = 16 * 1024;
+
 template<typename T>
 void warn(T msg) {
     std::cerr << msg << std::endl;
@@ -51,7 +53,7 @@ int accept(int server_socket, sockaddr *address, socklen_t *length) {
 
     try {
         warn("RDMA accept");
-        bridge[client_socket] = std::make_unique<RDMAMessageBuffer>(4 * 1024, client_socket);
+        bridge[client_socket] = std::make_unique<RDMAMessageBuffer>(BUFFER_SIZE, client_socket);
     } catch (...) {
         return ERROR;
     }
@@ -91,7 +93,7 @@ int connect(int fd, const sockaddr *address, socklen_t length) {
 
     try {
         warn("RDMA connect");
-        bridge[fd] = std::make_unique<RDMAMessageBuffer>(16 * 1024, fd);
+        bridge[fd] = std::make_unique<RDMAMessageBuffer>(BUFFER_SIZE, fd);
     } catch (...) {
         return ERROR;
     }
@@ -100,7 +102,7 @@ int connect(int fd, const sockaddr *address, socklen_t length) {
 
 ssize_t write(int fd, const void *source, size_t requested_bytes) {
     if (bridge.find(fd) != bridge.end()) {
-        warn("RDMA write");
+        // warn("RDMA write");
         // TODO: check if server is still alive
         bridge[fd]->send((uint8_t *) source, requested_bytes);
         return SUCCESS;
@@ -110,7 +112,7 @@ ssize_t write(int fd, const void *source, size_t requested_bytes) {
 
 ssize_t read(int fd, void *destination, size_t requested_bytes) {
     if (bridge.find(fd) != bridge.end()) {
-        warn("RDMA read");
+        // warn("RDMA read");
         // TODO: check if server is still alive
         auto res = bridge[fd]->receive();
         if (res.size() > requested_bytes) {
