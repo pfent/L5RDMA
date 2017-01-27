@@ -39,6 +39,8 @@ namespace real {
 
     int poll(struct pollfd fds[], nfds_t nfds, int timeout);
 
+    int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *errorfds, struct timeval *timeout);
+
     pid_t fork();
 }
 

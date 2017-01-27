@@ -8,6 +8,7 @@
 #include "realFunctions.h"
 #include "overrides.h"
 
+// unordered_map does not like to be 0 initialized, so we can't use it here
 static std::map<int, std::unique_ptr<RDMAMessageBuffer>> bridge;
 static bool forked = false;
 
@@ -262,6 +263,12 @@ int poll(struct pollfd *fds, nfds_t nfds, int timeout) {
         return ERROR;
     }
 
+    // This is necessary for repeated calls with the same poll structures
+    // (the kernel probably does this internally first too)
+    for (size_t i = 0; i < nfds; ++i) {
+        fds[i].revents = 0;
+    }
+
     return event_count;
 }
 
@@ -273,4 +280,146 @@ int fcntl(int fd, int command, ...) {
         return ERROR;
     }
     return real::fcntl(fd, command, args);
+}
+
+/***********************************/
+// Select stuff here.
+
+typedef struct DescriptorSets {
+    fd_set *readfds;
+    fd_set *writefds;
+    fd_set *errorfds;
+} DescriptorSets;
+
+bool _fd_is_set(int fd, const fd_set *set) {
+    return set != NULL && FD_ISSET(fd, set);
+}
+
+bool _is_in_any_set(int fd, const DescriptorSets *sets) {
+    if (_fd_is_set(fd, sets->readfds)) return true;
+    if (_fd_is_set(fd, sets->writefds)) return true;
+    if (_fd_is_set(fd, sets->errorfds)) return true;
+
+    return false;
+}
+
+void _count_tssx_sockets(size_t highest_fd, const DescriptorSets *sets, size_t *lowest_fd, size_t *normal_count,
+                         size_t *tssx_count) {
+    *normal_count = 0;
+    *tssx_count = 0;
+    *lowest_fd = highest_fd;
+
+    for (size_t fd = 0; fd < highest_fd; ++fd) {
+        if (_is_in_any_set(fd, sets)) {
+            if (fd < *lowest_fd) {
+                *lowest_fd = fd;
+            }
+            if (bridge.find(fd) != bridge.end()) {
+                ++(*tssx_count);
+            } else {
+                ++(*normal_count);
+            }
+        }
+    }
+}
+
+void _copy_set(fd_set *destination, const fd_set *source) {
+    if (source == NULL) {
+        FD_ZERO(destination);
+    } else {
+        *destination = *source;
+    }
+}
+
+void _clear_set(fd_set *set) {
+    if (set != NULL) FD_ZERO(set);
+}
+
+void _clear_all_sets(DescriptorSets *sets) {
+    _clear_set(sets->readfds);
+    _clear_set(sets->writefds);
+    _clear_set(sets->errorfds);
+}
+
+void _copy_all_sets(DescriptorSets *destination, const DescriptorSets *source) {
+    _copy_set(destination->readfds, source->readfds);
+    _copy_set(destination->writefds, source->writefds);
+    _copy_set(destination->errorfds, source->errorfds);
+}
+
+int timeval_to_milliseconds(const struct timeval *time) {
+    int milliseconds;
+
+    milliseconds = time->tv_sec * 1000;
+    milliseconds += time->tv_usec / 1000;
+
+    return milliseconds;
+}
+
+bool _waiting_and_ready_for_select_read(int fd, std::unique_ptr<RDMAMessageBuffer> &session, fd_set *operation) {
+    if (!_fd_is_set(fd, operation)) return false;
+
+    return session->hasData();
+}
+
+bool _waiting_and_ready_for_select_write(int fd, std::unique_ptr<RDMAMessageBuffer> &, fd_set *operation) {
+    if (!_fd_is_set(fd, operation)) return false;
+
+    return true;
+}
+
+bool _check_select_events(int fd, std::unique_ptr<RDMAMessageBuffer> &session, DescriptorSets *sets) {
+    bool activity = false;
+
+    if (_waiting_and_ready_for_select_read(fd, session, sets->readfds)) {
+        activity = true;
+    }
+
+    if (_waiting_and_ready_for_select_write(fd, session, sets->writefds)) {
+        activity = true;
+    }
+
+    return activity;
+}
+
+int _select_on_tssx_only(DescriptorSets *sets, size_t, size_t lowest_fd, size_t highest_fd,
+                         struct timeval *timeout) {
+
+    auto start = std::chrono::steady_clock::now();
+    int ready_count = 0;
+    int milliseconds = timeout ? timeval_to_milliseconds(timeout) : -1;
+
+    fd_set readfds, writefds, errorfds;
+    DescriptorSets original = {&readfds, &writefds, &errorfds};
+    _copy_all_sets(&original, sets);
+    _clear_all_sets(sets);
+
+    // Do-while for the case of non-blocking
+    // so that we do at least one iteration
+    do {
+        for (size_t fd = lowest_fd; fd < highest_fd; ++fd) {
+            auto &session = bridge[fd];
+            if (_check_select_events(fd, session, &original)) ++ready_count;
+        }
+        if (ready_count > 0) break;
+    } while (std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count() >
+             milliseconds);
+
+    return ready_count;
+}
+
+int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *errorfds, struct timeval *timeout) {
+    DescriptorSets sets = {readfds, writefds, errorfds};
+    size_t tssx_count, normal_count, lowest_fd;
+    _count_tssx_sockets(nfds, &sets, &lowest_fd, &normal_count, &tssx_count);
+
+    if (normal_count == 0) {
+        return _select_on_tssx_only(&sets, tssx_count, lowest_fd, nfds, timeout);
+    } else if (tssx_count == 0) {
+        return real::select(nfds, readfds, writefds, errorfds, timeout);
+    } else {
+        warn("can't do mixed RDMA / TCP yet");
+        return ERROR;
+        //return _forward_to_poll(nfds, &sets, tssx_count + normal_count, timeout);
+    }
 }

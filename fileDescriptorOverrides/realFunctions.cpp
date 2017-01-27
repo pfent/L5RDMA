@@ -93,3 +93,8 @@ int ::real::fork() {
     using real_fork_t = pid_t (*)();
     return reinterpret_cast<real_fork_t>(dlsym(RTLD_NEXT, "fork"))();
 }
+
+int ::real::select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *errorfds, struct timeval *timeout) {
+    using real_select_t = int (*)(int, fd_set *, fd_set *, fd_set *, struct timeval *);
+    return reinterpret_cast<real_select_t>(dlsym(RTLD_NEXT, "select"))(nfds, readfds, writefds, errorfds, timeout);
+}

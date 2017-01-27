@@ -38,6 +38,8 @@ sendto(int fd, const void *buffer, size_t length, int flags, const struct sockad
 ssize_t sendmsg(int fd, const struct msghdr *msg, int flags);
 
 pid_t fork(void);
+
+int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *errorfds, struct timeval *timeout);
 }
 
 #pragma GCC visibility pop
