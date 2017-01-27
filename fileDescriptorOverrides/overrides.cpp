@@ -20,6 +20,7 @@ void warn(T msg) {
 }
 
 int accept(int server_socket, sockaddr *address, socklen_t *length) {
+    warn("accept");
     int client_socket = real::accept(server_socket, address, length);
     if (client_socket < 0) {
         return ERROR;
@@ -61,6 +62,8 @@ int accept(int server_socket, sockaddr *address, socklen_t *length) {
 }
 
 int connect(int fd, const sockaddr *address, socklen_t length) {
+    warn("connect");
+
     if (real::connect(fd, address, length) == ERROR) {
         return ERROR;
     }
@@ -86,7 +89,12 @@ int connect(int fd, const sockaddr *address, socklen_t length) {
         addressLocation = options.ss_family;
     }
 
+    warn("socketType");
+    warn(socketType);
+    warn("addressLocation");
+    warn(addressLocation);
     if (not(socketType == SOCK_STREAM && addressLocation == AF_INET)) {
+        warn("normal connect");
         // only handle TCP network sockets with RDMA
         return SUCCESS;
     }
@@ -123,6 +131,7 @@ ssize_t read(int fd, void *destination, size_t requested_bytes) {
 }
 
 int close(int fd) {
+    warn("close");
 /* TODO
     // epoll is linux only
 #ifdef __linux__
@@ -143,6 +152,7 @@ int close(int fd) {
 }
 
 ssize_t send(int fd, const void *buffer, size_t length, int flags) {
+    warn("send");
 // For now: We forward the call to write for a certain set of
 // flags, which we chose to ignore. By putting them here explicitly,
 // we make sure that we only ignore flags, which are not important.
@@ -160,6 +170,7 @@ ssize_t send(int fd, const void *buffer, size_t length, int flags) {
 }
 
 ssize_t recv(int fd, void *buffer, size_t length, int flags) {
+    warn("recv");
 #ifdef __APPLE__
     if (flags == 0) {
 #else
@@ -173,6 +184,7 @@ ssize_t recv(int fd, void *buffer, size_t length, int flags) {
 }
 
 ssize_t sendmsg(int fd, const struct msghdr *msg, int flags) {
+    warn("sendmsg");
     // This one is hard to implemenet because the `msghdr` struct contains
     // an iovec pointer, which points to an array of iovec structs. Each such
     // struct is then a vector with a starting address and length. The sendmsg
@@ -190,6 +202,7 @@ ssize_t sendmsg(int fd, const struct msghdr *msg, int flags) {
 }
 
 ssize_t recvmsg(int fd, struct msghdr *msg, int flags) {
+    warn("recvmsg");
     if (msg->msg_iovlen == 1) {
         return recvfrom(fd, msg->msg_iov[0].iov_base, msg->msg_iov[0].iov_len, flags, (struct sockaddr *) msg->msg_name,
                         &msg->msg_namelen);
@@ -201,6 +214,7 @@ ssize_t recvmsg(int fd, struct msghdr *msg, int flags) {
 
 ssize_t
 sendto(int fd, const void *buffer, size_t length, int flags, const struct sockaddr *dest_addr, socklen_t addrlen) {
+    warn("sendto");
     // When the destination address is null, then this should be a stream socket
     if (dest_addr == NULL) {
         return send(fd, buffer, length, flags);
@@ -211,6 +225,7 @@ sendto(int fd, const void *buffer, size_t length, int flags, const struct sockad
 }
 
 ssize_t recvfrom(int fd, void *buffer, size_t length, int flags, struct sockaddr *src_addr, socklen_t *addrlen) {
+    warn("recvfrom");
     // When the destination address is null, then this should be a stream socket
     if (src_addr == NULL) {
         return recv(fd, buffer, length, flags);
@@ -226,6 +241,7 @@ pid_t fork(void) {
 }
 
 int poll(struct pollfd *fds, nfds_t nfds, int timeout) {
+    warn("poll");
     auto start = std::chrono::steady_clock::now();
     if (nfds == 0) return 0;
 
@@ -273,6 +289,7 @@ int poll(struct pollfd *fds, nfds_t nfds, int timeout) {
 }
 
 int fcntl(int fd, int command, ...) {
+    warn("fcntl");
     va_list args;
     if (bridge.find(fd) != bridge.end()) {
         warn("RDMA fcntl");
@@ -409,13 +426,16 @@ int _select_on_tssx_only(DescriptorSets *sets, size_t, size_t lowest_fd, size_t 
 }
 
 int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *errorfds, struct timeval *timeout) {
+    warn("select");
     DescriptorSets sets = {readfds, writefds, errorfds};
     size_t tssx_count, normal_count, lowest_fd;
     _count_tssx_sockets(nfds, &sets, &lowest_fd, &normal_count, &tssx_count);
 
     if (normal_count == 0) {
+        warn("RDMA select");
         return _select_on_tssx_only(&sets, tssx_count, lowest_fd, nfds, timeout);
     } else if (tssx_count == 0) {
+        warn("TCP select");
         return real::select(nfds, readfds, writefds, errorfds, timeout);
     } else {
         warn("can't do mixed RDMA / TCP yet");
