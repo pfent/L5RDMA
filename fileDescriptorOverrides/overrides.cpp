@@ -375,14 +375,6 @@ void _count_tssx_sockets(size_t highest_fd, const DescriptorSets *sets, size_t *
     }
 }
 
-void _copy_set(fd_set *destination, const fd_set *source) {
-    if (source == NULL) {
-        FD_ZERO(destination);
-    } else {
-        *destination = *source;
-    }
-}
-
 void _clear_set(fd_set *set) {
     if (set != NULL) FD_ZERO(set);
 }
@@ -391,12 +383,6 @@ void _clear_all_sets(DescriptorSets *sets) {
     _clear_set(sets->readfds);
     _clear_set(sets->writefds);
     _clear_set(sets->errorfds);
-}
-
-void _copy_all_sets(DescriptorSets *destination, const DescriptorSets *source) {
-    _copy_set(destination->readfds, source->readfds);
-    _copy_set(destination->writefds, source->writefds);
-    _copy_set(destination->errorfds, source->errorfds);
 }
 
 int timeval_to_milliseconds(const struct timeval *time) {
@@ -408,56 +394,112 @@ int timeval_to_milliseconds(const struct timeval *time) {
     return milliseconds;
 }
 
-bool _waiting_and_ready_for_select_read(int fd, std::unique_ptr<RDMAMessageBuffer> &session, fd_set *operation) {
-    if (!_fd_is_set(fd, operation)) return false;
+void _fill_poll_entries(struct pollfd *poll_entries, const DescriptorSets *sets, size_t highest_fd) {
+    size_t poll_index = 0;
 
-    return session->hasData();
+    for (size_t fd = 0; fd < highest_fd; ++fd) {
+        if (!_is_in_any_set(fd, sets)) continue;
+
+        poll_entries[poll_index].fd = fd;
+
+        if (_fd_is_set(fd, sets->readfds)) {
+            poll_entries[poll_index].events |= POLLIN;
+        }
+        if (_fd_is_set(fd, sets->writefds)) {
+            poll_entries[poll_index].events |= POLLOUT;
+        }
+        if (_fd_is_set(fd, sets->errorfds)) {
+            poll_entries[poll_index].events |= POLLERR;
+        }
+
+        ++poll_index;
+    }
 }
 
-bool _waiting_and_ready_for_select_write(int fd, std::unique_ptr<RDMAMessageBuffer> &, fd_set *operation) {
-    if (!_fd_is_set(fd, operation)) return false;
+struct pollfd *_setup_poll_entries(size_t population_count, const DescriptorSets *sets, size_t highest_fd) {
+    struct pollfd *poll_entries;
 
-    return true;
-}
-
-bool _check_select_events(int fd, std::unique_ptr<RDMAMessageBuffer> &session, DescriptorSets *sets) {
-    bool activity = false;
-
-    if (_waiting_and_ready_for_select_read(fd, session, sets->readfds)) {
-        activity = true;
+    poll_entries = (pollfd *) calloc(population_count, sizeof *poll_entries);
+    if (poll_entries == NULL) {
+        perror("Error allocating memory for poll entries");
+        return NULL;
     }
 
-    if (_waiting_and_ready_for_select_write(fd, session, sets->writefds)) {
-        activity = true;
-    }
+    _fill_poll_entries(poll_entries, sets, highest_fd);
 
-    return activity;
+    return poll_entries;
 }
 
-int _select_on_tssx_only(DescriptorSets *sets, size_t, size_t lowest_fd, size_t highest_fd,
-                         struct timeval *timeout) {
+fd_set *_fd_set_for_poll_event(const DescriptorSets *sets, int poll_event) {
+    switch (poll_event) {
+        case POLLNVAL:
+            return sets->errorfds;
+        case POLLIN:
+            return sets->readfds;
+        case POLLOUT:
+            return sets->writefds;
+        case POLLERR:
+            return sets->errorfds;
+        default:
+            return NULL;
+    }
+}
 
-    auto start = std::chrono::steady_clock::now();
-    int ready_count = 0;
-    int milliseconds = timeout ? timeval_to_milliseconds(timeout) : -1;
+bool _check_poll_event_occurred(const struct pollfd *entry, DescriptorSets *sets, int event) {
+    fd_set *set;
 
-    fd_set readfds, writefds, errorfds;
-    DescriptorSets original = {&readfds, &writefds, &errorfds};
-    _copy_all_sets(&original, sets);
+    if (entry->revents & event) {
+        set = _fd_set_for_poll_event(sets, event);
+        FD_SET(entry->fd, set);
+        return true;
+    }
+
+    return false;
+}
+
+int _read_poll_entries(DescriptorSets *sets, struct pollfd *poll_entries,
+                       size_t population_count) {    // First unset all, then just repopulate
     _clear_all_sets(sets);
 
-    // Do-while for the case of non-blocking
-    // so that we do at least one iteration
-    do {
-        for (size_t fd = lowest_fd; fd < highest_fd; ++fd) {
-            auto &session = bridge[fd];
-            if (_check_select_events(fd, session, &original)) ++ready_count;
-        }
-        if (ready_count > 0) break;
-    } while (std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count() >
-             milliseconds);
+    for (size_t index = 0; index < population_count; ++index) {
+        struct pollfd *entry = &(poll_entries[index]);
 
-    return ready_count;
+        if (_check_poll_event_occurred(entry, sets, POLLNVAL)) continue;
+        _check_poll_event_occurred(entry, sets, POLLIN);
+        _check_poll_event_occurred(entry, sets, POLLOUT);
+        _check_poll_event_occurred(entry, sets, POLLERR);
+    }
+
+    free(poll_entries);
+
+    return SUCCESS;
+}
+
+int _forward_to_poll(size_t highest_fd, DescriptorSets *sets, size_t population_count, struct timeval *timeout) {
+    struct pollfd *poll_entries;
+    int number_of_events;
+    int milliseconds;
+
+    poll_entries = _setup_poll_entries(population_count, sets, highest_fd);
+    if (poll_entries == NULL) {
+        return ERROR;
+    }
+
+    milliseconds = timeout ? timeval_to_milliseconds(timeout) : -1;
+
+    // The actual forwarding call
+    number_of_events = poll(poll_entries, population_count, milliseconds);
+
+    if (number_of_events == ERROR) {
+        free(poll_entries);
+        return ERROR;
+    }
+
+    if (_read_poll_entries(sets, poll_entries, population_count) == ERROR) {
+        return ERROR;
+    }
+
+    return number_of_events;
 }
 
 int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *errorfds, struct timeval *timeout) {
@@ -465,16 +507,5 @@ int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *errorfds, struct
     size_t tssx_count, normal_count, lowest_fd;
     _count_tssx_sockets(nfds, &sets, &lowest_fd, &normal_count, &tssx_count);
 
-    if (normal_count == 0 && tssx_count > 0) {
-        std::cerr << "RDMA select" << std::endl;
-        return _select_on_tssx_only(&sets, tssx_count, lowest_fd, nfds, timeout);
-    } else if (tssx_count == 0 && normal_count > 0) {
-        return real::select(nfds, readfds, writefds, errorfds, timeout);
-    } else if (tssx_count == 0 && normal_count == 0) {
-        return 0;
-    } else {
-        warn("can't do mixed RDMA / TCP yet");
-        return ERROR;
-        //return _forward_to_poll(nfds, &sets, tssx_count + normal_count, timeout);
-    }
+    return _forward_to_poll(nfds, &sets, tssx_count + normal_count, timeout);
 }
