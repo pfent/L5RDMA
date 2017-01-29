@@ -3,6 +3,8 @@
 #include <unordered_map>
 #include <map>
 #include <cstring>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 
 #include "rdma_tests/RDMAMessageBuffer.h"
 #include "realFunctions.h"
@@ -14,9 +16,88 @@ static bool forked = false;
 
 static const size_t BUFFER_SIZE = 16 * 1024;
 
+static const auto rdmaReachable = getenv("USE_RDMA");
+
 template<typename T>
 void warn(T msg) {
     std::cerr << msg << std::endl;
+}
+
+bool isTcpSocket(int socket, bool isServer) {
+    int socketType;
+    {
+        socklen_t option;
+        socklen_t option_length = sizeof(option);
+        if (real::getsockopt(socket, SOL_SOCKET, SO_TYPE, &option, &option_length) < 0) {
+            return false;
+        }
+        socketType = option;
+    }
+
+    int addressLocation;
+    {
+        struct sockaddr_storage options;
+        socklen_t size = sizeof(options);
+        if (isServer) {
+            if (real::getsockname(socket, (struct sockaddr *) &options, &size) < 0) {
+                return false;
+            }
+        } else {
+            if (getpeername(socket, (struct sockaddr *) &options, &size) < 0) {
+                return false;
+            }
+        }
+        addressLocation = options.ss_family;
+    }
+
+    return socketType == SOCK_STREAM && addressLocation == AF_INET;
+}
+
+sockaddr_in getRDMAReachable() {
+    sockaddr_in possibleAddr;
+    if (rdmaReachable == nullptr) {
+        std::cerr << "USE_RDMA not set, disabling RDMA socket interception" << std::endl;
+        return possibleAddr;
+    }
+
+    inet_pton(AF_INET, rdmaReachable, &possibleAddr.sin_addr);
+    return possibleAddr;
+}
+
+bool shouldServerIntercept(int serverSocket, int clientSocket) {
+    if (not isTcpSocket(serverSocket, true)) {
+        return false;
+    }
+
+    auto possibleAddr = getRDMAReachable();
+
+    sockaddr_in connectedAddr;
+    {
+        socklen_t size = sizeof(connectedAddr);
+        getpeername(clientSocket, (struct sockaddr *) &connectedAddr, &size);
+    }
+
+    std::cout << "connected to: " << inet_ntoa(connectedAddr.sin_addr) << std::endl;
+    std::cout << "RDMA connections possible to: " << inet_ntoa(possibleAddr.sin_addr) << std::endl;
+    return connectedAddr.sin_addr.s_addr == possibleAddr.sin_addr.s_addr;
+}
+
+bool shouldClientIntercept(int socket) {
+    if (not isTcpSocket(socket, false)) {
+        return false;
+    }
+
+    auto possibleAddr = getRDMAReachable();
+
+    sockaddr_in connectedAddr;
+    {
+        socklen_t size = sizeof(connectedAddr);
+        getpeername(socket, (struct sockaddr *) &connectedAddr, &size);
+    }
+
+    std::cout << "connected to: " << inet_ntoa(connectedAddr.sin_addr) << std::endl;
+    std::cout << "RDMA connections possible to: " << inet_ntoa(possibleAddr.sin_addr) << std::endl;
+    return connectedAddr.sin_addr.s_addr == possibleAddr.sin_addr.s_addr;
 }
 
 int accept(int server_socket, sockaddr *address, socklen_t *length) {
@@ -26,29 +107,7 @@ int accept(int server_socket, sockaddr *address, socklen_t *length) {
         return ERROR;
     }
 
-    int socketType;
-    {
-        socklen_t option;
-        socklen_t option_length = sizeof(option);
-        if (real::getsockopt(server_socket, SOL_SOCKET, SO_TYPE, &option, &option_length) < 0) {
-            return ERROR;
-        }
-        socketType = option;
-    }
-
-    int addressLocation;
-    {
-        struct sockaddr_storage options;
-        socklen_t size = sizeof(options);
-        if (real::getsockname(server_socket, (struct sockaddr *) &options, &size) < 0) {
-            return ERROR;
-        }
-        addressLocation = options.ss_family;
-    }
-
-    if (not(socketType == SOCK_STREAM && addressLocation == AF_INET)) {
-        // only handle TCP network sockets with RDMA
-        // TODO: probably allow more fine grained control over which socket should be over RDMA
+    if (not shouldServerIntercept(server_socket, client_socket)) {
         return SUCCESS;
     }
 
@@ -68,34 +127,8 @@ int connect(int fd, const sockaddr *address, socklen_t length) {
         return ERROR;
     }
 
-    // client can directly check sockname
-    int socketType;
-    {
-        socklen_t option;
-        socklen_t option_length = sizeof(option);
-        if (real::getsockopt(fd, SOL_SOCKET, SO_TYPE, &option, &option_length) < 0) {
-            return ERROR;
-        }
-        socketType = option;
-    }
-
-    int addressLocation;
-    {
-        struct sockaddr_storage options;
-        socklen_t size = sizeof(options);
-        if (getpeername(fd, (struct sockaddr *) &options, &size) < 0) {
-            return ERROR;
-        }
-        addressLocation = options.ss_family;
-    }
-
-    warn("socketType");
-    warn(socketType);
-    warn("addressLocation");
-    warn(addressLocation);
-    if (not(socketType == SOCK_STREAM && addressLocation == AF_INET)) {
+    if (not shouldClientIntercept(fd)) {
         warn("normal connect");
-        // only handle TCP network sockets with RDMA
         return SUCCESS;
     }
 
@@ -193,7 +226,8 @@ ssize_t sendmsg(int fd, const struct msghdr *msg, int flags) {
     // function, but right now we just support a single buffer and else route
     // the call to the socket itself.
     if (msg->msg_iovlen == 1) {
-        return sendto(fd, msg->msg_iov[0].iov_base, msg->msg_iov[0].iov_len, flags, (struct sockaddr *) msg->msg_name,
+        return sendto(fd, msg->msg_iov[0].iov_base, msg->msg_iov[0].iov_len, flags,
+                      (struct sockaddr *) msg->msg_name,
                       msg->msg_namelen);
     } else {
         warn("Routing sendmsg to socket (too many buffers)");
@@ -204,7 +238,8 @@ ssize_t sendmsg(int fd, const struct msghdr *msg, int flags) {
 ssize_t recvmsg(int fd, struct msghdr *msg, int flags) {
     warn("recvmsg");
     if (msg->msg_iovlen == 1) {
-        return recvfrom(fd, msg->msg_iov[0].iov_base, msg->msg_iov[0].iov_len, flags, (struct sockaddr *) msg->msg_name,
+        return recvfrom(fd, msg->msg_iov[0].iov_base, msg->msg_iov[0].iov_len, flags,
+                        (struct sockaddr *) msg->msg_name,
                         &msg->msg_namelen);
     } else {
         warn("Routing recvmsg to socket (too many buffers)");
@@ -241,7 +276,6 @@ pid_t fork(void) {
 }
 
 int poll(struct pollfd *fds, nfds_t nfds, int timeout) {
-    warn("poll");
     auto start = std::chrono::steady_clock::now();
     if (nfds == 0) return 0;
 
@@ -273,7 +307,8 @@ int poll(struct pollfd *fds, nfds_t nfds, int timeout) {
                 fds[i].revents |= outFlag;
             }
             if (event_count > 0) break;
-        } while (std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count() > timeout);
+        } while (std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count() >
+                 timeout);
     } else {
         warn("can't do mixed RDMA / TCP yet");
         return ERROR;
@@ -426,7 +461,6 @@ int _select_on_tssx_only(DescriptorSets *sets, size_t, size_t lowest_fd, size_t 
 }
 
 int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *errorfds, struct timeval *timeout) {
-    warn("select");
     DescriptorSets sets = {readfds, writefds, errorfds};
     size_t tssx_count, normal_count, lowest_fd;
     _count_tssx_sockets(nfds, &sets, &lowest_fd, &normal_count, &tssx_count);
@@ -435,7 +469,6 @@ int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *errorfds, struct
         warn("RDMA select");
         return _select_on_tssx_only(&sets, tssx_count, lowest_fd, nfds, timeout);
     } else if (tssx_count == 0) {
-        warn("TCP select");
         return real::select(nfds, readfds, writefds, errorfds, timeout);
     } else {
         warn("can't do mixed RDMA / TCP yet");

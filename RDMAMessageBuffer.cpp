@@ -111,6 +111,8 @@ void RDMAMessageBuffer::send(const uint8_t *data, size_t length) {
     if (sizeToWrite > size) throw runtime_error{"data > buffersize!"};
 
     // TODO: we can probably do a IBV_SEND_INLINE without actually writing to the sendbuffer
+    // Probably set the length, data, validity in the "sg_list". There is no abstraction for it yet, but should be doable
+    // populate ibv_sge's with address and length. no need for lkey, since IBV_SEND_INLINE does not check for registered memory.
 
     const size_t beginPos = sendPos & bitmask;
     const size_t endPos = (sendPos + sizeToWrite - 1) & bitmask;
