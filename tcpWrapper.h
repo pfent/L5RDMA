@@ -15,4 +15,6 @@ void tcp_bind(int sock, sockaddr_in &addr);
 
 int tcp_accept(int sock, sockaddr_in &inAddr);
 
+void tcp_setBlocking(int sock);
+
 #endif //TCPWRAPPER_H

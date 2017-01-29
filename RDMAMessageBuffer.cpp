@@ -102,6 +102,8 @@ RDMAMessageBuffer::RDMAMessageBuffer(size_t size, int sock) :
         throw runtime_error{"size should be a power of 2"};
     }
 
+    tcp_setBlocking(sock); // just set the socket to block for our setup.
+
     sendRmrInfo(sock, localReceive, localReadPos);
     receiveAndSetupRmr(sock, remoteReceive, remoteReadPos);
 }

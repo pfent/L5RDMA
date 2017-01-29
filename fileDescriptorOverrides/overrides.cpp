@@ -114,12 +114,8 @@ int accept(int server_socket, sockaddr *address, socklen_t *length) {
         return SUCCESS;
     }
 
-    try {
-        warn("RDMA accept");
-        bridge[client_socket] = std::make_unique<RDMAMessageBuffer>(BUFFER_SIZE, client_socket);
-    } catch (...) {
-        return ERROR;
-    }
+    warn("RDMA accept");
+    bridge[client_socket] = std::make_unique<RDMAMessageBuffer>(BUFFER_SIZE, client_socket);
     return client_socket;
 }
 

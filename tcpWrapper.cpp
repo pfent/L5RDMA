@@ -1,6 +1,7 @@
 #include <netinet/in.h>
 #include <iostream>
 #include <unistd.h>
+#include <fcntl.h>
 #include "tcpWrapper.h"
 
 int tcp_socket() {
@@ -46,4 +47,10 @@ int tcp_accept(int sock, sockaddr_in &inAddr) {
         throw std::runtime_error{"error accept'ing"};
     }
     return acced;
+}
+
+void tcp_setBlocking(int sock) {
+    auto opts = fcntl(sock, F_GETFL);
+    opts &= ~O_NONBLOCK;
+    fcntl(sock, F_SETFL, opts);
 }
