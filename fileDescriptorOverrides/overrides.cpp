@@ -164,7 +164,6 @@ ssize_t read(int fd, void *destination, size_t requested_bytes) {
 }
 
 int close(int fd) {
-    warn("close");
 /* TODO
     // epoll is linux only
 #ifdef __linux__
@@ -355,34 +354,15 @@ bool _is_in_any_set(int fd, const DescriptorSets *sets) {
     return false;
 }
 
-void _count_tssx_sockets(size_t highest_fd, const DescriptorSets *sets, size_t *lowest_fd, size_t *normal_count,
-                         size_t *tssx_count) {
-    *normal_count = 0;
+void _count_tssx_sockets(size_t highest_fd, const DescriptorSets *sets, size_t *tssx_count) {
     *tssx_count = 0;
-    *lowest_fd = highest_fd;
-
     for (size_t fd = 0; fd < highest_fd; ++fd) {
         if (_is_in_any_set(fd, sets)) {
-            if (fd < *lowest_fd) {
-                *lowest_fd = fd;
-            }
             if (bridge.find(fd) != bridge.end()) {
                 ++(*tssx_count);
-            } else {
-                ++(*normal_count);
             }
         }
     }
-}
-
-void _clear_set(fd_set *set) {
-    if (set != NULL) FD_ZERO(set);
-}
-
-void _clear_all_sets(DescriptorSets *sets) {
-    _clear_set(sets->readfds);
-    _clear_set(sets->writefds);
-    _clear_set(sets->errorfds);
 }
 
 int timeval_to_milliseconds(const struct timeval *time) {
@@ -394,118 +374,91 @@ int timeval_to_milliseconds(const struct timeval *time) {
     return milliseconds;
 }
 
-void _fill_poll_entries(struct pollfd *poll_entries, const DescriptorSets *sets, size_t highest_fd) {
-    size_t poll_index = 0;
+static struct pollfd *rs_select_to_poll(int *nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds) {
+    struct pollfd *fds;
+    int fd, i = 0;
 
-    for (size_t fd = 0; fd < highest_fd; ++fd) {
-        if (!_is_in_any_set(fd, sets)) continue;
-
-        poll_entries[poll_index].fd = fd;
-
-        if (_fd_is_set(fd, sets->readfds)) {
-            poll_entries[poll_index].events |= POLLIN;
-        }
-        if (_fd_is_set(fd, sets->writefds)) {
-            poll_entries[poll_index].events |= POLLOUT;
-        }
-        if (_fd_is_set(fd, sets->errorfds)) {
-            poll_entries[poll_index].events |= POLLERR;
-        }
-
-        ++poll_index;
-    }
-}
-
-struct pollfd *_setup_poll_entries(size_t population_count, const DescriptorSets *sets, size_t highest_fd) {
-    struct pollfd *poll_entries;
-
-    poll_entries = (pollfd *) calloc(population_count, sizeof *poll_entries);
-    if (poll_entries == NULL) {
-        perror("Error allocating memory for poll entries");
+    fds = (pollfd *) calloc(*nfds, sizeof(*fds));
+    if (!fds)
         return NULL;
+
+    for (fd = 0; fd < *nfds; fd++) {
+        if (readfds && FD_ISSET(fd, readfds)) {
+            fds[i].fd = fd;
+            fds[i].events = POLLIN;
+        }
+
+        if (writefds && FD_ISSET(fd, writefds)) {
+            fds[i].fd = fd;
+            fds[i].events |= POLLOUT;
+        }
+
+        if (exceptfds && FD_ISSET(fd, exceptfds))
+            fds[i].fd = fd;
+
+        if (fds[i].fd)
+            i++;
     }
 
-    _fill_poll_entries(poll_entries, sets, highest_fd);
-
-    return poll_entries;
+    *nfds = i;
+    return fds;
 }
 
-fd_set *_fd_set_for_poll_event(const DescriptorSets *sets, int poll_event) {
-    switch (poll_event) {
-        case POLLNVAL:
-            return sets->errorfds;
-        case POLLIN:
-            return sets->readfds;
-        case POLLOUT:
-            return sets->writefds;
-        case POLLERR:
-            return sets->errorfds;
-        default:
-            return NULL;
+static int rs_poll_to_select(int nfds, struct pollfd *fds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds) {
+    int i, cnt = 0;
+
+    for (i = 0; i < nfds; i++) {
+        if (readfds && (fds[i].revents & (POLLIN | POLLHUP))) {
+            FD_SET(fds[i].fd, readfds);
+            cnt++;
+        }
+
+        if (writefds && (fds[i].revents & POLLOUT)) {
+            FD_SET(fds[i].fd, writefds);
+            cnt++;
+        }
+
+        if (exceptfds && (fds[i].revents & ~(POLLIN | POLLOUT))) {
+            FD_SET(fds[i].fd, exceptfds);
+            cnt++;
+        }
     }
+    return cnt;
 }
 
-bool _check_poll_event_occurred(const struct pollfd *entry, DescriptorSets *sets, int event) {
-    fd_set *set;
-
-    if (entry->revents & event) {
-        set = _fd_set_for_poll_event(sets, event);
-        FD_SET(entry->fd, set);
-        return true;
-    }
-
-    return false;
-}
-
-int _read_poll_entries(DescriptorSets *sets, struct pollfd *poll_entries,
-                       size_t population_count) {    // First unset all, then just repopulate
-    _clear_all_sets(sets);
-
-    for (size_t index = 0; index < population_count; ++index) {
-        struct pollfd *entry = &(poll_entries[index]);
-
-        if (_check_poll_event_occurred(entry, sets, POLLNVAL)) continue;
-        _check_poll_event_occurred(entry, sets, POLLIN);
-        _check_poll_event_occurred(entry, sets, POLLOUT);
-        _check_poll_event_occurred(entry, sets, POLLERR);
-    }
-
-    free(poll_entries);
-
-    return SUCCESS;
-}
-
-int _forward_to_poll(size_t highest_fd, DescriptorSets *sets, size_t population_count, struct timeval *timeout) {
-    struct pollfd *poll_entries;
-    int number_of_events;
-    int milliseconds;
-
-    poll_entries = _setup_poll_entries(population_count, sets, highest_fd);
-    if (poll_entries == NULL) {
+int _forward_to_poll(int nfds, DescriptorSets *sets, struct timeval *timeout) {
+    auto pollfds = rs_select_to_poll(&nfds, sets->readfds, sets->writefds, sets->errorfds);
+    if (pollfds == NULL) {
         return ERROR;
     }
 
-    milliseconds = timeout ? timeval_to_milliseconds(timeout) : -1;
+    auto milliseconds = timeout ? timeval_to_milliseconds(timeout) : -1;
 
     // The actual forwarding call
-    number_of_events = poll(poll_entries, population_count, milliseconds);
+    auto number_of_events = poll(pollfds, nfds, milliseconds);
 
-    if (number_of_events == ERROR) {
-        free(poll_entries);
-        return ERROR;
+    if (sets->readfds)
+        FD_ZERO(sets->readfds);
+    if (sets->writefds)
+        FD_ZERO(sets->writefds);
+    if (sets->errorfds)
+        FD_ZERO(sets->errorfds);
+
+    if (number_of_events > 0) {
+        number_of_events = rs_poll_to_select(nfds, pollfds, sets->readfds, sets->writefds, sets->errorfds);
     }
-
-    if (_read_poll_entries(sets, poll_entries, population_count) == ERROR) {
-        return ERROR;
-    }
-
+    free(pollfds);
     return number_of_events;
 }
 
 int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *errorfds, struct timeval *timeout) {
     DescriptorSets sets = {readfds, writefds, errorfds};
-    size_t tssx_count, normal_count, lowest_fd;
-    _count_tssx_sockets(nfds, &sets, &lowest_fd, &normal_count, &tssx_count);
+    size_t tssx_count;
+    _count_tssx_sockets(nfds, &sets, &tssx_count);
 
-    return _forward_to_poll(nfds, &sets, tssx_count + normal_count, timeout);
+    if (tssx_count == 0) {
+        return real::select(nfds, readfds, writefds, errorfds, timeout);
+    }
+
+    return _forward_to_poll(nfds, &sets, timeout);
 }
