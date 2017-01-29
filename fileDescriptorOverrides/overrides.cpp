@@ -465,11 +465,13 @@ int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *errorfds, struct
     size_t tssx_count, normal_count, lowest_fd;
     _count_tssx_sockets(nfds, &sets, &lowest_fd, &normal_count, &tssx_count);
 
-    if (normal_count == 0) {
-        warn("RDMA select");
+    if (normal_count == 0 && tssx_count > 0) {
+        std::cerr << "RDMA select" << std::endl;
         return _select_on_tssx_only(&sets, tssx_count, lowest_fd, nfds, timeout);
-    } else if (tssx_count == 0) {
+    } else if (tssx_count == 0 && normal_count > 0) {
         return real::select(nfds, readfds, writefds, errorfds, timeout);
+    } else if (tssx_count == 0 && normal_count == 0) {
+        return 0;
     } else {
         warn("can't do mixed RDMA / TCP yet");
         return ERROR;
