@@ -288,12 +288,12 @@ int poll(struct pollfd *fds, nfds_t nfds, int timeout) {
     if (nfds == 0) return 0;
 
     int event_count = 0;
-    std::vector<int> tssx_fds, normal_fds;
+    std::vector<size_t> tssx_fds, normal_fds;
     for (nfds_t index = 0; index < nfds; ++index) {
         if (bridge.find(fds[index].fd) != bridge.end()) {
-            tssx_fds.push_back(fds[index].fd);
+            tssx_fds.push_back(index);
         } else {
-            normal_fds.push_back(fds[index].fd);
+            normal_fds.push_back(index);
         }
     }
 
@@ -304,7 +304,7 @@ int poll(struct pollfd *fds, nfds_t nfds, int timeout) {
         do {
             // Do a full loop over all FDs
             for (auto &i : tssx_fds) {
-                auto &msgBuf = bridge[i];
+                auto &msgBuf = bridge[fds[i].fd];
                 if (msgBuf->hasData()) {
                     auto inFlag = fds[i].events & POLLIN;
                     if (inFlag != 0) ++event_count;
