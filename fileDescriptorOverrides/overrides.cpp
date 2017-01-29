@@ -288,12 +288,12 @@ int poll(struct pollfd *fds, nfds_t nfds, int timeout) {
     if (nfds == 0) return 0;
 
     int event_count = 0;
-    std::vector<size_t> tssx_fds, normal_fds;
+    std::vector<int> tssx_fds, normal_fds;
     for (nfds_t index = 0; index < nfds; ++index) {
         if (bridge.find(fds[index].fd) != bridge.end()) {
-            tssx_fds.push_back(index);
+            tssx_fds.push_back(fds[index].fd);
         } else {
-            normal_fds.push_back(index);
+            normal_fds.push_back(fds[index].fd);
         }
     }
 
