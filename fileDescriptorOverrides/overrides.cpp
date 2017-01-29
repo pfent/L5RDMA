@@ -12,11 +12,14 @@
 
 // unordered_map does not like to be 0 initialized, so we can't use it here
 static std::map<int, std::unique_ptr<RDMAMessageBuffer>> bridge;
-static bool forked = false;
+static bool dontCloseRDMA = true; // as long as we can't get rid of the RDMA deallocation errors, don't ever close RDMA connections
 
 static const size_t BUFFER_SIZE = 16 * 1024;
 
-static const auto rdmaReachable = getenv("USE_RDMA");
+auto getRdmaEnv() {
+    static const auto rdmaReachable = getenv("USE_RDMA");
+    return rdmaReachable;
+}
 
 template<typename T>
 void warn(T msg) {
@@ -55,12 +58,12 @@ bool isTcpSocket(int socket, bool isServer) {
 
 sockaddr_in getRDMAReachable() {
     sockaddr_in possibleAddr;
-    if (rdmaReachable == nullptr) {
+    if (getRdmaEnv() == nullptr) {
         std::cerr << "USE_RDMA not set, disabling RDMA socket interception" << std::endl;
         return possibleAddr;
     }
 
-    inet_pton(AF_INET, rdmaReachable, &possibleAddr.sin_addr);
+    inet_pton(AF_INET, getRdmaEnv(), &possibleAddr.sin_addr);
     return possibleAddr;
 }
 
@@ -124,7 +127,17 @@ int connect(int fd, const sockaddr *address, socklen_t length) {
     warn("connect");
 
     if (real::connect(fd, address, length) == ERROR) {
-        return ERROR;
+        if (errno != EINPROGRESS) {
+            return ERROR;
+        }
+        // In case of a non blocking socket, we just poll until it is ready...
+        pollfd pfd;
+        pfd.fd = fd;
+        pfd.events = POLLOUT;
+        real::poll(&pfd, 1, -1);
+        if ((pfd.revents & POLLERR) != 0) {
+            return ERROR;
+        }
     }
 
     if (not shouldClientIntercept(fd)) {
@@ -175,7 +188,7 @@ int close(int fd) {
     }
 #else
  */
-    if (not forked) {
+    if (not dontCloseRDMA) {
         bridge.erase(fd);
     }
 //#endif
@@ -270,7 +283,7 @@ ssize_t recvfrom(int fd, void *buffer, size_t length, int flags, struct sockaddr
 }
 
 pid_t fork(void) {
-    forked = true;
+    dontCloseRDMA = true;
     return real::fork();
 }
 
