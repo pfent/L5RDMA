@@ -21,6 +21,7 @@
 #pragma once
 //---------------------------------------------------------------------------
 #include <memory>
+#include <vector>
 #include "MemoryRegion.hpp"
 
 //---------------------------------------------------------------------------
@@ -94,7 +95,7 @@ namespace rdma {
 
         /// Set a variable number of MemoryRegions, from with data is sent / written to in a single request.
         /// The total message size then is the sum of all MRs
-        void setLocalAddress(const std::initializer_list<MemoryRegion::Slice> localAddresses);
+        void setLocalAddress(const std::vector<MemoryRegion::Slice> localAddresses);
     };
 
 //---------------------------------------------------------------------------

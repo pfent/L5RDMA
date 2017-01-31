@@ -110,16 +110,14 @@ namespace rdma {
         wr->wr.rdma.rkey = remoteAddress.key;
     }
 
-    void RDMAWorkRequest::setLocalAddress(const std::initializer_list<MemoryRegion::Slice> localAddresses) {
+    void RDMAWorkRequest::setLocalAddress(const std::vector<MemoryRegion::Slice> localAddresses) {
         delete wr->sg_list;
         wr->sg_list = new ibv_sge[localAddresses.size()]();
         wr->num_sge = localAddresses.size();
-        size_t i = 0; // can't access an initializer_list via index
-        for (auto &localAddress : localAddresses) {
-            wr->sg_list[i].addr = reinterpret_cast<uintptr_t>(localAddress.address);
-            wr->sg_list->length = localAddress.size;
-            wr->sg_list->lkey = localAddress.lkey;
-            ++i;
+        for (size_t i = 0; i < localAddresses.size(); ++i) {
+            wr->sg_list[i].addr = reinterpret_cast<uintptr_t>(localAddresses[i].address);
+            wr->sg_list[i].length = localAddresses[i].size;
+            wr->sg_list[i].lkey = localAddresses[i].lkey;
         }
 
         // TODO: manage a sensible way of keeping track of the new'ed array

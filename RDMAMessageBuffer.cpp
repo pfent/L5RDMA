@@ -115,8 +115,8 @@ void RDMAMessageBuffer::sendInline(const uint8_t *data, size_t length) {
 
     // Don't actually write to a pinned memory region. RDMA doesn't care about the lkey, if IBV_SEND_INLINE is set
     if (endPos >= beginPos) {
-        const auto sizeSlice = MemoryRegion::Slice(&sizeToWrite, sizeof(sizeToWrite), 0);
-        const auto dataSlice = MemoryRegion::Slice((void *) data, sizeToWrite, 0);
+        const auto sizeSlice = MemoryRegion::Slice(&length, sizeof(length), 0);
+        const auto dataSlice = MemoryRegion::Slice((void *) data, length, 0);
         const auto validitySlice = MemoryRegion::Slice((void *) &validity, sizeof(validity), 0);
 
         const auto remoteSlice = remoteReceive.slice(beginPos);
@@ -124,10 +124,9 @@ void RDMAMessageBuffer::sendInline(const uint8_t *data, size_t length) {
         wr.setSendInline(true);
         wr.setLocalAddress({sizeSlice, dataSlice, validitySlice});
         wr.setRemoteAddress(remoteSlice);
-        wr.setCompletion(true);
+        wr.setCompletion(false);
         net.queuePair.postWorkRequest(wr);
     } else {
-        // TODO
         throw;
         // beginPos ~ buffer end
         const auto sendSlice1 = localSend.slice(beginPos, size - beginPos);
@@ -142,9 +141,7 @@ void RDMAMessageBuffer::sendInline(const uint8_t *data, size_t length) {
                 .send(net.queuePair);
         net.completionQueue.pollSendCompletionQueue();
     }
-
     sendPos += sizeToWrite;
-    net.completionQueue.pollSendCompletionQueue(); // This probably leaves one completion in the CQ
 }
 
 void RDMAMessageBuffer::send(const uint8_t *data, size_t length) {
@@ -154,12 +151,10 @@ void RDMAMessageBuffer::send(const uint8_t *data, size_t length) {
     const size_t beginPos = sendPos & bitmask;
     const size_t endPos = (sendPos + sizeToWrite - 1) & bitmask;
 
-    /*
-    if (sizeToWrite <= net.queuePair.getMaxInlineSize() && endPos >= beginPos) {
-        // inlining should be much faster, since we don't have to write to volatile memory
-        return sendInline(data, length);
-    }
-     */
+    //if (sizeToWrite <= net.queuePair.getMaxInlineSize() && endPos >= beginPos) {
+    // actually, sending from 3 different buffers seems to be a tad slower. So don't actually do it
+    //return sendInline(data, length);
+    //}
 
     writeToSendBuffer((uint8_t *) &length, sizeof(length));
     writeToSendBuffer(data, length);
