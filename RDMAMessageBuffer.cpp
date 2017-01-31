@@ -154,10 +154,12 @@ void RDMAMessageBuffer::send(const uint8_t *data, size_t length) {
     const size_t beginPos = sendPos & bitmask;
     const size_t endPos = (sendPos + sizeToWrite - 1) & bitmask;
 
+    /*
     if (sizeToWrite <= net.queuePair.getMaxInlineSize() && endPos >= beginPos) {
         // inlining should be much faster, since we don't have to write to volatile memory
         return sendInline(data, length);
     }
+     */
 
     writeToSendBuffer((uint8_t *) &length, sizeof(length));
     writeToSendBuffer(data, length);
@@ -166,7 +168,7 @@ void RDMAMessageBuffer::send(const uint8_t *data, size_t length) {
     if (endPos >= beginPos) {
         const auto sendSlice = localSend.slice(beginPos, sizeToWrite);
         const auto remoteSlice = remoteReceive.slice(beginPos);
-        WriteWorkRequestBuilder(sendSlice, remoteSlice, true)
+        WriteWorkRequestBuilder(sendSlice, remoteSlice, false)
                 .send(net.queuePair);
     } else {
         // beginPos ~ buffer end
@@ -176,13 +178,11 @@ void RDMAMessageBuffer::send(const uint8_t *data, size_t length) {
         const auto sendSlice2 = localSend.slice(0, endPos + 1);
         const auto remoteSlice2 = remoteReceive.slice(0);
 
-        WriteWorkRequestBuilder(sendSlice1, remoteSlice1, true)
+        WriteWorkRequestBuilder(sendSlice1, remoteSlice1, false)
                 .send(net.queuePair);
-        WriteWorkRequestBuilder(sendSlice2, remoteSlice2, true)
+        WriteWorkRequestBuilder(sendSlice2, remoteSlice2, false)
                 .send(net.queuePair);
-        net.completionQueue.pollSendCompletionQueue();
     }
-    net.completionQueue.pollSendCompletionQueue(); // This probably leaves one completion in the CQ
 }
 
 void RDMAMessageBuffer::writeToSendBuffer(const uint8_t *data, size_t sizeToWrite) {

@@ -113,6 +113,7 @@ namespace rdma {
     void RDMAWorkRequest::setLocalAddress(const std::initializer_list<MemoryRegion::Slice> localAddresses) {
         delete wr->sg_list;
         wr->sg_list = new ibv_sge[localAddresses.size()]();
+        wr->num_sge = localAddresses.size();
         size_t i = 0; // can't access an initializer_list via index
         for (auto &localAddress : localAddresses) {
             wr->sg_list[i].addr = reinterpret_cast<uintptr_t>(localAddress.address);
