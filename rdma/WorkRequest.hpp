@@ -91,6 +91,10 @@ namespace rdma {
         void setLocalAddress(const MemoryRegion &localAddress);
 
         void setLocalAddress(const MemoryRegion::Slice &localAddress);
+
+        /// Set a variable number of MemoryRegions, from with data is sent / written to in a single request.
+        /// The total message size then is the sum of all MRs
+        void setLocalAddress(const std::initializer_list<MemoryRegion::Slice> localAddresses);
     };
 
 //---------------------------------------------------------------------------

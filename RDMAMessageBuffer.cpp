@@ -108,16 +108,56 @@ RDMAMessageBuffer::RDMAMessageBuffer(size_t size, int sock) :
     receiveAndSetupRmr(sock, remoteReceive, remoteReadPos);
 }
 
+void RDMAMessageBuffer::sendInline(const uint8_t *data, size_t length) {
+    size_t sizeToWrite = sizeof(length) + length + sizeof(validity);
+    const size_t beginPos = sendPos & bitmask;
+    const size_t endPos = (sendPos + sizeToWrite - 1) & bitmask;
+
+    // Don't actually write to a pinned memory region. RDMA doesn't care about the lkey, if IBV_SEND_INLINE is set
+    if (endPos >= beginPos) {
+        const auto sizeSlice = MemoryRegion::Slice(&sizeToWrite, sizeof(sizeToWrite), 0);
+        const auto dataSlice = MemoryRegion::Slice((void *) data, sizeToWrite, 0);
+        const auto validitySlice = MemoryRegion::Slice((void *) &validity, sizeof(validity), 0);
+
+        const auto remoteSlice = remoteReceive.slice(beginPos);
+        WriteWorkRequest wr;
+        wr.setSendInline(true);
+        wr.setLocalAddress({sizeSlice, dataSlice, validitySlice});
+        wr.setRemoteAddress(remoteSlice);
+        wr.setCompletion(true);
+        net.queuePair.postWorkRequest(wr);
+    } else {
+        // TODO
+        throw;
+        // beginPos ~ buffer end
+        const auto sendSlice1 = localSend.slice(beginPos, size - beginPos);
+        const auto remoteSlice1 = remoteReceive.slice(beginPos);
+        // buffer start ~ endpos
+        const auto sendSlice2 = localSend.slice(0, endPos + 1);
+        const auto remoteSlice2 = remoteReceive.slice(0);
+
+        WriteWorkRequestBuilder(sendSlice1, remoteSlice1, true)
+                .send(net.queuePair);
+        WriteWorkRequestBuilder(sendSlice2, remoteSlice2, true)
+                .send(net.queuePair);
+        net.completionQueue.pollSendCompletionQueue();
+    }
+
+    sendPos += sizeToWrite;
+    net.completionQueue.pollSendCompletionQueue(); // This probably leaves one completion in the CQ
+}
+
 void RDMAMessageBuffer::send(const uint8_t *data, size_t length) {
     const size_t sizeToWrite = sizeof(length) + length + sizeof(validity);
     if (sizeToWrite > size) throw runtime_error{"data > buffersize!"};
 
-    // TODO: we can probably do a IBV_SEND_INLINE without actually writing to the sendbuffer
-    // Probably set the length, data, validity in the "sg_list". There is no abstraction for it yet, but should be doable
-    // populate ibv_sge's with address and length. no need for lkey, since IBV_SEND_INLINE does not check for registered memory.
-
     const size_t beginPos = sendPos & bitmask;
     const size_t endPos = (sendPos + sizeToWrite - 1) & bitmask;
+
+    if (sizeToWrite <= net.queuePair.getMaxInlineSize() && endPos >= beginPos) {
+        // inlining should be much faster, since we don't have to write to volatile memory
+        return sendInline(data, length);
+    }
 
     writeToSendBuffer((uint8_t *) &length, sizeof(length));
     writeToSendBuffer(data, length);

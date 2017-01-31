@@ -56,6 +56,8 @@ private:
     void readFromReceiveBuffer(size_t readPos, uint8_t *whereTo, size_t sizeToRead);
 
     void zeroReceiveBuffer(size_t beginReceiveCount, size_t sizeToZero);
+
+    void sendInline(const uint8_t *data, size_t length);
 };
 
 #endif //RDMA_HASH_MAP_RDMAMESSAGEBUFFER_H

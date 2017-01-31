@@ -64,7 +64,7 @@ namespace rdma {
         if (flag)
             wr->send_flags = wr->send_flags | IBV_SEND_SIGNALED;
         else
-            wr->send_flags = wr->send_flags & !IBV_SEND_SIGNALED;
+            wr->send_flags = wr->send_flags & ~IBV_SEND_SIGNALED;
     }
 
 //---------------------------------------------------------------------------
@@ -110,6 +110,20 @@ namespace rdma {
         wr->wr.rdma.rkey = remoteAddress.key;
     }
 
+    void RDMAWorkRequest::setLocalAddress(const std::initializer_list<MemoryRegion::Slice> localAddresses) {
+        delete wr->sg_list;
+        wr->sg_list = new ibv_sge[localAddresses.size()]();
+        size_t i = 0; // can't access an initializer_list via index
+        for (auto &localAddress : localAddresses) {
+            wr->sg_list[i].addr = reinterpret_cast<uintptr_t>(localAddress.address);
+            wr->sg_list->length = localAddress.size;
+            wr->sg_list->lkey = localAddress.lkey;
+            ++i;
+        }
+
+        // TODO: manage a sensible way of keeping track of the new'ed array
+    }
+
 //---------------------------------------------------------------------------
     WriteWorkRequest::WriteWorkRequest() {
         wr->opcode = IBV_WR_RDMA_WRITE;
@@ -119,7 +133,7 @@ namespace rdma {
         if (flag) {
             wr->send_flags |= IBV_SEND_INLINE;
         } else {
-            wr->send_flags &= not IBV_SEND_INLINE;
+            wr->send_flags &= ~IBV_SEND_INLINE;
         }
     }
 
@@ -196,15 +210,16 @@ namespace rdma {
         qp.postWorkRequest(wr);
     }
 
-    ReadWorkRequestBuilder::ReadWorkRequestBuilder(const MemoryRegion &localAddress, const RemoteMemoryRegion &remoteAddress,
-                                      bool completion) {
+    ReadWorkRequestBuilder::ReadWorkRequestBuilder(const MemoryRegion &localAddress,
+                                                   const RemoteMemoryRegion &remoteAddress,
+                                                   bool completion) {
         wr.setLocalAddress(localAddress);
         wr.setRemoteAddress(remoteAddress);
         wr.setCompletion(completion);
         wr.setId(42);
     }
 
-    ReadWorkRequestBuilder& ReadWorkRequestBuilder::setNextWorkRequest(const WorkRequest *workRequest) {
+    ReadWorkRequestBuilder &ReadWorkRequestBuilder::setNextWorkRequest(const WorkRequest *workRequest) {
         wr.setNextWorkRequest(workRequest);
         return *this;
     }
@@ -213,23 +228,25 @@ namespace rdma {
         return move(wr);
     }
 
-    ReadWorkRequestBuilder::ReadWorkRequestBuilder(const MemoryRegion::Slice &localAddress, const RemoteMemoryRegion &remoteAddress,
-                                      bool completion) {
+    ReadWorkRequestBuilder::ReadWorkRequestBuilder(const MemoryRegion::Slice &localAddress,
+                                                   const RemoteMemoryRegion &remoteAddress,
+                                                   bool completion) {
         wr.setLocalAddress(localAddress);
         wr.setRemoteAddress(remoteAddress);
         wr.setCompletion(completion);
     }
 
-    WriteWorkRequestBuilder::WriteWorkRequestBuilder(const MemoryRegion &localAddress, const RemoteMemoryRegion &remoteAddress,
-                                       bool completion) {
+    WriteWorkRequestBuilder::WriteWorkRequestBuilder(const MemoryRegion &localAddress,
+                                                     const RemoteMemoryRegion &remoteAddress,
+                                                     bool completion) {
         size = localAddress.size;
         wr.setLocalAddress(localAddress);
         wr.setRemoteAddress(remoteAddress);
         wr.setCompletion(completion);
     }
 
-    WriteWorkRequestBuilder& WriteWorkRequestBuilder::send(QueuePair &qp) {
-        if (qp.getMaxInlineSize() > size) {
+    WriteWorkRequestBuilder &WriteWorkRequestBuilder::send(QueuePair &qp) {
+        if (qp.getMaxInlineSize() >= size) {
             wr.setSendInline(true);
         }
         qp.postWorkRequest(wr);
@@ -245,16 +262,18 @@ namespace rdma {
         return move(wr);
     }
 
-    WriteWorkRequestBuilder::WriteWorkRequestBuilder(const MemoryRegion::Slice &localAddress, const RemoteMemoryRegion &remoteAddress,
-                                       bool completion) {
+    WriteWorkRequestBuilder::WriteWorkRequestBuilder(const MemoryRegion::Slice &localAddress,
+                                                     const RemoteMemoryRegion &remoteAddress,
+                                                     bool completion) {
         wr.setLocalAddress(localAddress);
         wr.setRemoteAddress(remoteAddress);
         wr.setCompletion(completion);
     }
 
     AtomicFetchAndAddWorkRequestBuilder::AtomicFetchAndAddWorkRequestBuilder(const MemoryRegion &localAddress,
-                                                   const RemoteMemoryRegion &remoteAddress, uint64_t addValue,
-                                                   bool completion) {
+                                                                             const RemoteMemoryRegion &remoteAddress,
+                                                                             uint64_t addValue,
+                                                                             bool completion) {
         wr.setLocalAddress(localAddress);
         wr.setRemoteAddress(remoteAddress);
         wr.setCompletion(completion);
@@ -265,7 +284,8 @@ namespace rdma {
         qp.postWorkRequest(wr);
     }
 
-    AtomicFetchAndAddWorkRequestBuilder& AtomicFetchAndAddWorkRequestBuilder::setNextWorkRequest(const WorkRequest *workRequest) {
+    AtomicFetchAndAddWorkRequestBuilder &
+    AtomicFetchAndAddWorkRequestBuilder::setNextWorkRequest(const WorkRequest *workRequest) {
         wr.setNextWorkRequest(workRequest);
         return *this;
     }
@@ -275,8 +295,9 @@ namespace rdma {
     }
 
     AtomicFetchAndAddWorkRequestBuilder::AtomicFetchAndAddWorkRequestBuilder(const MemoryRegion::Slice &localAddress,
-                                                   const RemoteMemoryRegion &remoteAddress, uint64_t addValue,
-                                                   bool completion) {
+                                                                             const RemoteMemoryRegion &remoteAddress,
+                                                                             uint64_t addValue,
+                                                                             bool completion) {
         wr.setLocalAddress(localAddress);
         wr.setRemoteAddress(remoteAddress);
         wr.setCompletion(completion);

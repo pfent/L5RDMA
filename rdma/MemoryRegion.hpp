@@ -50,7 +50,6 @@ public:
         void *address;
         size_t size;
         uint32_t lkey;
-    private:
         Slice(void *address, size_t size, uint32_t lkey) : address(address), size(size), lkey(lkey) {}
     };
 
