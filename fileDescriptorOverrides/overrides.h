@@ -39,6 +39,14 @@ ssize_t sendmsg(int fd, const struct msghdr *msg, int flags);
 
 pid_t fork(void);
 
+int getsockopt(int fd, int level, int option_name, void *option_value, socklen_t *option_len);
+
+int setsockopt(int fd, int level, int option_name, const void *option_value, socklen_t option_len);
+
+int getsockname(int fd, struct sockaddr *addr, socklen_t *addrlen);
+
+int fcntl(int fd, int command, ...);
+
 int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *errorfds, struct timeval *timeout);
 }
 
