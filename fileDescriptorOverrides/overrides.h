@@ -39,11 +39,12 @@ ssize_t sendmsg(int fd, const struct msghdr *msg, int flags);
 
 pid_t fork(void);
 
-int getsockopt(int fd, int level, int option_name, void *option_value, socklen_t *option_len);
+int getsockopt(int fd, int level, int option_name, void *option_value,
+               socklen_t *option_len) __THROW; // Mark them as throw in c++ but not in c context
 
-int setsockopt(int fd, int level, int option_name, const void *option_value, socklen_t option_len);
+int setsockopt(int fd, int level, int option_name, const void *option_value, socklen_t option_len) __THROW;
 
-int getsockname(int fd, struct sockaddr *addr, socklen_t *addrlen);
+int getsockname(int fd, struct sockaddr *addr, socklen_t *addrlen) __THROW;
 
 int fcntl(int fd, int command, ...);
 

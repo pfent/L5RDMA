@@ -328,11 +328,11 @@ int fcntl(int fd, int command, ...) {
     return real::fcntl(fd, command, args);
 }
 
-int getsockopt(int fd, int level, int option_name, void *option_value, socklen_t *option_len) {
+int getsockopt(int fd, int level, int option_name, void *option_value, socklen_t *option_len) __THROW {
     return real::getsockopt(fd, level, option_name, option_value, option_len);
 }
 
-int setsockopt(int fd, int level, int option_name, const void *option_value, socklen_t option_len) {
+int setsockopt(int fd, int level, int option_name, const void *option_value, socklen_t option_len) __THROW {
     if (bridge.find(fd) != bridge.end()) {
         warn("RDMA setsockopt");
         // we can probably support O_NONBLOCK
@@ -341,7 +341,7 @@ int setsockopt(int fd, int level, int option_name, const void *option_value, soc
     return real::setsockopt(fd, level, option_name, option_value, option_len);
 }
 
-int getsockname(int fd, struct sockaddr *addr, socklen_t *addrlen) {
+int getsockname(int fd, struct sockaddr *addr, socklen_t *addrlen) __THROW {
     return real::getsockname(fd, addr, addrlen);
 }
 
