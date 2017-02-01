@@ -1,6 +1,5 @@
 #include <netinet/in.h>
 #include <iostream>
-#include <unistd.h>
 #include <fcntl.h>
 #include "tcpWrapper.h"
 
@@ -23,13 +22,15 @@ void tcp_connect(int sock, sockaddr_in &addr) {
 }
 
 void tcp_write(int sock, void *buffer, std::size_t size) {
-    if (write(sock, buffer, size) < 0) {
+    if (send(sock, buffer, size, 0) < 0) {
+        perror("send");
         throw std::runtime_error{"error write'ing"};
     }
 }
 
 void tcp_read(int sock, void *buffer, std::size_t size) {
-    if (read(sock, buffer, size) < 0) {
+    if (recv(sock, buffer, size, 0) < 0) {
+        perror("recv");
         throw std::runtime_error{"error read'ing"};
     }
 }

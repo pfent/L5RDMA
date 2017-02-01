@@ -373,7 +373,7 @@ int setsockopt(int fd, int level, int option_name, const void *option_value, soc
     if (bridge.find(fd) != bridge.end()) {
         warn("RDMA setsockopt");
         // we can probably support O_NONBLOCK
-        return ERROR;
+        return SUCCESS;
     }
     return real::setsockopt(fd, level, option_name, option_value, option_len);
 }
