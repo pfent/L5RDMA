@@ -35,7 +35,12 @@ namespace real {
 
     int getsockname(int fd, struct sockaddr *addr, socklen_t *addrlen);
 
-    int fcntl(int fd, int command, ...);
+    /**
+     * Non-portable non-exaustive way of implementing fcntl... If there's a better method, shoot me a message
+     */
+    int fcntl_set_flags(int fd, int command, int flag);
+
+    int fcntl_get_flags(int fd, int command);
 
     int poll(struct pollfd fds[], nfds_t nfds, int timeout);
 

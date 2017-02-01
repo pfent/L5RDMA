@@ -5,6 +5,8 @@
 #include <cstring>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <cstdarg>
+#include <fcntl.h>
 
 #include "rdma_tests/RDMAMessageBuffer.h"
 #include "realFunctions.h"
@@ -317,15 +319,50 @@ int poll(struct pollfd *fds, nfds_t nfds, int timeout) {
     return event_count;
 }
 
+static int fcntl_set(int fd, int command, int flags) {
+    if (bridge.find(fd) != bridge.end()) {
+        // TODO: actually do something to set our implementation nonblocking here
+        return SUCCESS;
+    }
+
+    return real::fcntl_set_flags(fd, command, flags);
+}
+
+static int fcntl_get(int fd, int command) {
+    int flags = real::fcntl_get_flags(fd, command);
+
+    // Theoretically the flags should be in sync
+    if (bridge.find(fd) != bridge.end()) {
+        // First unset the flag, then check if we have it set
+        flags &= ~O_NONBLOCK; // TODO: if we fcntl_set set this, we also need to query this
+    }
+
+    return flags;
+}
+
+
 int fcntl(int fd, int command, ...) {
-    warn("fcntl");
-    va_list args;
     if (bridge.find(fd) != bridge.end()) {
         warn("RDMA fcntl");
-        // we can probably support O_NONBLOCK
+        // we can probably support O_NONBLOCK, but just ignore it for now
+        return SUCCESS;
+    }
+
+    va_list argument;
+
+    // Takes the argument pointer and the last positional argument
+    // Makes the argument pointer point to the first optional argument
+    va_start(argument, command);
+
+    if (command == F_SETFL || command == F_SETFD) {
+        return fcntl_set(fd, command, va_arg(argument, int));
+    } else if (command == F_GETFL || command == F_GETFD) {
+        return fcntl_get(fd, command);
+    } else {
+        // Sorry, don't know what to do for other commands :(
+        // If necessary: handle all cases of arguments ...
         return ERROR;
     }
-    return real::fcntl(fd, command, args);
 }
 
 int getsockopt(int fd, int level, int option_name, void *option_value, socklen_t *option_len) __THROW {
