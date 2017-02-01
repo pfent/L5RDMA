@@ -57,7 +57,7 @@ bool isTcpSocket(int socket, bool isServer) {
 }
 
 sockaddr_in getRDMAReachable() {
-    sockaddr_in possibleAddr;
+    sockaddr_in possibleAddr{};
     if (getRdmaEnv() == nullptr) {
         std::cerr << "USE_RDMA not set, disabling RDMA socket interception" << std::endl;
         return possibleAddr;
@@ -154,6 +154,8 @@ ssize_t write(int fd, const void *source, size_t requested_bytes) {
     if (bridge.find(fd) != bridge.end()) {
         // TODO: check if server is still alive
         bridge[fd]->send((uint8_t *) source, requested_bytes);
+        std::cout << "write \"" << std::string(((char *) source), ((char *) source) + requested_bytes) << '"'
+                  << std::endl;
         return SUCCESS;
     }
     return real::write(fd, source, requested_bytes);
@@ -162,38 +164,23 @@ ssize_t write(int fd, const void *source, size_t requested_bytes) {
 ssize_t read(int fd, void *destination, size_t requested_bytes) {
     if (bridge.find(fd) != bridge.end()) {
         // TODO: check if server is still alive
-        try {
-            return bridge[fd]->receive(destination, requested_bytes);
-        } catch (...) {
-            warn("something went wrong RDMA reading");
-        }
-        return ERROR;
+        auto bytesRead = bridge[fd]->receive(destination, requested_bytes);
+        std::cout << "read \"" << std::string(((char *) destination), ((char *) destination) + bytesRead) << '"'
+                  << std::endl;
+        return bridge[fd]->receive(destination, requested_bytes);
     }
     return real::read(fd, destination, requested_bytes);
 }
 
 int close(int fd) {
-/* TODO
-    // epoll is linux only
-#ifdef __linux__
-    // These two are definitely mutually exclusive
-    if (has_epoll_instance_associated(fd)) {
-        close_epoll_instance(fd);
-    } else {
-        bridge_erase(&bridge, fd);
-    }
-#else
- */
     if (not dontCloseRDMA) {
         bridge.erase(fd);
     }
-//#endif
 
     return real::close(fd);
 }
 
 ssize_t send(int fd, const void *buffer, size_t length, int flags) {
-    warn("send");
 // For now: We forward the call to write for a certain set of
 // flags, which we chose to ignore. By putting them here explicitly,
 // we make sure that we only ignore flags, which are not important.
@@ -211,7 +198,6 @@ ssize_t send(int fd, const void *buffer, size_t length, int flags) {
 }
 
 ssize_t recv(int fd, void *buffer, size_t length, int flags) {
-    warn("recv");
 #ifdef __APPLE__
     if (flags == 0) {
 #else
@@ -226,7 +212,7 @@ ssize_t recv(int fd, void *buffer, size_t length, int flags) {
 
 ssize_t sendmsg(int fd, const struct msghdr *msg, int flags) {
     warn("sendmsg");
-    // This one is hard to implemenet because the `msghdr` struct contains
+    // This one is hard to implement because the `msghdr` struct contains
     // an iovec pointer, which points to an array of iovec structs. Each such
     // struct is then a vector with a starting address and length. The sendmsg
     // call then fills these vectors one by one until the stream is empty or
@@ -351,30 +337,28 @@ typedef struct DescriptorSets {
     fd_set *errorfds;
 } DescriptorSets;
 
-bool _fd_is_set(int fd, const fd_set *set) {
+static bool fd_is_set(int fd, const fd_set *set) {
     return set != NULL && FD_ISSET(fd, set);
 }
 
-bool _is_in_any_set(int fd, const DescriptorSets *sets) {
-    if (_fd_is_set(fd, sets->readfds)) return true;
-    if (_fd_is_set(fd, sets->writefds)) return true;
-    if (_fd_is_set(fd, sets->errorfds)) return true;
-
-    return false;
+static bool is_in_any_set(int fd, const DescriptorSets *sets) {
+    return fd_is_set(fd, sets->readfds) ||
+           fd_is_set(fd, sets->writefds) ||
+           fd_is_set(fd, sets->errorfds);
 }
 
-void _count_tssx_sockets(size_t highest_fd, const DescriptorSets *sets, size_t *tssx_count) {
-    *tssx_count = 0;
+static void count_rdma_sockets(size_t highest_fd, const DescriptorSets *sets, size_t *rdma_count) {
+    *rdma_count = 0;
     for (size_t fd = 0; fd < highest_fd; ++fd) {
-        if (_is_in_any_set(fd, sets)) {
+        if (is_in_any_set(fd, sets)) {
             if (bridge.find(fd) != bridge.end()) {
-                ++(*tssx_count);
+                ++(*rdma_count);
             }
         }
     }
 }
 
-int timeval_to_milliseconds(const struct timeval *time) {
+static int timeval_to_milliseconds(const struct timeval *time) {
     int milliseconds;
 
     milliseconds = time->tv_sec * 1000;
@@ -383,15 +367,13 @@ int timeval_to_milliseconds(const struct timeval *time) {
     return milliseconds;
 }
 
-static struct pollfd *rs_select_to_poll(int *nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds) {
-    struct pollfd *fds;
-    int fd, i = 0;
-
-    fds = (pollfd *) calloc(*nfds, sizeof(*fds));
+static struct pollfd *select_to_poll(int *nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds) {
+    struct pollfd *fds = (pollfd *) calloc(*nfds, sizeof(*fds));
     if (!fds)
         return NULL;
 
-    for (fd = 0; fd < *nfds; fd++) {
+    int i = 0;
+    for (int fd = 0; fd < *nfds; fd++) {
         if (readfds && FD_ISSET(fd, readfds)) {
             fds[i].fd = fd;
             fds[i].events = POLLIN;
@@ -413,10 +395,9 @@ static struct pollfd *rs_select_to_poll(int *nfds, fd_set *readfds, fd_set *writ
     return fds;
 }
 
-static int rs_poll_to_select(int nfds, struct pollfd *fds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds) {
-    int i, cnt = 0;
-
-    for (i = 0; i < nfds; i++) {
+static int poll_to_select(int nfds, struct pollfd *fds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds) {
+    int cnt = 0;
+    for (int i = 0; i < nfds; i++) {
         if (readfds && (fds[i].revents & (POLLIN | POLLHUP))) {
             FD_SET(fds[i].fd, readfds);
             cnt++;
@@ -435,8 +416,8 @@ static int rs_poll_to_select(int nfds, struct pollfd *fds, fd_set *readfds, fd_s
     return cnt;
 }
 
-int _forward_to_poll(int nfds, DescriptorSets *sets, struct timeval *timeout) {
-    auto pollfds = rs_select_to_poll(&nfds, sets->readfds, sets->writefds, sets->errorfds);
+static int forward_to_poll(int nfds, DescriptorSets *sets, struct timeval *timeout) {
+    auto pollfds = select_to_poll(&nfds, sets->readfds, sets->writefds, sets->errorfds);
     if (pollfds == NULL) {
         return ERROR;
     }
@@ -454,7 +435,7 @@ int _forward_to_poll(int nfds, DescriptorSets *sets, struct timeval *timeout) {
         FD_ZERO(sets->errorfds);
 
     if (number_of_events > 0) {
-        number_of_events = rs_poll_to_select(nfds, pollfds, sets->readfds, sets->writefds, sets->errorfds);
+        number_of_events = poll_to_select(nfds, pollfds, sets->readfds, sets->writefds, sets->errorfds);
     }
     free(pollfds);
     return number_of_events;
@@ -462,12 +443,12 @@ int _forward_to_poll(int nfds, DescriptorSets *sets, struct timeval *timeout) {
 
 int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *errorfds, struct timeval *timeout) {
     DescriptorSets sets = {readfds, writefds, errorfds};
-    size_t tssx_count;
-    _count_tssx_sockets(nfds, &sets, &tssx_count);
+    size_t rdma_count;
+    count_rdma_sockets(nfds, &sets, &rdma_count);
 
-    if (tssx_count == 0) {
+    if (rdma_count == 0) {
         return real::select(nfds, readfds, writefds, errorfds, timeout);
     }
 
-    return _forward_to_poll(nfds, &sets, timeout);
+    return forward_to_poll(nfds, &sets, timeout);
 }
