@@ -242,5 +242,6 @@ bool RDMAMessageBuffer::hasData() {
 RDMANetworking::RDMANetworking(int sock) :
         completionQueue(network),
         queuePair(network, completionQueue) {
+    tcp_setBlocking(sock); // just set the socket to block for our setup.
     exchangeQPNAndConnect(sock, network, queuePair);
 }
