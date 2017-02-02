@@ -158,7 +158,7 @@ ssize_t write(int fd, const void *source, size_t requested_bytes) {
         bridge[fd]->send((uint8_t *) source, requested_bytes);
         std::cout << "write \"" << std::string(((char *) source), ((char *) source) + requested_bytes) << '"'
                   << std::endl;
-        return SUCCESS;
+        return requested_bytes;
     }
     return real::write(fd, source, requested_bytes);
 }
