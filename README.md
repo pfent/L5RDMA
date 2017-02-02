@@ -14,15 +14,17 @@ rdmaPingPong
 | Where      | What | RoundTrips / second | avg. latency in µs |
 | ---------- | ---- | ------------------: | -----------------: |
 | localhost  | TCP  |              81,781 |              12.23 |
-| localhost  | RDMA |             344,330 |               2.90 |
-| LAN        | TCP  |              39,541 |              25.29 |
-| LAN        | RDMA |             278,790 |               3.59 |
+| localhost  | RDMA |             472,415 |               2.12 |
+| network    | TCP  |              39,541 |              25.29 |
+| network    | RDMA |             381,520 |               2.62 |
 
 ## Remarks
-* `WorkRequest::setCompletion()` apparently has no effect, since no matter what I set, I always get a completion in the completion queue. So even with `setCompletion(false)` we need to poll the queue or we run out of memory in the queue.  
-* `CompletionQueuePair::waitForCompletion()` slows the roundtrips per second by ~50% (so only do that when really necessary)
 * Keeping track of the sent / received messages with a separate AtomicFetchAndAddWorkRequest also slows the RTT by ~50%. Keeping the message in a single WriteRequest seems reasonable.
 * RDMA guarantees, that memory is written in order. However, only bytes are written atomically. When reading bigger words, they might be written partially.
+
+## calling `fork()`
+`fork()`-ing libibverbs should be avoided. However, the [man pages](https://linux.die.net/man/3/ibv_fork_init) suggest, that forking can be done when calling `ibv_fork_init()` before forking, or simply setting `IBV_FORK_SAFE=1`.  
+However, trying to get this to work with postgres results in a segfault in the server process.
 
 ## Building
 The project can be built with CMake on any platform libibverbs is supported on (Only tested on Linux though) and a reasonably modern compiler (C++14).
