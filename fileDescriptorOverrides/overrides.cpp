@@ -169,7 +169,7 @@ ssize_t read(int fd, void *destination, size_t requested_bytes) {
         auto bytesRead = bridge[fd]->receive(destination, requested_bytes);
         std::cout << "read \"" << std::string(((char *) destination), ((char *) destination) + bytesRead) << '"'
                   << std::endl;
-        return bridge[fd]->receive(destination, requested_bytes);
+        return bytesRead;
     }
     return real::read(fd, destination, requested_bytes);
 }
