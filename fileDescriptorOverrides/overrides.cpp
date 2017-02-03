@@ -15,7 +15,7 @@
 
 // unordered_map does not like to be 0 initialized, so we can't use it here
 static std::map<int, std::unique_ptr<RDMAMessageBuffer>> bridge;
-static std::set<int> rdmableSockets;
+static std::map<int, size_t> rdmableSockets;
 static bool dontCloseRDMA = true; // as long as we can't get rid of the RDMA deallocation errors, don't ever close RDMA connections
 static size_t forkGeneration = 0;
 
@@ -30,6 +30,12 @@ auto getForkGenIntercept() {
     static const auto forkGenChars = getenv("RDMA_FORKGEN");
     static const auto forkGen = forkGenChars ? std::stoul(std::string(forkGenChars)) : 0;
     return forkGen;
+}
+
+auto getPreRDMAWriteSize() {
+    static const auto preWriteChars = getenv("RDMA_PRE_WRITE");
+    static const auto preWrite = preWriteChars ? std::stoul(std::string(preWriteChars)) : 0;
+    return preWrite;
 }
 
 template<typename T>
@@ -126,7 +132,7 @@ int accept(int server_socket, sockaddr *address, socklen_t *length) {
     }
 
     warn("RDMA accept");
-    rdmableSockets.insert(client_socket);
+    rdmableSockets.insert({client_socket, 0});
     return client_socket;
 }
 
@@ -153,23 +159,28 @@ int connect(int fd, const sockaddr *address, socklen_t length) {
     }
 
     warn("RDMA connect");
-    rdmableSockets.insert(fd);
+    rdmableSockets.insert({fd, getPreRDMAWriteSize()});
     return SUCCESS;
 }
 
 ssize_t write(int fd, const void *source, size_t requested_bytes) {
     if (bridge.find(fd) != bridge.end()) {
-        bridge[fd]->send((uint8_t *) source, requested_bytes);
-        std::cout << "write \"" << std::string(((char *) source), ((char *) source) + requested_bytes) << '"'
+        std::cout << "write " << requested_bytes << "B \""
+                  << std::string(((char *) source), ((char *) source) + requested_bytes) << '"'
                   << std::endl;
+        bridge[fd]->send((uint8_t *) source, requested_bytes);
         return requested_bytes;
     }
     if (forkGeneration == getForkGenIntercept() &&
         // When dealing with the accept then fork pattern, delay the actual RDMA connection to the child process
         rdmableSockets.find(fd) != rdmableSockets.end()) {
-        rdmableSockets.erase(rdmableSockets.find(fd));
-        bridge[fd] = std::make_unique<RDMAMessageBuffer>(BUFFER_SIZE, fd);
-        return write(fd, source, requested_bytes);
+        if (rdmableSockets[fd] == 0) {
+            rdmableSockets.erase(rdmableSockets.find(fd));
+            bridge[fd] = std::make_unique<RDMAMessageBuffer>(BUFFER_SIZE, fd);
+            return write(fd, source, requested_bytes);
+        } else {
+            rdmableSockets[fd] -= requested_bytes;
+        }
     }
     return real::write(fd, source, requested_bytes);
 }
@@ -177,7 +188,8 @@ ssize_t write(int fd, const void *source, size_t requested_bytes) {
 ssize_t read(int fd, void *destination, size_t requested_bytes) {
     if (bridge.find(fd) != bridge.end()) {
         auto bytesRead = bridge[fd]->receive(destination, requested_bytes);
-        std::cout << "read \"" << std::string(((char *) destination), ((char *) destination) + bytesRead) << '"'
+        std::cout << "read " << requested_bytes << "B \""
+                  << std::string(((char *) destination), ((char *) destination) + bytesRead) << '"'
                   << std::endl;
         return bytesRead;
     }
