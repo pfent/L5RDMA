@@ -26,6 +26,12 @@ auto getRdmaEnv() {
     return rdmaReachable;
 }
 
+auto getForkGenIntercept() {
+    static const auto forkGenChars = getenv("RDMA_FORKGEN");
+    static const auto forkGen = forkGenChars ? std::stoul(std::string(forkGenChars)) : 0;
+    return forkGen;
+}
+
 template<typename T>
 void warn(T msg) {
     std::cerr << msg << std::endl;
@@ -153,13 +159,12 @@ int connect(int fd, const sockaddr *address, socklen_t length) {
 
 ssize_t write(int fd, const void *source, size_t requested_bytes) {
     if (bridge.find(fd) != bridge.end()) {
-        // TODO: check if server is still alive
         bridge[fd]->send((uint8_t *) source, requested_bytes);
         std::cout << "write \"" << std::string(((char *) source), ((char *) source) + requested_bytes) << '"'
                   << std::endl;
         return requested_bytes;
     }
-    if (forkGeneration > 0 &&
+    if (forkGeneration == getForkGenIntercept() &&
         // When dealing with the accept then fork pattern, delay the actual RDMA connection to the child process
         rdmableSockets.find(fd) != rdmableSockets.end()) {
         rdmableSockets.erase(rdmableSockets.find(fd));
@@ -171,14 +176,13 @@ ssize_t write(int fd, const void *source, size_t requested_bytes) {
 
 ssize_t read(int fd, void *destination, size_t requested_bytes) {
     if (bridge.find(fd) != bridge.end()) {
-        // TODO: check if server is still alive
         auto bytesRead = bridge[fd]->receive(destination, requested_bytes);
         std::cout << "read \"" << std::string(((char *) destination), ((char *) destination) + bytesRead) << '"'
                   << std::endl;
         return bytesRead;
     }
 
-    if (forkGeneration > 0 &&
+    if (forkGeneration == getForkGenIntercept() &&
         // When dealing with the accept then fork pattern, delay the actual RDMA connection to the child process
         rdmableSockets.find(fd) != rdmableSockets.end()) {
         rdmableSockets.erase(rdmableSockets.find(fd));

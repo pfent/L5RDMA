@@ -26,6 +26,14 @@ rdmaPingPong
 `fork()`-ing libibverbs should be avoided. However, the [man pages](https://linux.die.net/man/3/ibv_fork_init) suggest, that forking can be done when calling `ibv_fork_init()` before forking, or simply setting `IBV_FORK_SAFE=1`.  
 However, trying to get this to work with postgres results in a segfault in the server process.
 
+There is a (quite hacky) solution in place to allow correct operation with forking programs, by setting `RDMA_FORKGEN`:
+```bash
+RDMA_FORKGEN=1 USE_RDMA=127.0.0.1 LD_PRELOAD=/home/fent/rdma_tests/bin/libTest.so ./forkingPingPong server 1234
+RDMA_FORKGEN=0 USE_RDMA=127.0.0.1 LD_PRELOAD=/home/fent/rdma_tests/bin/libTest.so ./forkingPingPong client 1234 127.0.0.1
+```
+
+Please note, that you need to know in which generation your program stops to fork and set the environment variable accordingly.
+
 ## Building
 The project can be built with CMake on any platform libibverbs is supported on (Only tested on Linux though) and a reasonably modern compiler (C++14).
 
