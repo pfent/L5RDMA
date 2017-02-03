@@ -7,6 +7,7 @@
 #include <arpa/inet.h>
 #include <cstdarg>
 #include <fcntl.h>
+#include <set>
 
 #include "rdma_tests/RDMAMessageBuffer.h"
 #include "realFunctions.h"
@@ -14,7 +15,9 @@
 
 // unordered_map does not like to be 0 initialized, so we can't use it here
 static std::map<int, std::unique_ptr<RDMAMessageBuffer>> bridge;
+static std::set<int> rdmableSockets;
 static bool dontCloseRDMA = true; // as long as we can't get rid of the RDMA deallocation errors, don't ever close RDMA connections
+static size_t forkGeneration = 0;
 
 static const size_t BUFFER_SIZE = 16 * 1024;
 
@@ -117,7 +120,7 @@ int accept(int server_socket, sockaddr *address, socklen_t *length) {
     }
 
     warn("RDMA accept");
-    bridge[client_socket] = std::make_unique<RDMAMessageBuffer>(BUFFER_SIZE, client_socket);
+    rdmableSockets.insert(client_socket);
     return client_socket;
 }
 
@@ -143,12 +146,8 @@ int connect(int fd, const sockaddr *address, socklen_t length) {
         return SUCCESS;
     }
 
-    try {
-        warn("RDMA connect");
-        bridge[fd] = std::make_unique<RDMAMessageBuffer>(BUFFER_SIZE, fd);
-    } catch (...) {
-        return ERROR;
-    }
+    warn("RDMA connect");
+    rdmableSockets.insert(fd);
     return SUCCESS;
 }
 
@@ -160,6 +159,13 @@ ssize_t write(int fd, const void *source, size_t requested_bytes) {
                   << std::endl;
         return requested_bytes;
     }
+    if (forkGeneration > 0 &&
+        // When dealing with the accept then fork pattern, delay the actual RDMA connection to the child process
+        rdmableSockets.find(fd) != rdmableSockets.end()) {
+        rdmableSockets.erase(rdmableSockets.find(fd));
+        bridge[fd] = std::make_unique<RDMAMessageBuffer>(BUFFER_SIZE, fd);
+        return write(fd, source, requested_bytes);
+    }
     return real::write(fd, source, requested_bytes);
 }
 
@@ -170,6 +176,14 @@ ssize_t read(int fd, void *destination, size_t requested_bytes) {
         std::cout << "read \"" << std::string(((char *) destination), ((char *) destination) + bytesRead) << '"'
                   << std::endl;
         return bytesRead;
+    }
+
+    if (forkGeneration > 0 &&
+        // When dealing with the accept then fork pattern, delay the actual RDMA connection to the child process
+        rdmableSockets.find(fd) != rdmableSockets.end()) {
+        rdmableSockets.erase(rdmableSockets.find(fd));
+        bridge[fd] = std::make_unique<RDMAMessageBuffer>(BUFFER_SIZE, fd);
+        return read(fd, destination, requested_bytes);
     }
     return real::read(fd, destination, requested_bytes);
 }
@@ -268,7 +282,11 @@ ssize_t recvfrom(int fd, void *buffer, size_t length, int flags, struct sockaddr
 
 pid_t fork(void) {
     dontCloseRDMA = true;
-    return real::fork();
+    auto res = real::fork();
+    if (res == 0) {
+        ++forkGeneration;
+    }
+    return res;
 }
 
 int poll(struct pollfd *fds, nfds_t nfds, int timeout) {
