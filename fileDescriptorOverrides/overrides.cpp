@@ -1,6 +1,5 @@
 #include <sys/socket.h>
 #include <iostream>
-#include <unordered_map>
 #include <map>
 #include <cstring>
 #include <netinet/in.h>
@@ -15,7 +14,7 @@
 
 // unordered_map does not like to be 0 initialized, so we can't use it here
 static std::map<int, std::unique_ptr<RDMAMessageBuffer>> bridge;
-static std::map<int, size_t> rdmableSockets;
+static std::set<int> rdmableSockets;
 static bool dontCloseRDMA = true; // as long as we can't get rid of the RDMA deallocation errors, don't ever close RDMA connections
 static size_t forkGeneration = 0;
 
@@ -30,12 +29,6 @@ auto getForkGenIntercept() {
     static const auto forkGenChars = getenv("RDMA_FORKGEN");
     static const auto forkGen = forkGenChars ? std::stoul(std::string(forkGenChars)) : 0;
     return forkGen;
-}
-
-auto getPreRDMAWriteSize() {
-    static const auto preWriteChars = getenv("RDMA_PRE_WRITE");
-    static const auto preWrite = preWriteChars ? std::stoul(std::string(preWriteChars)) : 0;
-    return preWrite;
 }
 
 template<typename T>
@@ -97,8 +90,6 @@ bool shouldServerIntercept(int serverSocket, int clientSocket) {
         getpeername(clientSocket, (struct sockaddr *) &connectedAddr, &size);
     }
 
-    std::cout << "connected to: " << inet_ntoa(connectedAddr.sin_addr) << std::endl;
-    std::cout << "RDMA connections possible to: " << inet_ntoa(possibleAddr.sin_addr) << std::endl;
     return connectedAddr.sin_addr.s_addr == possibleAddr.sin_addr.s_addr;
 }
 
@@ -115,13 +106,10 @@ bool shouldClientIntercept(int socket) {
         getpeername(socket, (struct sockaddr *) &connectedAddr, &size);
     }
 
-    std::cout << "connected to: " << inet_ntoa(connectedAddr.sin_addr) << std::endl;
-    std::cout << "RDMA connections possible to: " << inet_ntoa(possibleAddr.sin_addr) << std::endl;
     return connectedAddr.sin_addr.s_addr == possibleAddr.sin_addr.s_addr;
 }
 
 int accept(int server_socket, sockaddr *address, socklen_t *length) {
-    warn("accept");
     int client_socket = real::accept(server_socket, address, length);
     if (client_socket < 0) {
         return ERROR;
@@ -131,14 +119,11 @@ int accept(int server_socket, sockaddr *address, socklen_t *length) {
         return SUCCESS;
     }
 
-    warn("RDMA accept");
-    rdmableSockets.insert({client_socket, 0});
+    rdmableSockets.insert(client_socket);
     return client_socket;
 }
 
 int connect(int fd, const sockaddr *address, socklen_t length) {
-    warn("connect");
-
     if (real::connect(fd, address, length) == ERROR) {
         if (errno != EINPROGRESS) {
             return ERROR;
@@ -154,33 +139,24 @@ int connect(int fd, const sockaddr *address, socklen_t length) {
     }
 
     if (not shouldClientIntercept(fd)) {
-        warn("normal connect");
         return SUCCESS;
     }
 
-    warn("RDMA connect");
-    rdmableSockets.insert({fd, getPreRDMAWriteSize()});
+    rdmableSockets.insert(fd);
     return SUCCESS;
 }
 
 ssize_t write(int fd, const void *source, size_t requested_bytes) {
     if (bridge.find(fd) != bridge.end()) {
-        std::cout << "write " << requested_bytes << "B \""
-                  << std::string(((char *) source), ((char *) source) + requested_bytes) << '"'
-                  << std::endl;
         bridge[fd]->send((uint8_t *) source, requested_bytes);
         return requested_bytes;
     }
     if (forkGeneration == getForkGenIntercept() &&
         // When dealing with the accept then fork pattern, delay the actual RDMA connection to the child process
         rdmableSockets.find(fd) != rdmableSockets.end()) {
-        if (rdmableSockets[fd] == 0) {
             rdmableSockets.erase(rdmableSockets.find(fd));
             bridge[fd] = std::make_unique<RDMAMessageBuffer>(BUFFER_SIZE, fd);
             return write(fd, source, requested_bytes);
-        } else {
-            rdmableSockets[fd] -= requested_bytes;
-        }
     }
     return real::write(fd, source, requested_bytes);
 }
@@ -188,9 +164,6 @@ ssize_t write(int fd, const void *source, size_t requested_bytes) {
 ssize_t read(int fd, void *destination, size_t requested_bytes) {
     if (bridge.find(fd) != bridge.end()) {
         auto bytesRead = bridge[fd]->receive(destination, requested_bytes);
-        std::cout << "read " << requested_bytes << "B \""
-                  << std::string(((char *) destination), ((char *) destination) + bytesRead) << '"'
-                  << std::endl;
         return bytesRead;
     }
 
@@ -280,7 +253,7 @@ sendto(int fd, const void *buffer, size_t length, int flags, const struct sockad
     if (dest_addr == NULL) {
         return send(fd, buffer, length, flags);
     } else {
-        // Connection-less sockets (UDP) sockets never use TSSX anyway
+        // Connection-less sockets (UDP) sockets never use RDMA anyway
         return real::sendto(fd, buffer, length, flags, dest_addr, addrlen);
     }
 }
@@ -291,7 +264,7 @@ ssize_t recvfrom(int fd, void *buffer, size_t length, int flags, struct sockaddr
     if (src_addr == NULL) {
         return recv(fd, buffer, length, flags);
     } else {
-        // Connection-Less sockets (UDP) sockets never use TSSX anyway
+        // Connection-Less sockets (UDP) sockets never use RDMA anyway
         return real::recvfrom(fd, buffer, length, flags, src_addr, addrlen);
     }
 }
@@ -310,22 +283,21 @@ int poll(struct pollfd *fds, nfds_t nfds, int timeout) {
     if (nfds == 0) return 0;
 
     int event_count = 0;
-    std::vector<size_t> tssx_fds, normal_fds;
+    std::vector<size_t> rdma_fds, normal_fds;
     for (nfds_t index = 0; index < nfds; ++index) {
         if (bridge.find(fds[index].fd) != bridge.end()) {
-            tssx_fds.push_back(index);
+            rdma_fds.push_back(index);
         } else {
             normal_fds.push_back(index);
         }
     }
 
-    if (tssx_fds.size() == 0) {
+    if (rdma_fds.size() == 0) {
         event_count = real::poll(fds, nfds, timeout);
     } else if (normal_fds.size() == 0) {
-        warn("RDMA poll");
         do {
             // Do a full loop over all FDs
-            for (auto &i : tssx_fds) {
+            for (auto &i : rdma_fds) {
                 auto &msgBuf = bridge[fds[i].fd];
                 if (msgBuf->hasData()) {
                     auto inFlag = fds[i].events & POLLIN;

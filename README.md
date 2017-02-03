@@ -34,6 +34,15 @@ RDMA_FORKGEN=0 USE_RDMA=127.0.0.1 LD_PRELOAD=/home/fent/rdma_tests/bin/libTest.s
 
 Please note, that you need to know in which generation your program stops to fork and set the environment variable accordingly.
 
+## Executing postgres with the preload library
+
+```bash
+# Server
+RDMA_FORKGEN=1 USE_RDMA=10.0.0.11 LD_PRELOAD=/home/fent/rdma_tests/bin/libTest.so ./bin/postgres -D ../tmp/ -p 4567
+# Client
+RDMA_FORKGEN=0 USE_RDMA=10.0.0.16 LD_PRELOAD=/home/fent/rdma_tests/bin/libTest.so ./bin/psql -h scyper16 -p 4567 -d postgres
+```
+
 ## Building
 The project can be built with CMake on any platform libibverbs is supported on (Only tested on Linux though) and a reasonably modern compiler (C++14).
 
