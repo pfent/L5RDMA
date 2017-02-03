@@ -1,25 +1,34 @@
 #include <iostream>
 #include <arpa/inet.h>
+#include <unistd.h>
+#include <algorithm>
 #include <chrono>
+#include <wait.h>
 #include "rdma/Network.hpp"
-#include <rdma/rsocket.h>
+#include "tcpWrapper.h"
 
 using namespace std;
 using namespace rdma;
+
+static void sigchldHandler(int) {
+    while (waitpid(-1, NULL, WNOHANG) > 0);
+}
 
 int main(int argc, char **argv) {
     if (argc < 3 || (argv[1][0] == 'c' && argc < 4)) {
         cout << "Usage: " << argv[0] << " <client / server> <Port> [IP (if client)]" << endl;
         return -1;
     }
+    struct sigaction act{};
+    act.sa_handler = sigchldHandler;
+    if (sigaction(SIGCHLD, &act, 0)) {
+        perror("sigaction");
+        return 1;
+    }
     const auto isClient = argv[1][0] == 'c';
     const auto port = atoi(argv[2]);
 
-    auto sock = rsocket(AF_INET, SOCK_STREAM, 0);
-    if (sock < 0) {
-        perror("rsocket");
-        throw runtime_error{"rsocket failed"};
-    }
+    auto sock = tcp_socket();
 
     static const size_t MESSAGES = 1024 * 128;
     static const size_t BUFFER_SIZE = 64;
@@ -33,19 +42,14 @@ int main(int argc, char **argv) {
         addr.sin_port = htons(port);
         inet_pton(AF_INET, argv[3], &addr.sin_addr);
 
-        auto connect = rconnect(sock, (sockaddr *) &addr, sizeof(addr));
-        if (connect < 0) {
-            perror("rconnect");
-            throw runtime_error{"rconnect failed"};
-        }
+        tcp_connect(sock, addr);
         const auto start = chrono::steady_clock::now();
         for (size_t i = 0; i < MESSAGES; ++i) {
-
-            rwrite(sock, DATA, BUFFER_SIZE);
+            tcp_write(sock, DATA, BUFFER_SIZE);
 
             fill(begin(buffer), end(buffer), 0);
 
-            rread(sock, buffer, BUFFER_SIZE);
+            tcp_read(sock, buffer, BUFFER_SIZE);
 
             for (size_t j = 0; j < BUFFER_SIZE; ++j) {
                 if (buffer[j] != DATA[j]) {
@@ -64,24 +68,27 @@ int main(int argc, char **argv) {
         addr.sin_port = htons(port);
         addr.sin_addr.s_addr = INADDR_ANY;
 
-        rbind(sock, (sockaddr *) &addr, sizeof(addr));
+        tcp_bind(sock, addr);
         listen(sock, SOMAXCONN);
         sockaddr_in inAddr;
         for (;;) {
-            socklen_t inAddrLen = sizeof inAddr;
-            const auto acced = raccept(sock, (sockaddr *) &inAddr, &inAddrLen);
-            if (acced < 0) {
-                throw std::runtime_error{"error accept'ing"};
+            const auto acced = tcp_accept(sock, inAddr);
+            //if(acced == EINTR) continue;
+            if (fork() == 0) { // child
+                close(sock);
+                for (size_t i = 0; i < MESSAGES; ++i) {
+                    tcp_read(acced, buffer, BUFFER_SIZE);
+                    tcp_write(acced, buffer, BUFFER_SIZE);
+                }
+                close(acced);
+                return 0;
             }
-            for (size_t i = 0; i < MESSAGES; ++i) {
-                rread(acced, buffer, BUFFER_SIZE);
-                rwrite(acced, buffer, BUFFER_SIZE);
-            }
-            rclose(acced);
+
+            close(acced);
         }
     }
 
-    rclose(sock);
+    close(sock);
     return 0;
 }
 

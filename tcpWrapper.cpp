@@ -45,6 +45,7 @@ int tcp_accept(int sock, sockaddr_in &inAddr) {
     socklen_t inAddrLen = sizeof inAddr;
     auto acced = accept(sock, (sockaddr *) &inAddr, &inAddrLen);
     if (acced < 0) {
+        perror("accept");
         throw std::runtime_error{"error accept'ing"};
     }
     return acced;
