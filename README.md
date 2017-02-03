@@ -22,7 +22,7 @@ rdmaPingPong
 * Keeping track of the sent / received messages with a separate AtomicFetchAndAddWorkRequest also slows the RTT by ~50%. Keeping the message in a single WriteRequest seems reasonable.
 * RDMA guarantees, that memory is written in order. However, only bytes are written atomically. When reading bigger words, they might be written partially.
 
-## calling `fork()`
+## Calling `fork()`
 `fork()`-ing libibverbs should be avoided. However, the [man pages](https://linux.die.net/man/3/ibv_fork_init) suggest, that forking can be done when calling `ibv_fork_init()` before forking, or simply setting `IBV_FORK_SAFE=1`.  
 However, trying to get this to work with postgres results in a segfault in the server process.
 
@@ -42,6 +42,8 @@ RDMA_FORKGEN=1 USE_RDMA=10.0.0.11 LD_PRELOAD=/home/fent/rdma_tests/bin/libTest.s
 # Client
 RDMA_FORKGEN=0 USE_RDMA=10.0.0.16 LD_PRELOAD=/home/fent/rdma_tests/bin/libTest.so ./bin/psql -h scyper16 -p 4567 -d postgres
 ```
+
+Results in a working psql environment.
 
 ## Building
 The project can be built with CMake on any platform libibverbs is supported on (Only tested on Linux though) and a reasonably modern compiler (C++14).
