@@ -106,38 +106,40 @@ RDMAMessageBuffer::RDMAMessageBuffer(size_t size, int sock) :
 }
 
 /// Higher order wraparound function. Calls the given function func() once or twice, depending on if a wraparound is needed or not
+/// func(size_t prevBytes, T* begin, T* end)
 template<typename T, typename Func>
 void wraparound(T *buffer, const size_t totalSize, const size_t todoSize, const size_t pos, Func &&func) {
-    wraparound(totalSize, todoSize, pos, [&](auto beginPos, auto endPos) {
-        func(buffer + beginPos, buffer + endPos);
+    wraparound(totalSize, todoSize, pos, [&](auto prevBytes, auto beginPos, auto endPos) {
+        func(prevBytes, buffer + beginPos, buffer + endPos);
     });
 }
 
 template<typename Func>
 void wraparound(const size_t totalSize, const size_t todoSize, const size_t pos, Func &&func) {
     const size_t beginPos = pos & (totalSize - 1);
-    if ((totalSize - beginPos) > todoSize) {
-        func(beginPos, beginPos + todoSize);
+    if ((totalSize - beginPos) >= todoSize) {
+        func(0, beginPos, beginPos + todoSize);
     } else {
         const auto fst = beginPos;
         const auto fstToRead = totalSize - beginPos;
         const auto snd = 0;
         const auto sndToRead = todoSize - fstToRead;
-        func(fst, fst + fstToRead);
-        func(snd, snd + sndToRead);
+        func(0, fst, fst + fstToRead);
+        func(fstToRead, snd, snd + sndToRead);
     }
 }
 
 void RDMAMessageBuffer::send(const uint8_t *data, size_t length) {
     const size_t sizeToWrite = sizeof(length) + length + sizeof(validity);
     if (sizeToWrite > size) throw runtime_error{"data > buffersize!"};
-    const auto startOfWrite = sendPos;
+
+    const size_t startOfWrite = sendPos;
 
     writeToSendBuffer((uint8_t *) &length, sizeof(length));
     writeToSendBuffer(data, length);
     writeToSendBuffer((uint8_t *) &validity, sizeof(validity));
 
-    wraparound(size, sizeToWrite, startOfWrite, [&](auto beginPos, auto endPos) {
+    wraparound(size, sizeToWrite, startOfWrite, [&](auto, auto beginPos, auto endPos) {
         const auto sendSlice = localSend.slice(beginPos, endPos - beginPos);
         const auto remoteSlice = remoteReceive.slice(beginPos);
         WriteWorkRequestBuilder(sendSlice, remoteSlice, false)
@@ -155,22 +157,22 @@ void RDMAMessageBuffer::writeToSendBuffer(const uint8_t *data, size_t sizeToWrit
         safeToWrite = size - (sendPos - currentRemoteReceive);
     }
 
-    wraparound(sendBuffer.get(), size, sizeToWrite, sendPos, [&](auto begin, auto end) {
-        copy(data, data + distance(begin, end), begin);
+    wraparound(sendBuffer.get(), size, sizeToWrite, sendPos, [&](auto prevBytes, auto begin, auto end) {
+        copy(data + prevBytes, data + prevBytes + distance(begin, end), begin);
     });
 
     sendPos += sizeToWrite;
 }
 
 void RDMAMessageBuffer::readFromReceiveBuffer(size_t readPos, uint8_t *whereTo, size_t sizeToRead) {
-    wraparound(receiveBuffer.get(), size, sizeToRead, readPos, [whereTo](auto begin, auto end) {
-        copy(begin, end, whereTo);
+    wraparound(receiveBuffer.get(), size, sizeToRead, readPos, [whereTo](auto prevBytes, auto begin, auto end) {
+        copy(begin, end, whereTo + prevBytes);
     });
     // Don't increment currentRead, we might need to read the same position multiple times!
 }
 
 void RDMAMessageBuffer::zeroReceiveBuffer(size_t beginReceiveCount, size_t sizeToZero) {
-    wraparound(receiveBuffer.get(), size, sizeToZero, beginReceiveCount, [](auto begin, auto end) {
+    wraparound(receiveBuffer.get(), size, sizeToZero, beginReceiveCount, [](auto, auto begin, auto end) {
         fill(begin, end, 0);
     });
 }
