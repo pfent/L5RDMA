@@ -88,7 +88,7 @@ Network::Network()
 Network::~Network()
 /// Destructor
 {
-   int status;
+//   int status;
 
    sharedReceiveQueue.release();
    sharedCompletionQueuePair.release();

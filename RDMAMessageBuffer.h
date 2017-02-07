@@ -2,7 +2,6 @@
 #define RDMA_HASH_MAP_RDMAMESSAGEBUFFER_H
 
 #include <atomic>
-#include <deque>
 #include "rdma/Network.hpp"
 #include "rdma/CompletionQueuePair.hpp"
 #include "rdma/QueuePair.hpp"
@@ -52,15 +51,11 @@ private:
     rdma::RemoteMemoryRegion remoteReceive;
     rdma::RemoteMemoryRegion remoteReadPos;
 
-    std::deque<uint8_t> alreadyRead;
-
     void writeToSendBuffer(const uint8_t *data, size_t sizeToWrite);
 
     void readFromReceiveBuffer(size_t readPos, uint8_t *whereTo, size_t sizeToRead);
 
     void zeroReceiveBuffer(size_t beginReceiveCount, size_t sizeToZero);
-
-    void sendInline(const uint8_t *data, size_t length);
 };
 
 #endif //RDMA_HASH_MAP_RDMAMESSAGEBUFFER_H
