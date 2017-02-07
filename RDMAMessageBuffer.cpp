@@ -130,6 +130,10 @@ void wraparound(const size_t totalSize, const size_t todoSize, const size_t pos,
 }
 
 void RDMAMessageBuffer::send(const uint8_t *data, size_t length) {
+    send(data, length, true);
+}
+
+void RDMAMessageBuffer::send(const uint8_t *data, size_t length, bool inln) {
     const size_t sizeToWrite = sizeof(length) + length + sizeof(validity);
     if (sizeToWrite > size) throw runtime_error{"data > buffersize!"};
 
@@ -143,6 +147,7 @@ void RDMAMessageBuffer::send(const uint8_t *data, size_t length) {
         const auto sendSlice = localSend.slice(beginPos, endPos - beginPos);
         const auto remoteSlice = remoteReceive.slice(beginPos);
         WriteWorkRequestBuilder(sendSlice, remoteSlice, false)
+                .setInline(inln && sendSlice.size <= net.queuePair.getMaxInlineSize())
                 .send(net.queuePair);
     });
 }

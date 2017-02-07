@@ -22,6 +22,8 @@ public:
     /// Send data to the remote site
     void send(const uint8_t *data, size_t length);
 
+    void send(const uint8_t *data, size_t length, bool inln);
+
     /// Receive data to a freshly allocated data vector
     std::vector<uint8_t> receive();
 

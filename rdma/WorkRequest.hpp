@@ -146,6 +146,8 @@ namespace rdma {
 
         WriteWorkRequestBuilder &send(QueuePair &qp);
 
+        WriteWorkRequestBuilder &setInline(bool flag);
+
         WriteWorkRequest build();
     };
 
