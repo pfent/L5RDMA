@@ -34,7 +34,7 @@ int main(int argc, char **argv) {
 
         const auto start = chrono::steady_clock::now();
         for (size_t i = 0; i < MESSAGES; ++i) {
-            rdma.send(sendData.data(), sendData.size());
+            rdma.send(sendData.data(), sendData.size(), true);
             auto answer = rdma.receive();
             if (answer.size() != sendData.size()) {
                 throw runtime_error{"answer has wrong size!"};

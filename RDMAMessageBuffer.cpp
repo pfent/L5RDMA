@@ -9,13 +9,15 @@ using namespace rdma;
 
 static const size_t validity = 0xDEADDEADBEEFBEEF;
 
+struct RmrInfo {
+    uint32_t bufferKey;
+    uintptr_t bufferAddress;
+    uint32_t readPosKey;
+    uintptr_t readPosAddress;
+};
+
 static void receiveAndSetupRmr(int sock, RemoteMemoryRegion &buffer, RemoteMemoryRegion &readPos) {
-    struct {
-        uint32_t bufferKey;
-        uintptr_t bufferAddress;
-        uint32_t readPosKey;
-        uintptr_t readPosAddress;
-    } rmrInfo;
+    RmrInfo rmrInfo;
     tcp_read(sock, &rmrInfo, sizeof(rmrInfo));
     buffer.key = rmrInfo.bufferKey;
     buffer.address = rmrInfo.bufferAddress;
@@ -24,12 +26,7 @@ static void receiveAndSetupRmr(int sock, RemoteMemoryRegion &buffer, RemoteMemor
 }
 
 static void sendRmrInfo(int sock, const MemoryRegion &buffer, const MemoryRegion &readPos) {
-    struct {
-        uint32_t bufferKey;
-        uintptr_t bufferAddress;
-        uint32_t readPosKey;
-        uintptr_t readPosAddress;
-    } rmrInfo;
+    RmrInfo rmrInfo;
     rmrInfo.bufferKey = buffer.key->rkey;
     rmrInfo.bufferAddress = reinterpret_cast<uintptr_t>(buffer.address);
     rmrInfo.readPosKey = readPos.key->rkey;
@@ -108,79 +105,55 @@ RDMAMessageBuffer::RDMAMessageBuffer(size_t size, int sock) :
     receiveAndSetupRmr(sock, remoteReceive, remoteReadPos);
 }
 
-void RDMAMessageBuffer::sendInline(const uint8_t *data, size_t length) {
-    size_t sizeToWrite = sizeof(length) + length + sizeof(validity);
-    const size_t beginPos = sendPos & bitmask;
-    const size_t endPos = (sendPos + sizeToWrite - 1) & bitmask;
+/// Higher order wraparound function. Calls the given function func() once or twice, depending on if a wraparound is needed or not
+/// func(size_t prevBytes, T* begin, T* end)
+template<typename T, typename Func>
+void wraparound(T *buffer, const size_t totalSize, const size_t todoSize, const size_t pos, Func &&func) {
+    wraparound(totalSize, todoSize, pos, [&](auto prevBytes, auto beginPos, auto endPos) {
+        func(prevBytes, buffer + beginPos, buffer + endPos);
+    });
+}
 
-    // Don't actually write to a pinned memory region. RDMA doesn't care about the lkey, if IBV_SEND_INLINE is set
-    if (endPos >= beginPos) {
-        const auto sizeSlice = MemoryRegion::Slice(&length, sizeof(length), 0);
-        const auto dataSlice = MemoryRegion::Slice((void *) data, length, 0);
-        const auto validitySlice = MemoryRegion::Slice((void *) &validity, sizeof(validity), 0);
-
-        const auto remoteSlice = remoteReceive.slice(beginPos);
-        WriteWorkRequest wr;
-        wr.setSendInline(true);
-        wr.setLocalAddress({sizeSlice, dataSlice, validitySlice});
-        wr.setRemoteAddress(remoteSlice);
-        wr.setCompletion(false);
-        net.queuePair.postWorkRequest(wr);
+template<typename Func>
+void wraparound(const size_t totalSize, const size_t todoSize, const size_t pos, Func &&func) {
+    const size_t beginPos = pos & (totalSize - 1);
+    if ((totalSize - beginPos) >= todoSize) {
+        func(0, beginPos, beginPos + todoSize);
     } else {
-        throw;
-        // beginPos ~ buffer end
-        const auto sendSlice1 = localSend.slice(beginPos, size - beginPos);
-        const auto remoteSlice1 = remoteReceive.slice(beginPos);
-        // buffer start ~ endpos
-        const auto sendSlice2 = localSend.slice(0, endPos + 1);
-        const auto remoteSlice2 = remoteReceive.slice(0);
-
-        WriteWorkRequestBuilder(sendSlice1, remoteSlice1, true)
-                .send(net.queuePair);
-        WriteWorkRequestBuilder(sendSlice2, remoteSlice2, true)
-                .send(net.queuePair);
-        net.completionQueue.pollSendCompletionQueue();
+        const auto fst = beginPos;
+        const auto fstToRead = totalSize - beginPos;
+        const auto snd = 0;
+        const auto sndToRead = todoSize - fstToRead;
+        func(0, fst, fst + fstToRead);
+        func(fstToRead, snd, snd + sndToRead);
     }
-    sendPos += sizeToWrite;
 }
 
 void RDMAMessageBuffer::send(const uint8_t *data, size_t length) {
+    send(data, length, true);
+}
+
+void RDMAMessageBuffer::send(const uint8_t *data, size_t length, bool inln) {
     const size_t sizeToWrite = sizeof(length) + length + sizeof(validity);
     if (sizeToWrite > size) throw runtime_error{"data > buffersize!"};
 
-    const size_t beginPos = sendPos & bitmask;
-    const size_t endPos = (sendPos + sizeToWrite - 1) & bitmask;
-
-    //if (sizeToWrite <= net.queuePair.getMaxInlineSize() && endPos >= beginPos) {
-    // actually, sending from 3 different buffers seems to be a tad slower. So don't actually do it
-    //return sendInline(data, length);
-    //}
+    const size_t startOfWrite = sendPos;
 
     writeToSendBuffer((uint8_t *) &length, sizeof(length));
     writeToSendBuffer(data, length);
     writeToSendBuffer((uint8_t *) &validity, sizeof(validity));
 
-    if (endPos >= beginPos) {
-        const auto sendSlice = localSend.slice(beginPos, sizeToWrite);
+    wraparound(size, sizeToWrite, startOfWrite, [&](auto, auto beginPos, auto endPos) {
+        const auto sendSlice = localSend.slice(beginPos, endPos - beginPos);
         const auto remoteSlice = remoteReceive.slice(beginPos);
         WriteWorkRequestBuilder(sendSlice, remoteSlice, false)
+                .setInline(inln && sendSlice.size <= net.queuePair.getMaxInlineSize())
                 .send(net.queuePair);
-    } else {
-        // beginPos ~ buffer end
-        const auto sendSlice1 = localSend.slice(beginPos, size - beginPos);
-        const auto remoteSlice1 = remoteReceive.slice(beginPos);
-        // buffer start ~ endpos
-        const auto sendSlice2 = localSend.slice(0, endPos + 1);
-        const auto remoteSlice2 = remoteReceive.slice(0);
-
-        WriteWorkRequestBuilder(sendSlice1, remoteSlice1, false)
-                .send(net.queuePair);
-        WriteWorkRequestBuilder(sendSlice2, remoteSlice2, false)
-                .send(net.queuePair);
-    }
+    });
 }
 
 void RDMAMessageBuffer::writeToSendBuffer(const uint8_t *data, size_t sizeToWrite) {
+    // Make sure, there is enough space
     size_t safeToWrite = size - (sendPos - currentRemoteReceive);
     while (sizeToWrite > safeToWrite) {
         ReadWorkRequestBuilder(localCurrentRemoteReceive, remoteReadPos, true)
@@ -188,46 +161,25 @@ void RDMAMessageBuffer::writeToSendBuffer(const uint8_t *data, size_t sizeToWrit
         while (net.completionQueue.pollSendCompletionQueue() != 42);
         safeToWrite = size - (sendPos - currentRemoteReceive);
     }
-    const size_t beginPos = sendPos & bitmask;
-    if ((size - beginPos) > sizeToWrite) {
-        copy(data, data + sizeToWrite, sendBuffer.get() + beginPos);
-    } else {
-        auto fst = sendBuffer.get() + beginPos;
-        auto fstToWrite = size - beginPos;
-        auto snd = sendBuffer.get() + 0;
-        copy(data, data + fstToWrite, fst);
-        copy(data + fstToWrite, data + sizeToWrite, snd);
-    }
+
+    wraparound(sendBuffer.get(), size, sizeToWrite, sendPos, [&](auto prevBytes, auto begin, auto end) {
+        copy(data + prevBytes, data + prevBytes + distance(begin, end), begin);
+    });
+
     sendPos += sizeToWrite;
 }
 
 void RDMAMessageBuffer::readFromReceiveBuffer(size_t readPos, uint8_t *whereTo, size_t sizeToRead) {
-    const size_t beginPos = readPos & bitmask;
-    if ((size - beginPos) > sizeToRead) {
-        copy(receiveBuffer.get() + beginPos, receiveBuffer.get() + beginPos + sizeToRead, whereTo);
-    } else {
-        auto fst = receiveBuffer.get() + beginPos;
-        auto fstToRead = size - beginPos;
-        auto snd = receiveBuffer.get() + 0;
-        auto sndToRead = sizeToRead - fstToRead;
-        copy(fst, fst + fstToRead, whereTo);
-        copy(snd, snd + sndToRead, whereTo + fstToRead);
-    }
+    wraparound(receiveBuffer.get(), size, sizeToRead, readPos, [whereTo](auto prevBytes, auto begin, auto end) {
+        copy(begin, end, whereTo + prevBytes);
+    });
     // Don't increment currentRead, we might need to read the same position multiple times!
 }
 
 void RDMAMessageBuffer::zeroReceiveBuffer(size_t beginReceiveCount, size_t sizeToZero) {
-    const size_t beginPos = beginReceiveCount & bitmask;
-    if ((size - beginPos) > sizeToZero) {
-        fill(receiveBuffer.get() + beginPos, receiveBuffer.get() + beginPos + sizeToZero, 0);
-    } else {
-        auto fst = receiveBuffer.get() + beginPos;
-        auto fstToRead = size - beginPos;
-        auto snd = receiveBuffer.get() + 0;
-        auto sndToRead = sizeToZero - fstToRead;
-        fill(fst, fst + fstToRead, 0);
-        fill(snd, snd + sndToRead, 0);
-    }
+    wraparound(receiveBuffer.get(), size, sizeToZero, beginReceiveCount, [](auto, auto begin, auto end) {
+        fill(begin, end, 0);
+    });
 }
 
 bool RDMAMessageBuffer::hasData() {

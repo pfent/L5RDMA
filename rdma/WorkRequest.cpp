@@ -245,9 +245,6 @@ namespace rdma {
     }
 
     WriteWorkRequestBuilder &WriteWorkRequestBuilder::send(QueuePair &qp) {
-        if (qp.getMaxInlineSize() >= size) {
-            wr.setSendInline(true);
-        }
         qp.postWorkRequest(wr);
         return *this;
     }
@@ -267,6 +264,11 @@ namespace rdma {
         wr.setLocalAddress(localAddress);
         wr.setRemoteAddress(remoteAddress);
         wr.setCompletion(completion);
+    }
+
+    WriteWorkRequestBuilder &WriteWorkRequestBuilder::setInline(bool sendInline) {
+        wr.setSendInline(sendInline);
+        return *this;
     }
 
     AtomicFetchAndAddWorkRequestBuilder::AtomicFetchAndAddWorkRequestBuilder(const MemoryRegion &localAddress,
