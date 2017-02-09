@@ -21,18 +21,19 @@ rdmaPingPong
 ## Remarks
 * Keeping track of the sent / received messages with a separate AtomicFetchAndAddWorkRequest also slows the RTT by ~50%. Keeping the message in a single WriteRequest seems reasonable.
 * RDMA guarantees, that memory is written in order. However, only bytes are written atomically. When reading bigger words, they might be written partially.
+* `IBV_SEND_INLINE` is significantly faster for messages < 192 Bytes.
 
 ## Calling `fork()`
 `fork()`-ing libibverbs should be avoided. However, the [man pages](https://linux.die.net/man/3/ibv_fork_init) suggest, that forking can be done when calling `ibv_fork_init()` before forking, or simply setting `IBV_FORK_SAFE=1`.  
 However, trying to get this to work with postgres results in a segfault in the server process.
 
-There is a (quite hacky) solution in place to allow correct operation with forking programs, by setting `RDMA_FORKGEN`:
+There is a (quite hacky) solution in place to allow correct operation with forking programs, by setting `RDMA_FORKGEN=1`. This works by only opening the RDMA connection, after 1 call to `fork()` and avoids later calls to it. E.g.:
 ```bash
 RDMA_FORKGEN=1 USE_RDMA=127.0.0.1 LD_PRELOAD=/home/fent/rdma_tests/bin/libTest.so ./forkingPingPong server 1234
 RDMA_FORKGEN=0 USE_RDMA=127.0.0.1 LD_PRELOAD=/home/fent/rdma_tests/bin/libTest.so ./forkingPingPong client 1234 127.0.0.1
 ```
 
-Please note, that you need to know in which generation your program stops to fork and set the environment variable accordingly.
+You need to know in which generation your program stops to fork and set the environment variable accordingly.
 
 ## Executing postgres with the preload library
 
