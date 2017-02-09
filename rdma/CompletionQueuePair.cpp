@@ -244,7 +244,7 @@ uint64_t CompletionQueuePair::pollSendCompletionQueue()
     int status;
 
     // Poll for a work completion
-    ibv_wc completion;
+   ibv_wc completion{};
     status = ::ibv_poll_cq(sendQueue, 1, &completion);
     if (status == 0) {
         return numeric_limits<uint64_t>::max();

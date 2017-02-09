@@ -101,7 +101,7 @@ void QueuePair::connect(const Address &address, unsigned retryCount)
    uint32_t remotePSN = 0;
    uint32_t localPSN = 0;
 
-   struct ibv_qp_attr attributes;
+   struct ibv_qp_attr attributes{};
 
    // INIT
    memset(&attributes, 0, sizeof(attributes));

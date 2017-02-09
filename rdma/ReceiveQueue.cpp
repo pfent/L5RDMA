@@ -20,7 +20,6 @@
 // ---------------------------------------------------------------------------
 #include "ReceiveQueue.hpp"
 #include "WorkRequest.hpp"
-#include "MemoryRegion.hpp"
 #include "Network.hpp"
 //---------------------------------------------------------------------------
 #include <infiniband/verbs.h>
@@ -35,7 +34,7 @@ namespace rdma {
 ReceiveQueue::ReceiveQueue(Network &network)
 {
    // Create receive queue
-   struct ibv_srq_init_attr srq_init_attr;
+    struct ibv_srq_init_attr srq_init_attr{};
    memset(&srq_init_attr, 0, sizeof(srq_init_attr));
    srq_init_attr.attr.max_wr = 16351;
    srq_init_attr.attr.max_sge = 1;

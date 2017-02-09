@@ -17,7 +17,7 @@ struct RmrInfo {
 };
 
 static void receiveAndSetupRmr(int sock, RemoteMemoryRegion &buffer, RemoteMemoryRegion &readPos) {
-    RmrInfo rmrInfo;
+    RmrInfo rmrInfo{};
     tcp_read(sock, &rmrInfo, sizeof(rmrInfo));
     buffer.key = rmrInfo.bufferKey;
     buffer.address = rmrInfo.bufferAddress;
@@ -26,7 +26,7 @@ static void receiveAndSetupRmr(int sock, RemoteMemoryRegion &buffer, RemoteMemor
 }
 
 static void sendRmrInfo(int sock, const MemoryRegion &buffer, const MemoryRegion &readPos) {
-    RmrInfo rmrInfo;
+    RmrInfo rmrInfo{};
     rmrInfo.bufferKey = buffer.key->rkey;
     rmrInfo.bufferAddress = reinterpret_cast<uintptr_t>(buffer.address);
     rmrInfo.readPosKey = readPos.key->rkey;
@@ -35,7 +35,7 @@ static void sendRmrInfo(int sock, const MemoryRegion &buffer, const MemoryRegion
 }
 
 static void exchangeQPNAndConnect(int sock, Network &network, QueuePair &queuePair) {
-    Address addr;
+    Address addr{};
     addr.lid = network.getLID();
     addr.qpn = queuePair.getQPN();
     tcp_write(sock, &addr, sizeof(addr)); // Send own qpn to server
@@ -45,7 +45,7 @@ static void exchangeQPNAndConnect(int sock, Network &network, QueuePair &queuePa
 }
 
 vector<uint8_t> RDMAMessageBuffer::receive() {
-    size_t receiveSize;
+    size_t receiveSize = 0;
     auto receiveValidity = (decltype(validity)) 0;
     do {
         readFromReceiveBuffer(readPos, (uint8_t *) &receiveSize, sizeof(receiveSize));
@@ -63,7 +63,7 @@ vector<uint8_t> RDMAMessageBuffer::receive() {
 }
 
 size_t RDMAMessageBuffer::receive(void *whereTo, size_t maxSize) {
-    size_t receiveSize;
+    size_t receiveSize = 0;
     auto receiveValidity = (decltype(validity)) 0;
     do {
         readFromReceiveBuffer(readPos, (uint8_t *) &receiveSize, sizeof(receiveSize));
@@ -83,7 +83,6 @@ size_t RDMAMessageBuffer::receive(void *whereTo, size_t maxSize) {
 
 RDMAMessageBuffer::RDMAMessageBuffer(size_t size, int sock) :
         size(size),
-        bitmask(size - 1),
         net(sock),
         receiveBuffer(make_unique<volatile uint8_t[]>(size)),
         sendBuffer(make_unique<uint8_t[]>(size)),

@@ -1,6 +1,5 @@
 #include <iostream>
 #include <arpa/inet.h>
-#include <unistd.h>
 #include <algorithm>
 #include <chrono>
 #include "rdma/Network.hpp"
@@ -58,7 +57,7 @@ int main(int argc, char **argv) {
         addr.sin_addr.s_addr = INADDR_ANY;
 
         tcp_bind(sock, addr);
-        listen(sock, SOMAXCONN);
+        tcp_listen(sock);
         sockaddr_in inAddr;
         for (;;) {
             const auto acced = tcp_accept(sock, inAddr);
@@ -66,11 +65,11 @@ int main(int argc, char **argv) {
                 tcp_read(acced, buffer, BUFFER_SIZE);
                 tcp_write(acced, buffer, BUFFER_SIZE);
             }
-            close(acced);
+            tcp_close(acced);
         }
     }
 
-    close(sock);
+    tcp_close(sock);
     return 0;
 }
 

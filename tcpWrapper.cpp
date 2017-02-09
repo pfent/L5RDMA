@@ -1,6 +1,7 @@
 #include <netinet/in.h>
 #include <iostream>
 #include <fcntl.h>
+#include <unistd.h>
 #include "tcpWrapper.h"
 
 int tcp_socket() {
@@ -55,4 +56,18 @@ void tcp_setBlocking(int sock) {
     auto opts = fcntl(sock, F_GETFL);
     opts &= ~O_NONBLOCK;
     fcntl(sock, F_SETFL, opts);
+}
+
+void tcp_close(int sock) {
+    if (close(sock) < 0) {
+        perror("close");
+        throw std::runtime_error{"error close'ing"};
+    }
+}
+
+void tcp_listen(int sock) {
+    if (listen(sock, SOMAXCONN) < 0) {
+        perror("listen");
+        throw std::runtime_error{"error close'ing"};
+    }
 }

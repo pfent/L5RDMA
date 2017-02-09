@@ -39,7 +39,6 @@ public:
 
 private:
     const size_t size;
-    const size_t bitmask;
     RDMANetworking net;
     std::unique_ptr<volatile uint8_t[]> receiveBuffer;
     std::atomic<size_t> readPos{0};

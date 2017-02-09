@@ -70,8 +70,8 @@ namespace rdma {
 //---------------------------------------------------------------------------
 /// The LID and QPN uniquely address a queue pair
     struct Address {
-        uint16_t lid;
         uint32_t qpn;
+        uint16_t lid;
     };
 
     std::ostream &operator<<(std::ostream &os, const Address &address);

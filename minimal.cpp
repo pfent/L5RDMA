@@ -5,7 +5,6 @@
 #include "rdma/CompletionQueuePair.hpp"
 #include "rdma/QueuePair.hpp"
 #include "rdma/WorkRequest.hpp"
-#include "rdma/MemoryRegion.hpp"
 
 #include <infiniband/verbs.h>
 
@@ -26,7 +25,7 @@ int main(int argc, char **argv) {
     cout << "queuePairs[i]->getQPN() = " << queuePair.getQPN() << endl;
 
     cout << "enter qpn:" << endl;
-    uint32_t qpn;
+    uint16_t qpn;
     cin >> qpn;
 
     Address address{network.getLID(), qpn};

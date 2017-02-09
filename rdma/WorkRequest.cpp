@@ -211,7 +211,7 @@ namespace rdma {
 
     ReadWorkRequestBuilder::ReadWorkRequestBuilder(const MemoryRegion &localAddress,
                                                    const RemoteMemoryRegion &remoteAddress,
-                                                   bool completion) {
+                                                   bool completion) : wr() {
         wr.setLocalAddress(localAddress);
         wr.setRemoteAddress(remoteAddress);
         wr.setCompletion(completion);
@@ -229,7 +229,7 @@ namespace rdma {
 
     ReadWorkRequestBuilder::ReadWorkRequestBuilder(const MemoryRegion::Slice &localAddress,
                                                    const RemoteMemoryRegion &remoteAddress,
-                                                   bool completion) {
+                                                   bool completion) : wr() {
         wr.setLocalAddress(localAddress);
         wr.setRemoteAddress(remoteAddress);
         wr.setCompletion(completion);
@@ -237,7 +237,7 @@ namespace rdma {
 
     WriteWorkRequestBuilder::WriteWorkRequestBuilder(const MemoryRegion &localAddress,
                                                      const RemoteMemoryRegion &remoteAddress,
-                                                     bool completion) {
+                                                     bool completion) : wr() {
         size = localAddress.size;
         wr.setLocalAddress(localAddress);
         wr.setRemoteAddress(remoteAddress);
@@ -260,7 +260,7 @@ namespace rdma {
 
     WriteWorkRequestBuilder::WriteWorkRequestBuilder(const MemoryRegion::Slice &localAddress,
                                                      const RemoteMemoryRegion &remoteAddress,
-                                                     bool completion) {
+                                                     bool completion) : wr() {
         wr.setLocalAddress(localAddress);
         wr.setRemoteAddress(remoteAddress);
         wr.setCompletion(completion);
