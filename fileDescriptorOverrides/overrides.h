@@ -44,8 +44,6 @@ int getsockopt(int fd, int level, int option_name, void *option_value,
 
 int setsockopt(int fd, int level, int option_name, const void *option_value, socklen_t option_len) __THROW;
 
-int getsockname(int fd, struct sockaddr *addr, socklen_t *addrlen) __THROW;
-
 int fcntl(int fd, int command, ...);
 
 int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *errorfds, struct timeval *timeout);

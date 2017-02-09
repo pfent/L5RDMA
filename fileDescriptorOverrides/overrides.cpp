@@ -18,7 +18,7 @@ static std::set<int> rdmableSockets;
 static bool dontCloseRDMA = true; // as long as we can't get rid of the RDMA deallocation errors, don't ever close RDMA connections
 static size_t forkGeneration = 0;
 
-static const size_t BUFFER_SIZE = 16 * 1024;
+static const size_t BUFFER_SIZE = 128 * 1024;
 
 auto getRdmaEnv() {
     static const auto rdmaReachable = getenv("USE_RDMA");
@@ -29,11 +29,6 @@ auto getForkGenIntercept() {
     static const auto forkGenChars = getenv("RDMA_FORKGEN");
     static const auto forkGen = forkGenChars ? std::stoul(std::string(forkGenChars)) : 0;
     return forkGen;
-}
-
-template<typename T>
-void warn(T msg) {
-    std::cerr << msg << std::endl;
 }
 
 bool isTcpSocket(int socket, bool isServer) {
@@ -55,10 +50,8 @@ bool isTcpSocket(int socket, bool isServer) {
             if (real::getsockname(socket, (struct sockaddr *) &options, &size) < 0) {
                 return false;
             }
-        } else {
-            if (getpeername(socket, (struct sockaddr *) &options, &size) < 0) {
-                return false;
-            }
+        } else if (getpeername(socket, (struct sockaddr *) &options, &size) < 0) {
+            return false;
         }
         addressLocation = options.ss_family;
     }
@@ -82,7 +75,7 @@ bool shouldServerIntercept(int serverSocket, int clientSocket) {
         return false;
     }
 
-    auto possibleAddr = getRDMAReachable();
+    const auto possibleAddr = getRDMAReachable();
 
     sockaddr_in connectedAddr;
     {
@@ -98,7 +91,7 @@ bool shouldClientIntercept(int socket) {
         return false;
     }
 
-    auto possibleAddr = getRDMAReachable();
+    const auto possibleAddr = getRDMAReachable();
 
     sockaddr_in connectedAddr;
     {
@@ -110,7 +103,7 @@ bool shouldClientIntercept(int socket) {
 }
 
 int accept(int server_socket, sockaddr *address, socklen_t *length) {
-    int client_socket = real::accept(server_socket, address, length);
+    const int client_socket = real::accept(server_socket, address, length);
     if (client_socket < 0) {
         return ERROR;
     }
@@ -154,17 +147,16 @@ ssize_t write(int fd, const void *source, size_t requested_bytes) {
     if (forkGeneration == getForkGenIntercept() &&
         // When dealing with the accept then fork pattern, delay the actual RDMA connection to the child process
         rdmableSockets.find(fd) != rdmableSockets.end()) {
-            rdmableSockets.erase(rdmableSockets.find(fd));
-            bridge[fd] = std::make_unique<RDMAMessageBuffer>(BUFFER_SIZE, fd);
-            return write(fd, source, requested_bytes);
+        rdmableSockets.erase(rdmableSockets.find(fd));
+        bridge[fd] = std::make_unique<RDMAMessageBuffer>(BUFFER_SIZE, fd);
+        return write(fd, source, requested_bytes);
     }
     return real::write(fd, source, requested_bytes);
 }
 
 ssize_t read(int fd, void *destination, size_t requested_bytes) {
     if (bridge.find(fd) != bridge.end()) {
-        auto bytesRead = bridge[fd]->receive(destination, requested_bytes);
-        return bytesRead;
+        return bridge[fd]->receive(destination, requested_bytes);
     }
 
     if (forkGeneration == getForkGenIntercept() &&
@@ -197,7 +189,7 @@ ssize_t send(int fd, const void *buffer, size_t length, int flags) {
 #endif
         return write(fd, buffer, length);
     } else {
-        warn("Routing send to socket (unsupported flags)");
+        std::cerr << "Routing send to socket (unsupported flags)" << std::endl;
         return real::send(fd, buffer, length, flags);
     }
 }
@@ -210,13 +202,12 @@ ssize_t recv(int fd, void *buffer, size_t length, int flags) {
 #endif
         return read(fd, buffer, length);
     } else {
-        warn("Routing recv to socket (unsupported flags)");
+        std::cerr << "Routing recv to socket (unsupported flags)" << std::endl;
         return real::recv(fd, buffer, length, flags);
     }
 }
 
 ssize_t sendmsg(int fd, const struct msghdr *msg, int flags) {
-    warn("sendmsg");
     // This one is hard to implement because the `msghdr` struct contains
     // an iovec pointer, which points to an array of iovec structs. Each such
     // struct is then a vector with a starting address and length. The sendmsg
@@ -229,26 +220,24 @@ ssize_t sendmsg(int fd, const struct msghdr *msg, int flags) {
                       (struct sockaddr *) msg->msg_name,
                       msg->msg_namelen);
     } else {
-        warn("Routing sendmsg to socket (too many buffers)");
+        std::cerr << "Routing sendmsg to socket (too many buffers)" << std::endl;
         return real::sendmsg(fd, msg, flags);
     }
 }
 
 ssize_t recvmsg(int fd, struct msghdr *msg, int flags) {
-    warn("recvmsg");
     if (msg->msg_iovlen == 1) {
         return recvfrom(fd, msg->msg_iov[0].iov_base, msg->msg_iov[0].iov_len, flags,
                         (struct sockaddr *) msg->msg_name,
                         &msg->msg_namelen);
     } else {
-        warn("Routing recvmsg to socket (too many buffers)");
+        std::cerr << "Routing recvmsg to socket (too many buffers)" << std::endl;
         return real::recvmsg(fd, msg, flags);
     }
 }
 
 ssize_t
 sendto(int fd, const void *buffer, size_t length, int flags, const struct sockaddr *dest_addr, socklen_t addrlen) {
-    warn("sendto");
     // When the destination address is null, then this should be a stream socket
     if (dest_addr == NULL) {
         return send(fd, buffer, length, flags);
@@ -259,7 +248,6 @@ sendto(int fd, const void *buffer, size_t length, int flags, const struct sockad
 }
 
 ssize_t recvfrom(int fd, void *buffer, size_t length, int flags, struct sockaddr *src_addr, socklen_t *addrlen) {
-    warn("recvfrom");
     // When the destination address is null, then this should be a stream socket
     if (src_addr == NULL) {
         return recv(fd, buffer, length, flags);
@@ -279,7 +267,7 @@ pid_t fork(void) {
 }
 
 int poll(struct pollfd *fds, nfds_t nfds, int timeout) {
-    auto start = std::chrono::steady_clock::now();
+    const auto start = std::chrono::steady_clock::now();
     if (nfds == 0) return 0;
 
     int event_count = 0;
@@ -312,7 +300,7 @@ int poll(struct pollfd *fds, nfds_t nfds, int timeout) {
         } while (std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count() >
                  timeout);
     } else {
-        warn("can't do mixed RDMA / TCP yet");
+        std::cerr << "can't do mixed RDMA / TCP yet" << std::endl;
         return ERROR;
     }
 
@@ -337,7 +325,6 @@ static int fcntl_set(int fd, int command, int flags) {
 static int fcntl_get(int fd, int command) {
     int flags = real::fcntl_get_flags(fd, command);
 
-    // Theoretically the flags should be in sync
     if (bridge.find(fd) != bridge.end()) {
         // First unset the flag, then check if we have it set
         flags &= ~O_NONBLOCK; // TODO: if we fcntl_set set this, we also need to query this
@@ -349,7 +336,7 @@ static int fcntl_get(int fd, int command) {
 
 int fcntl(int fd, int command, ...) {
     if (bridge.find(fd) != bridge.end()) {
-        warn("RDMA fcntl");
+        std::cerr << "RDMA fcntl isn't supported!" << std::endl;
         // we can probably support O_NONBLOCK, but just ignore it for now
         return SUCCESS;
     }
@@ -377,19 +364,15 @@ int getsockopt(int fd, int level, int option_name, void *option_value, socklen_t
 
 int setsockopt(int fd, int level, int option_name, const void *option_value, socklen_t option_len) __THROW {
     if (bridge.find(fd) != bridge.end()) {
-        warn("RDMA setsockopt");
+        std::cerr << "RDMA setsockopt isn't supported!" << std::endl;
         // we can probably support O_NONBLOCK
         return SUCCESS;
     }
     return real::setsockopt(fd, level, option_name, option_value, option_len);
 }
 
-int getsockname(int fd, struct sockaddr *addr, socklen_t *addrlen) __THROW {
-    return real::getsockname(fd, addr, addrlen);
-}
-
-/***********************************/
-// Select stuff here.
+// Snip.
+// Select forwarding to poll here. Skip all the way to the bottom
 
 typedef struct DescriptorSets {
     fd_set *readfds;
@@ -419,12 +402,10 @@ static void count_rdma_sockets(size_t highest_fd, const DescriptorSets *sets, si
 }
 
 static int timeval_to_milliseconds(const struct timeval *time) {
-    int milliseconds;
-
-    milliseconds = time->tv_sec * 1000;
+    auto milliseconds = time->tv_sec * 1000;
     milliseconds += time->tv_usec / 1000;
 
-    return milliseconds;
+    return static_cast<int>(milliseconds);
 }
 
 static struct pollfd *select_to_poll(int *nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds) {
