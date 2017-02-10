@@ -44,7 +44,23 @@ RDMA_FORKGEN=1 USE_RDMA=10.0.0.11 LD_PRELOAD=/home/fent/rdma_tests/bin/libTest.s
 RDMA_FORKGEN=0 USE_RDMA=10.0.0.16 LD_PRELOAD=/home/fent/rdma_tests/bin/libTest.so ./bin/psql -h scyper16 -p 4567 -d postgres
 ```
 
-Results in a working psql environment.
+Results in a working psql environment, which we can benchmark for a more realistic test:
+```bash
+$ wc -l pgbench.log
+39705 pgbench.log
+# Benchmark over TCP
+$ time cat pgbench.log | ./bin/psql -h scyper16 -p 4567 -d postgres > /dev/null
+real	0m12.138s
+user	0m1.072s
+sys	0m1.156s
+# Benchmark over RDMA
+real	0m7.685s
+user	0m7.664s
+sys	0m0.040s
+$ time cat pgbench.log | RDMA_FORKGEN=0 USE_RDMA=10.0.0.16 LD_PRELOAD=/home/fent/rdma_tests/bin/libTest.so ./bin/psql -h scyper16 -p 4567 -d postgres > /dev/null
+```
+
+One can already see, that the `sys` time is almost gone, since we don't use any syscalls. However, the ~50% performances increases are not quite in par with the microbenchmark speedup, yet.
 
 ## Building
 The project can be built with CMake on any platform libibverbs is supported on (Only tested on Linux though) and a reasonably modern compiler (C++14).

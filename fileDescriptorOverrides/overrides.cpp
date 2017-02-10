@@ -121,9 +121,7 @@ int connect(int fd, const sockaddr *address, socklen_t length) {
             return ERROR;
         }
         // In case of a non blocking socket, we just poll until it is ready...
-        pollfd pfd;
-        pfd.fd = fd;
-        pfd.events = POLLOUT;
+        pollfd pfd{fd, POLLOUT, 0};
         real::poll(&pfd, 1, -1);
         if ((pfd.revents & POLLERR) != 0) {
             return ERROR;
