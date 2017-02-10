@@ -1,8 +1,5 @@
-#include <sys/socket.h>
 #include <iostream>
 #include <map>
-#include <cstring>
-#include <netinet/in.h>
 #include <arpa/inet.h>
 #include <cstdarg>
 #include <fcntl.h>
@@ -12,94 +9,96 @@
 #include "realFunctions.h"
 #include "overrides.h"
 
+namespace {
 // unordered_map does not like to be 0 initialized, so we can't use it here
-static std::map<int, std::unique_ptr<RDMAMessageBuffer>> bridge;
-static std::set<int> rdmableSockets;
-static bool dontCloseRDMA = true; // as long as we can't get rid of the RDMA deallocation errors, don't ever close RDMA connections
-static size_t forkGeneration = 0;
+    std::map<int, std::unique_ptr<RDMAMessageBuffer>> bridge;
+    std::set<int> rdmableSockets;
+    bool dontCloseRDMA = true; // as long as we can't get rid of the RDMA deallocation errors, don't ever close RDMA connections
+    size_t forkGeneration = 0;
 
-static const size_t BUFFER_SIZE = 128 * 1024;
+    const size_t BUFFER_SIZE = 128 * 1024;
 
-auto getRdmaEnv() {
-    static const auto rdmaReachable = getenv("USE_RDMA");
-    return rdmaReachable;
-}
-
-auto getForkGenIntercept() {
-    static const auto forkGenChars = getenv("RDMA_FORKGEN");
-    static const auto forkGen = forkGenChars ? std::stoul(std::string(forkGenChars)) : 0;
-    return forkGen;
-}
-
-bool isTcpSocket(int socket, bool isServer) {
-    int socketType;
-    {
-        socklen_t option;
-        socklen_t option_length = sizeof(option);
-        if (real::getsockopt(socket, SOL_SOCKET, SO_TYPE, &option, &option_length) < 0) {
-            return false;
-        }
-        socketType = option;
+    auto getRdmaEnv() {
+        static const auto rdmaReachable = getenv("USE_RDMA");
+        return rdmaReachable;
     }
 
-    int addressLocation;
-    {
-        struct sockaddr_storage options;
-        socklen_t size = sizeof(options);
-        if (isServer) {
-            if (getsockname(socket, reinterpret_cast<struct sockaddr *>(&options), &size) < 0) {
+    auto getForkGenIntercept() {
+        static const auto forkGenChars = getenv("RDMA_FORKGEN");
+        static const auto forkGen = forkGenChars ? std::stoul(std::string(forkGenChars)) : 0;
+        return forkGen;
+    }
+
+    bool isTcpSocket(int socket, bool isServer) {
+        int socketType;
+        {
+            socklen_t option;
+            socklen_t option_length = sizeof(option);
+            if (real::getsockopt(socket, SOL_SOCKET, SO_TYPE, &option, &option_length) < 0) {
                 return false;
             }
-        } else if (getpeername(socket, reinterpret_cast<struct sockaddr *>(&options), &size) < 0) {
-            return false;
+            socketType = option;
         }
-        addressLocation = options.ss_family;
+
+        int addressLocation;
+        {
+            struct sockaddr_storage options;
+            socklen_t size = sizeof(options);
+            if (isServer) {
+                if (getsockname(socket, reinterpret_cast<struct sockaddr *>(&options), &size) < 0) {
+                    return false;
+                }
+            } else if (getpeername(socket, reinterpret_cast<struct sockaddr *>(&options), &size) < 0) {
+                return false;
+            }
+            addressLocation = options.ss_family;
+        }
+
+        return socketType == SOCK_STREAM && addressLocation == AF_INET;
     }
 
-    return socketType == SOCK_STREAM && addressLocation == AF_INET;
-}
+    sockaddr_in getRDMAReachable() {
+        sockaddr_in possibleAddr{};
+        if (getRdmaEnv() == nullptr) {
+            std::cerr << "USE_RDMA not set, disabling RDMA socket interception" << std::endl;
+            return possibleAddr;
+        }
 
-sockaddr_in getRDMAReachable() {
-    sockaddr_in possibleAddr{};
-    if (getRdmaEnv() == nullptr) {
-        std::cerr << "USE_RDMA not set, disabling RDMA socket interception" << std::endl;
+        inet_pton(AF_INET, getRdmaEnv(), &possibleAddr.sin_addr);
         return possibleAddr;
     }
 
-    inet_pton(AF_INET, getRdmaEnv(), &possibleAddr.sin_addr);
-    return possibleAddr;
-}
+    bool shouldServerIntercept(int serverSocket, int clientSocket) {
+        if (not isTcpSocket(serverSocket, true)) {
+            return false;
+        }
 
-bool shouldServerIntercept(int serverSocket, int clientSocket) {
-    if (not isTcpSocket(serverSocket, true)) {
-        return false;
+        const auto possibleAddr = getRDMAReachable();
+
+        sockaddr_in connectedAddr;
+        {
+            socklen_t size = sizeof(connectedAddr);
+            getpeername(clientSocket, reinterpret_cast<struct sockaddr *>(&connectedAddr), &size);
+        }
+
+        return connectedAddr.sin_addr.s_addr == possibleAddr.sin_addr.s_addr;
     }
 
-    const auto possibleAddr = getRDMAReachable();
+    bool shouldClientIntercept(int socket) {
+        if (not isTcpSocket(socket, false)) {
+            return false;
+        }
 
-    sockaddr_in connectedAddr;
-    {
-        socklen_t size = sizeof(connectedAddr);
-        getpeername(clientSocket, reinterpret_cast<struct sockaddr *>(&connectedAddr), &size);
+        const auto possibleAddr = getRDMAReachable();
+
+        sockaddr_in connectedAddr;
+        {
+            socklen_t size = sizeof(connectedAddr);
+            getpeername(socket, reinterpret_cast<struct sockaddr *>(&connectedAddr), &size);
+        }
+
+        return connectedAddr.sin_addr.s_addr == possibleAddr.sin_addr.s_addr;
     }
-
-    return connectedAddr.sin_addr.s_addr == possibleAddr.sin_addr.s_addr;
-}
-
-bool shouldClientIntercept(int socket) {
-    if (not isTcpSocket(socket, false)) {
-        return false;
-    }
-
-    const auto possibleAddr = getRDMAReachable();
-
-    sockaddr_in connectedAddr;
-    {
-        socklen_t size = sizeof(connectedAddr);
-        getpeername(socket, reinterpret_cast<struct sockaddr *>(&connectedAddr), &size);
-    }
-
-    return connectedAddr.sin_addr.s_addr == possibleAddr.sin_addr.s_addr;
 }
 
 int accept(int server_socket, sockaddr *address, socklen_t *length) {
@@ -408,10 +407,9 @@ static int timeval_to_milliseconds(const struct timeval *time) {
     return static_cast<int>(milliseconds);
 }
 
-static struct pollfd *select_to_poll(int *nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds) {
-    struct pollfd *fds = (pollfd *) calloc(*nfds, sizeof(*fds));
-    if (!fds)
-        return NULL;
+static std::unique_ptr<struct pollfd[]>
+select_to_poll(int *nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds) {
+    auto fds = std::make_unique<struct pollfd[]>(*nfds);
 
     int i = 0;
     for (int fd = 0; fd < *nfds; fd++) {
@@ -459,14 +457,11 @@ static int poll_to_select(int nfds, struct pollfd *fds, fd_set *readfds, fd_set 
 
 static int forward_to_poll(int nfds, DescriptorSets *sets, struct timeval *timeout) {
     auto pollfds = select_to_poll(&nfds, sets->readfds, sets->writefds, sets->errorfds);
-    if (pollfds == NULL) {
-        return ERROR;
-    }
 
     auto milliseconds = timeout ? timeval_to_milliseconds(timeout) : -1;
 
     // The actual forwarding call
-    auto number_of_events = poll(pollfds, nfds, milliseconds);
+    auto number_of_events = poll(pollfds.get(), nfds, milliseconds);
 
     if (sets->readfds)
         FD_ZERO(sets->readfds);
@@ -476,9 +471,8 @@ static int forward_to_poll(int nfds, DescriptorSets *sets, struct timeval *timeo
         FD_ZERO(sets->errorfds);
 
     if (number_of_events > 0) {
-        number_of_events = poll_to_select(nfds, pollfds, sets->readfds, sets->writefds, sets->errorfds);
+        number_of_events = poll_to_select(nfds, pollfds.get(), sets->readfds, sets->writefds, sets->errorfds);
     }
-    free(pollfds);
     return number_of_events;
 }
 
