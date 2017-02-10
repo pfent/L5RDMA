@@ -47,10 +47,10 @@ bool isTcpSocket(int socket, bool isServer) {
         struct sockaddr_storage options;
         socklen_t size = sizeof(options);
         if (isServer) {
-            if (real::getsockname(socket, (struct sockaddr *) &options, &size) < 0) {
+            if (getsockname(socket, reinterpret_cast<struct sockaddr *>(&options), &size) < 0) {
                 return false;
             }
-        } else if (getpeername(socket, (struct sockaddr *) &options, &size) < 0) {
+        } else if (getpeername(socket, reinterpret_cast<struct sockaddr *>(&options), &size) < 0) {
             return false;
         }
         addressLocation = options.ss_family;
@@ -80,7 +80,7 @@ bool shouldServerIntercept(int serverSocket, int clientSocket) {
     sockaddr_in connectedAddr;
     {
         socklen_t size = sizeof(connectedAddr);
-        getpeername(clientSocket, (struct sockaddr *) &connectedAddr, &size);
+        getpeername(clientSocket, reinterpret_cast<struct sockaddr *>(&connectedAddr), &size);
     }
 
     return connectedAddr.sin_addr.s_addr == possibleAddr.sin_addr.s_addr;
@@ -96,7 +96,7 @@ bool shouldClientIntercept(int socket) {
     sockaddr_in connectedAddr;
     {
         socklen_t size = sizeof(connectedAddr);
-        getpeername(socket, (struct sockaddr *) &connectedAddr, &size);
+        getpeername(socket, reinterpret_cast<struct sockaddr *>(&connectedAddr), &size);
     }
 
     return connectedAddr.sin_addr.s_addr == possibleAddr.sin_addr.s_addr;
@@ -141,7 +141,7 @@ int connect(int fd, const sockaddr *address, socklen_t length) {
 
 ssize_t write(int fd, const void *source, size_t requested_bytes) {
     if (bridge.find(fd) != bridge.end()) {
-        bridge[fd]->send((uint8_t *) source, requested_bytes);
+        bridge[fd]->send(reinterpret_cast<const uint8_t *>(source), requested_bytes);
         return requested_bytes;
     }
     if (forkGeneration == getForkGenIntercept() &&
@@ -217,7 +217,7 @@ ssize_t sendmsg(int fd, const struct msghdr *msg, int flags) {
     // the call to the socket itself.
     if (msg->msg_iovlen == 1) {
         return sendto(fd, msg->msg_iov[0].iov_base, msg->msg_iov[0].iov_len, flags,
-                      (struct sockaddr *) msg->msg_name,
+                      reinterpret_cast<struct sockaddr *>(msg->msg_name),
                       msg->msg_namelen);
     } else {
         std::cerr << "Routing sendmsg to socket (too many buffers)" << std::endl;
@@ -228,7 +228,7 @@ ssize_t sendmsg(int fd, const struct msghdr *msg, int flags) {
 ssize_t recvmsg(int fd, struct msghdr *msg, int flags) {
     if (msg->msg_iovlen == 1) {
         return recvfrom(fd, msg->msg_iov[0].iov_base, msg->msg_iov[0].iov_len, flags,
-                        (struct sockaddr *) msg->msg_name,
+                        reinterpret_cast<struct sockaddr *>(msg->msg_name),
                         &msg->msg_namelen);
     } else {
         std::cerr << "Routing recvmsg to socket (too many buffers)" << std::endl;

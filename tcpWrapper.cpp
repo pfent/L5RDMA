@@ -17,7 +17,7 @@ int tcp_socket() {
 }
 
 void tcp_connect(int sock, sockaddr_in &addr) {
-    if (connect(sock, (sockaddr *) &addr, sizeof addr) < 0) {
+    if (connect(sock, reinterpret_cast<sockaddr *>(&addr), sizeof addr) < 0) {
         throw std::runtime_error{"error connect'ing"};
     }
 }
@@ -37,14 +37,14 @@ void tcp_read(int sock, void *buffer, std::size_t size) {
 }
 
 void tcp_bind(int sock, sockaddr_in &addr) {
-    if (bind(sock, (sockaddr *) &addr, sizeof addr) < 0) {
+    if (bind(sock, reinterpret_cast<sockaddr *>(&addr), sizeof addr) < 0) {
         throw std::runtime_error{"error bind'ing"};
     }
 }
 
 int tcp_accept(int sock, sockaddr_in &inAddr) {
     socklen_t inAddrLen = sizeof inAddr;
-    auto acced = accept(sock, (sockaddr *) &inAddr, &inAddrLen);
+    auto acced = accept(sock, reinterpret_cast<sockaddr *>(&inAddr), &inAddrLen);
     if (acced < 0) {
         perror("accept");
         throw std::runtime_error{"error accept'ing"};

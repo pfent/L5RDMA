@@ -35,7 +35,7 @@ public:
     RDMAMessageBuffer(size_t size, int sock);
 
     /// whether there is data to be read non-blockingly
-    bool hasData();
+    bool hasData() const;
 
 private:
     const size_t size;
@@ -54,7 +54,7 @@ private:
 
     void writeToSendBuffer(const uint8_t *data, size_t sizeToWrite);
 
-    void readFromReceiveBuffer(size_t readPos, uint8_t *whereTo, size_t sizeToRead);
+    void readFromReceiveBuffer(size_t readPos, uint8_t *whereTo, size_t sizeToRead) const;
 
     void zeroReceiveBuffer(size_t beginReceiveCount, size_t sizeToZero);
 };

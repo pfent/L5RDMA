@@ -36,7 +36,8 @@ namespace rdma {
 //---------------------------------------------------------------------------
 ostream &operator<<(ostream &os, const RemoteMemoryRegion &remoteMemoryRegion)
 {
-   return os << "address=" << (void *) remoteMemoryRegion.address << " key=" << remoteMemoryRegion.key;
+    return os << "address=" << reinterpret_cast<void *>(remoteMemoryRegion.address) << " key="
+              << remoteMemoryRegion.key;
 }
 //---------------------------------------------------------------------------
 ostream &operator<<(ostream &os, const Address &address)

@@ -54,7 +54,7 @@ public:
     };
 
    ibv_mr *key;
-   const void *address;
+    void *address;
    const size_t size;
 
    /// Constructor

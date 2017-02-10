@@ -33,7 +33,7 @@ int main(int argc, char **argv) {
 
     if (isClient) {
         string data = "hello my world !";
-        MemoryRegion sharedMR((void *) data.data(), data.length(), network.getProtectionDomain(),
+        MemoryRegion sharedMR(const_cast<char *>(data.data()), data.length(), network.getProtectionDomain(),
                               MemoryRegion::Permission::All);
 
         RemoteMemoryRegion rmr;
@@ -56,13 +56,13 @@ int main(int argc, char **argv) {
                               MemoryRegion::Permission::All);
 
         cout << sharedMR.key->rkey << endl;
-        cout << (uint64_t) sharedMR.address << endl;
+        cout << reinterpret_cast<uint64_t>(sharedMR.address) << endl;
 
         int qwe;
         cout << "waiting for data ..." << endl;
         cin >> qwe;
 
-        cout << (char *) receiveBuffer.data() << endl;
+        cout << reinterpret_cast<char *>(receiveBuffer.data()) << endl;
     }
 
     int blub;

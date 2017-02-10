@@ -62,7 +62,7 @@ int ::real::close(int fd) {
 
 int ::real::getsockopt(int fd, int level, int option_name, void *option_value, socklen_t *option_len) {
     using real_getsockopt_t = int (*)(int, int, int, void *, socklen_t *);
-    return ((real_getsockopt_t) dlsym(RTLD_NEXT, "getsockopt"))
+    return (reinterpret_cast<real_getsockopt_t>(dlsym(RTLD_NEXT, "getsockopt")))
             (fd, level, option_name, option_value, option_len);
 }
 
@@ -70,11 +70,6 @@ int ::real::setsockopt(int fd, int level, int option_name, const void *option_va
     using real_setsockopt_t = int (*)(int, int, int, const void *, socklen_t);
     return reinterpret_cast<real_setsockopt_t>(dlsym(RTLD_NEXT, "setsockopt"))(fd, level, option_name, option_value,
                                                                                option_len);
-}
-
-int ::real::getsockname(int fd, struct sockaddr *addr, socklen_t *addrlen) {
-    using real_getsockname_t = int (*)(int, struct sockaddr *, socklen_t *);
-    return reinterpret_cast<real_getsockname_t>(dlsym(RTLD_NEXT, "getsockname"))(fd, addr, addrlen);
 }
 
 int ::real::poll(struct pollfd fds[], nfds_t nfds, int timeout) {

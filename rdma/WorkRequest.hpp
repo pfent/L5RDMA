@@ -102,6 +102,10 @@ namespace rdma {
     class ReadWorkRequest : public RDMAWorkRequest {
     public:
         ReadWorkRequest();
+
+        static uint64_t getId() {
+            return 42;
+        }
     };
 
     class ReadWorkRequestBuilder {

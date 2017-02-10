@@ -75,7 +75,7 @@ namespace rdma {
     }
 
     MemoryRegion::Slice MemoryRegion::slice(size_t offset, size_t size) {
-        return MemoryRegion::Slice((uint8_t *) address + offset, size, key->lkey);
+        return MemoryRegion::Slice(reinterpret_cast<uint8_t *>(address) + offset, size, key->lkey);
     }
 
 //---------------------------------------------------------------------------

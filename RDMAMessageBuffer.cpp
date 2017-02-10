@@ -11,8 +11,8 @@ static const size_t validity = 0xDEADDEADBEEFBEEF;
 
 struct RmrInfo {
     uint32_t bufferKey;
-    uintptr_t bufferAddress;
     uint32_t readPosKey;
+    uintptr_t bufferAddress;
     uintptr_t readPosAddress;
 };
 
@@ -46,11 +46,11 @@ static void exchangeQPNAndConnect(int sock, Network &network, QueuePair &queuePa
 
 vector<uint8_t> RDMAMessageBuffer::receive() {
     size_t receiveSize = 0;
-    auto receiveValidity = (decltype(validity)) 0;
+    auto receiveValidity = static_cast<decltype(validity)>(0);
     do {
-        readFromReceiveBuffer(readPos, (uint8_t *) &receiveSize, sizeof(receiveSize));
-        readFromReceiveBuffer(readPos + sizeof(receiveSize) + receiveSize, (uint8_t *) &receiveValidity,
-                              sizeof(receiveValidity));
+        readFromReceiveBuffer(readPos, reinterpret_cast<uint8_t *>(&receiveSize), sizeof(receiveSize));
+        readFromReceiveBuffer(readPos + sizeof(receiveSize) + receiveSize,
+                              reinterpret_cast<uint8_t *>(&receiveValidity), sizeof(receiveValidity));
     } while (receiveValidity != validity);
 
     auto result = vector<uint8_t>(receiveSize);
@@ -64,16 +64,18 @@ vector<uint8_t> RDMAMessageBuffer::receive() {
 
 size_t RDMAMessageBuffer::receive(void *whereTo, size_t maxSize) {
     size_t receiveSize = 0;
-    auto receiveValidity = (decltype(validity)) 0;
+    auto receiveValidity = static_cast<decltype(validity)>(0);
     do {
-        readFromReceiveBuffer(readPos, (uint8_t *) &receiveSize, sizeof(receiveSize));
-        readFromReceiveBuffer(readPos + sizeof(receiveSize) + receiveSize, (uint8_t *) &receiveValidity,
+        readFromReceiveBuffer(readPos, reinterpret_cast<uint8_t *>(&receiveSize), sizeof(receiveSize));
+        readFromReceiveBuffer(readPos + sizeof(receiveSize) + receiveSize,
+                              reinterpret_cast<uint8_t *>(&receiveValidity),
                               sizeof(receiveValidity));
     } while (receiveValidity != validity);
 
-    if (receiveSize > maxSize)
+    if (receiveSize > maxSize) {
         throw runtime_error{"plz only read whole messages for now!"}; // probably buffer partially read msgs
-    readFromReceiveBuffer(readPos + sizeof(receiveSize), (uint8_t *) whereTo, receiveSize);
+    }
+    readFromReceiveBuffer(readPos + sizeof(receiveSize), reinterpret_cast<uint8_t *>(whereTo), receiveSize);
     zeroReceiveBuffer(readPos, sizeof(receiveSize) + receiveSize + sizeof(validity));
 
     readPos += sizeof(receiveSize) + receiveSize + sizeof(validity);
@@ -87,11 +89,11 @@ RDMAMessageBuffer::RDMAMessageBuffer(size_t size, int sock) :
         receiveBuffer(make_unique<volatile uint8_t[]>(size)),
         sendBuffer(make_unique<uint8_t[]>(size)),
         localSend(sendBuffer.get(), size, net.network.getProtectionDomain(), MemoryRegion::Permission::None),
-        localReceive((void *) receiveBuffer.get(), size, net.network.getProtectionDomain(),
+        localReceive(const_cast<uint8_t *>(receiveBuffer.get()), size, net.network.getProtectionDomain(),
                      MemoryRegion::Permission::LocalWrite | MemoryRegion::Permission::RemoteWrite),
         localReadPos(&readPos, sizeof(readPos), net.network.getProtectionDomain(),
                      MemoryRegion::Permission::RemoteRead),
-        localCurrentRemoteReceive((void *) &currentRemoteReceive, sizeof(currentRemoteReceive),
+        localCurrentRemoteReceive(const_cast<size_t *>(&currentRemoteReceive), sizeof(currentRemoteReceive),
                                   net.network.getProtectionDomain(), MemoryRegion::Permission::LocalWrite) {
     const bool powerOfTwo = (size != 0) && !(size & (size - 1));
     if (not powerOfTwo) {
@@ -105,14 +107,6 @@ RDMAMessageBuffer::RDMAMessageBuffer(size_t size, int sock) :
 }
 
 /// Higher order wraparound function. Calls the given function func() once or twice, depending on if a wraparound is needed or not
-/// func(size_t prevBytes, T* begin, T* end)
-template<typename T, typename Func>
-void wraparound(T *buffer, const size_t totalSize, const size_t todoSize, const size_t pos, Func &&func) {
-    wraparound(totalSize, todoSize, pos, [&](auto prevBytes, auto beginPos, auto endPos) {
-        func(prevBytes, buffer + beginPos, buffer + endPos);
-    });
-}
-
 template<typename Func>
 void wraparound(const size_t totalSize, const size_t todoSize, const size_t pos, Func &&func) {
     const size_t beginPos = pos & (totalSize - 1);
@@ -128,6 +122,14 @@ void wraparound(const size_t totalSize, const size_t todoSize, const size_t pos,
     }
 }
 
+/// func(size_t prevBytes, T* begin, T* end)
+template<typename T, typename Func>
+void wraparound(T *buffer, const size_t totalSize, const size_t todoSize, const size_t pos, Func &&func) {
+    wraparound(totalSize, todoSize, pos, [&](auto prevBytes, auto beginPos, auto endPos) {
+        func(prevBytes, buffer + beginPos, buffer + endPos);
+    });
+}
+
 void RDMAMessageBuffer::send(const uint8_t *data, size_t length) {
     send(data, length, true);
 }
@@ -138,9 +140,9 @@ void RDMAMessageBuffer::send(const uint8_t *data, size_t length, bool inln) {
 
     const size_t startOfWrite = sendPos;
 
-    writeToSendBuffer((uint8_t *) &length, sizeof(length));
+    writeToSendBuffer(reinterpret_cast<const uint8_t *>(&length), sizeof(length));
     writeToSendBuffer(data, length);
-    writeToSendBuffer((uint8_t *) &validity, sizeof(validity));
+    writeToSendBuffer(reinterpret_cast<const uint8_t *>(&validity), sizeof(validity));
 
     wraparound(size, sizeToWrite, startOfWrite, [&](auto, auto beginPos, auto endPos) {
         const auto sendSlice = localSend.slice(beginPos, endPos - beginPos);
@@ -157,7 +159,8 @@ void RDMAMessageBuffer::writeToSendBuffer(const uint8_t *data, size_t sizeToWrit
     while (sizeToWrite > safeToWrite) {
         ReadWorkRequestBuilder(localCurrentRemoteReceive, remoteReadPos, true)
                 .send(net.queuePair);
-        while (net.completionQueue.pollSendCompletionQueue() != 42);
+        while (net.completionQueue.pollSendCompletionQueue() !=
+               ReadWorkRequest::getId()); // Poll until read has finished
         safeToWrite = size - (sendPos - currentRemoteReceive);
     }
 
@@ -168,7 +171,7 @@ void RDMAMessageBuffer::writeToSendBuffer(const uint8_t *data, size_t sizeToWrit
     sendPos += sizeToWrite;
 }
 
-void RDMAMessageBuffer::readFromReceiveBuffer(size_t readPos, uint8_t *whereTo, size_t sizeToRead) {
+void RDMAMessageBuffer::readFromReceiveBuffer(size_t readPos, uint8_t *whereTo, size_t sizeToRead) const {
     wraparound(receiveBuffer.get(), size, sizeToRead, readPos, [whereTo](auto prevBytes, auto begin, auto end) {
         copy(begin, end, whereTo + prevBytes);
     });
@@ -181,11 +184,11 @@ void RDMAMessageBuffer::zeroReceiveBuffer(size_t beginReceiveCount, size_t sizeT
     });
 }
 
-bool RDMAMessageBuffer::hasData() {
+bool RDMAMessageBuffer::hasData() const {
     size_t receiveSize;
-    auto receiveValidity = (decltype(validity)) 0;
-    readFromReceiveBuffer(readPos, (uint8_t *) &receiveSize, sizeof(receiveSize));
-    readFromReceiveBuffer(readPos + sizeof(receiveSize) + receiveSize, (uint8_t *) &receiveValidity,
+    auto receiveValidity = static_cast<decltype(validity)>(0);
+    readFromReceiveBuffer(readPos, reinterpret_cast<uint8_t *>(&receiveSize), sizeof(receiveSize));
+    readFromReceiveBuffer(readPos + sizeof(receiveSize) + receiveSize, reinterpret_cast<uint8_t *>(&receiveValidity),
                           sizeof(receiveValidity));
     return (receiveValidity == validity);
 }
