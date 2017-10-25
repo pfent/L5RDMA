@@ -3,8 +3,8 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 #include "rdma/CompletionQueuePair.hpp"
-#include "tcpWrapper.h"
-#include "RDMAMessageBuffer.h"
+#include "rdma_tests/util/tcpWrapper.h"
+#include "rdma_tests/datastructures/RDMAMessageBuffer.h"
 
 using namespace std;
 using namespace rdma;

@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <chrono>
 #include "rdma/Network.hpp"
-#include "tcpWrapper.h"
+#include "rdma_tests/util/tcpWrapper.h"
 
 using namespace std;
 using namespace rdma;

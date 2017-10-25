@@ -16,13 +16,14 @@ int tcp_socket() {
     return sock;
 }
 
-void tcp_connect(int sock, sockaddr_in &addr) {
-    if (connect(sock, reinterpret_cast<sockaddr *>(&addr), sizeof addr) < 0) {
+void tcp_connect(int sock, const sockaddr_in &addr) {
+    if (connect(sock, reinterpret_cast<const sockaddr *>(&addr), sizeof addr) < 0) {
+        perror("connect");
         throw std::runtime_error{"error connect'ing"};
     }
 }
 
-void tcp_write(int sock, void *buffer, std::size_t size) {
+void tcp_write(int sock, const void *buffer, std::size_t size) {
     if (send(sock, buffer, size, 0) < 0) {
         perror("send");
         throw std::runtime_error{"error write'ing"};
@@ -36,8 +37,8 @@ void tcp_read(int sock, void *buffer, std::size_t size) {
     }
 }
 
-void tcp_bind(int sock, sockaddr_in &addr) {
-    if (bind(sock, reinterpret_cast<sockaddr *>(&addr), sizeof addr) < 0) {
+void tcp_bind(int sock, const sockaddr_in &addr) {
+    if (bind(sock, reinterpret_cast<const sockaddr *>(&addr), sizeof addr) < 0) {
         throw std::runtime_error{"error bind'ing"};
     }
 }
