@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.0)
-project(rdma_sockets)
+project(exchangableTransports)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pedantic -Wall -Wextra -Wnon-virtual-dtor -Wold-style-cast -fshow-column -pipe -march=native")

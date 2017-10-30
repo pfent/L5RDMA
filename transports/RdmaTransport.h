@@ -1,11 +1,11 @@
-#ifndef RDMA_SOCKETS_MPITRANSPORT_H
-#define RDMA_SOCKETS_MPITRANSPORT_H
+#ifndef EXCHANGABLE_TRANSPORTS_MPITRANSPORT_H
+#define EXCHANGABLE_TRANSPORTS_MPITRANSPORT_H
 
 #include <cstdint>
 #include <cstddef>
 #include <string_view>
 #include <memory>
-#include <rdma_tests/datastructures/RDMAMessageBuffer.h>
+#include <exchangableTransports/datastructures/RDMAMessageBuffer.h>
 
 class RdmaTransport {
     const int sock;
@@ -28,4 +28,4 @@ public:
     void read(uint8_t *buffer, size_t size);
 };
 
-#endif //RDMA_SOCKETS_MPITRANSPORT_H
+#endif //EXCHANGABLE_TRANSPORTS_MPITRANSPORT_H

@@ -1,8 +1,8 @@
 #include <iostream>
 #include <algorithm>
 #include <chrono>
-#include <rdma_tests/transports/TcpTransport.h>
-#include <rdma_tests/transports/RdmaTransport.h>
+#include <exchangableTransports/transports/TcpTransport.h>
+#include <exchangableTransports/transports/RdmaTransport.h>
 
 using namespace std;
 using namespace rdma;

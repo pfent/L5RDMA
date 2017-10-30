@@ -1,5 +1,5 @@
-#ifndef RDMA_SOCKETS_TCPTRANSPORT_H
-#define RDMA_SOCKETS_TCPTRANSPORT_H
+#ifndef EXCHANGABLE_TRANSPORTS_TCPTRANSPORT_H
+#define EXCHANGABLE_TRANSPORTS_TCPTRANSPORT_H
 
 #include <cstdint>
 #include <cstddef>
@@ -26,4 +26,4 @@ public:
     void read(uint8_t *buffer, size_t size);
 };
 
-#endif //RDMA_SOCKETS_TCPTRANSPORT_H
+#endif //EXCHANGABLE_TRANSPORTS_TCPTRANSPORT_H
