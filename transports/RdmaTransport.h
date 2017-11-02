@@ -7,7 +7,7 @@
 #include <memory>
 #include <exchangableTransports/datastructures/RDMAMessageBuffer.h>
 
-class RdmaTransport {
+class RdmaTransport { // TODO
     const int sock;
     const uint16_t port;
     std::unique_ptr<RDMAMessageBuffer> rdma = nullptr;

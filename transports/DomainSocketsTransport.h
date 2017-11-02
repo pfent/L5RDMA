@@ -4,21 +4,33 @@
 #include <cstdint>
 #include <cstddef>
 #include <string_view>
+#include <string>
 
-class DomainSocketsTransport {
-    const int sock;
-    const uint16_t port;
+class DomainSocketsTransportServer {
+    const int initialSocket;
+    int communicationSocket = -1;
 
 public:
-    explicit DomainSocketsTransport(std::string_view port);
+    explicit DomainSocketsTransportServer(std::string_view file);
 
-    ~DomainSocketsTransport();
-
-    void connect(std::string_view ip);
-
-    void listen();
+    ~DomainSocketsTransportServer();
 
     void accept();
+
+    void write(const uint8_t *data, size_t size);
+
+    void read(uint8_t *buffer, size_t size);
+};
+
+class DomainSocketsTransportClient {
+    const int socket;
+
+public:
+    explicit DomainSocketsTransportClient();
+
+    ~DomainSocketsTransportClient();
+
+    void connect(std::string_view file);
 
     void write(const uint8_t *data, size_t size);
 

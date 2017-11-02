@@ -1,16 +1,18 @@
 #include <netinet/in.h>
-#include <iostream>
 #include <fcntl.h>
 #include <unistd.h>
+#include <stdexcept>
 #include "tcpWrapper.h"
 
 int tcp_socket() {
     auto sock = socket(AF_INET, SOCK_STREAM, 0);
     if (sock < 0) {
+        perror("socket");
         throw std::runtime_error{"Could not open socket"};
     }
     const int enable = 1;
     if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int)) < 0) {
+        perror("setsockopt");
         throw std::runtime_error{"Could not set SO_REUSEADDR"};
     }
     return sock;
@@ -39,6 +41,7 @@ void tcp_read(int sock, void *buffer, std::size_t size) {
 
 void tcp_bind(int sock, const sockaddr_in &addr) {
     if (bind(sock, reinterpret_cast<const sockaddr *>(&addr), sizeof addr) < 0) {
+        perror("bind");
         throw std::runtime_error{"error bind'ing"};
     }
 }

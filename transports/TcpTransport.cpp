@@ -3,29 +3,21 @@
 #include "exchangableTransports/util/tcpWrapper.h"
 #include "TcpTransport.h"
 
-TcpTransport::TcpTransport(std::string_view port) :
-        initialSocket(tcp_socket()),
-        port(std::stoi(std::string(port.data(), port.size()))) {}
+TcpTransportServer::TcpTransportServer(std::string_view port) :
+        initialSocket(tcp_socket()) {
+    auto p = std::stoi(std::string(port.data(), port.size()));
+    listen(p);
+}
 
-TcpTransport::~TcpTransport() {
+TcpTransportServer::~TcpTransportServer() {
     tcp_close(initialSocket);
 
-    if (initialSocket != communicationSocket && communicationSocket != -1) {
+    if (communicationSocket != -1) {
         tcp_close(communicationSocket);
     }
 }
 
-void TcpTransport::connect(std::string_view ip) {
-    sockaddr_in addr = {};
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons(port);
-    inet_pton(AF_INET, std::string(ip.data(), ip.size()).data(), &addr.sin_addr);
-
-    tcp_connect(initialSocket, addr);
-    communicationSocket = initialSocket;
-}
-
-void TcpTransport::listen() {
+void TcpTransportServer::listen(uint16_t port) {
     sockaddr_in addr = {};
     addr.sin_family = AF_INET;
     addr.sin_port = htons(port);
@@ -35,15 +27,41 @@ void TcpTransport::listen() {
     tcp_listen(initialSocket);
 }
 
-void TcpTransport::write(const uint8_t *data, size_t size) {
+void TcpTransportServer::write(const uint8_t *data, size_t size) {
     tcp_write(communicationSocket, data, size);
 }
 
-void TcpTransport::read(uint8_t *buffer, size_t size) {
+void TcpTransportServer::read(uint8_t *buffer, size_t size) {
     tcp_read(communicationSocket, buffer, size);
 }
 
-void TcpTransport::accept() {
+void TcpTransportServer::accept() {
     sockaddr_in ignored{};
     communicationSocket = tcp_accept(initialSocket, ignored);
+}
+
+TcpTransportClient::TcpTransportClient() : socket(tcp_socket()) {}
+
+TcpTransportClient::~TcpTransportClient() {
+    tcp_close(socket);
+}
+
+void TcpTransportClient::connect(std::string_view connection) {
+    const auto pos = connection.find(':');
+    const auto ip = std::string(connection.data(), pos);
+    const auto port = std::stoi(std::string(connection.begin() + pos, connection.end()));
+    sockaddr_in addr = {};
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(port);
+    inet_pton(AF_INET, ip.data(), &addr.sin_addr);
+
+    tcp_connect(socket, addr);
+}
+
+void TcpTransportClient::write(const uint8_t *data, size_t size) {
+    tcp_write(socket, data, size);
+}
+
+void TcpTransportClient::read(uint8_t *buffer, size_t size) {
+    tcp_read(socket, buffer, size);
 }
