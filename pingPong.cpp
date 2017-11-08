@@ -19,7 +19,7 @@ class Ping {
     array<uint8_t, data.size()> buffer;
 public:
     explicit Ping(unique_ptr<TransportClient<T>> transport, string_view ip) : transport(move(transport)) {
-        transport->connect(ip);
+        this->transport->connect(ip);
     }
 
     void ping() {
