@@ -4,8 +4,9 @@
 #include <cstdint>
 #include <cstddef>
 #include <string_view>
+#include "Transport.h"
 
-class TcpTransportServer {
+class TcpTransportServer : public TransportServer<TcpTransportServer> {
     const int initialSocket;
     int communicationSocket = -1;
 
@@ -14,16 +15,17 @@ public:
 
     ~TcpTransportServer();
 
+    void accept_impl();
+
+    void write_impl(const uint8_t *data, size_t size);
+
+    void read_impl(uint8_t *buffer, size_t size);
+
+private:
     void listen(uint16_t port);
-
-    void accept();
-
-    void write(const uint8_t *data, size_t size);
-
-    void read(uint8_t *buffer, size_t size);
 };
 
-class TcpTransportClient {
+class TcpTransportClient : public TransportClient<TcpTransportClient> {
     const int socket;
 
 public:
@@ -31,11 +33,11 @@ public:
 
     ~ TcpTransportClient();
 
-    void connect(std::string_view file);
+    void connect_impl(std::string_view file);
 
-    void write(const uint8_t *data, size_t size);
+    void write_impl(const uint8_t *data, size_t size);
 
-    void read(uint8_t *buffer, size_t size);
+    void read_impl(uint8_t *buffer, size_t size);
 };
 
 #endif //EXCHANGABLE_TRANSPORTS_TCPTRANSPORT_H

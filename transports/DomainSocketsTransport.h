@@ -5,8 +5,9 @@
 #include <cstddef>
 #include <string_view>
 #include <string>
+#include "Transport.h"
 
-class DomainSocketsTransportServer {
+class DomainSocketsTransportServer : public TransportServer<DomainSocketsTransportServer> {
     const int initialSocket;
     int communicationSocket = -1;
 
@@ -15,26 +16,26 @@ public:
 
     ~DomainSocketsTransportServer();
 
-    void accept();
+    void accept_impl();
 
-    void write(const uint8_t *data, size_t size);
+    void write_impl(const uint8_t *data, size_t size);
 
-    void read(uint8_t *buffer, size_t size);
+    void read_impl(uint8_t *buffer, size_t size);
 };
 
-class DomainSocketsTransportClient {
+class DomainSocketsTransportClient : public TransportClient<DomainSocketsTransportClient> {
     const int socket;
 
 public:
-    explicit DomainSocketsTransportClient();
+    DomainSocketsTransportClient();
 
     ~DomainSocketsTransportClient();
 
-    void connect(std::string_view file);
+    void connect_impl(std::string_view file);
 
-    void write(const uint8_t *data, size_t size);
+    void write_impl(const uint8_t *data, size_t size);
 
-    void read(uint8_t *buffer, size_t size);
+    void read_impl(uint8_t *buffer, size_t size);
 };
 
 #endif //EXCHANGABLE_TRANSPORTS_DOMAINSOCKETSTRANSPORT_H

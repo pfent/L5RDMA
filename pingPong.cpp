@@ -1,29 +1,31 @@
 #include <iostream>
 #include <algorithm>
 #include <chrono>
+#include <array>
+#include <memory>
+#include <exchangableTransports/transports/Transport.h>
 #include <exchangableTransports/transports/TcpTransport.h>
-#include <exchangableTransports/transports/RdmaTransport.h>
+#include <exchangableTransports/transports/DomainSocketsTransport.h>
 
 using namespace std;
-using namespace rdma;
 using namespace std::string_view_literals;
 
 static const size_t MESSAGES = 1024 * 128;
 
-template<class Transport>
+template<class T>
 class Ping {
     static constexpr string_view data = "123456789012345678901234567890123456789012345678901234567890123\0"sv;
-    Transport transport;
+    unique_ptr<TransportClient<T>> transport;
     array<uint8_t, data.size()> buffer;
 public:
-    explicit Ping(string_view ip, string_view port) : transport(port) {
-        transport.connect(ip);
+    explicit Ping(unique_ptr<TransportClient<T>> transport, string_view ip) : transport(move(transport)) {
+        transport->connect(ip);
     }
 
     void ping() {
-        transport.write(reinterpret_cast<const uint8_t *>(data.data()), data.size());
+        transport->write(reinterpret_cast<const uint8_t *>(data.data()), data.size());
         fill(begin(buffer), end(buffer), 0);
-        transport.read(buffer.data(), buffer.size());
+        transport->read(buffer.data(), buffer.size());
         for (size_t i = 0; i < data.size(); ++i) {
             if (buffer[i] != data[i]) {
                 throw runtime_error{"received unexpected data: " + string(begin(buffer), end(buffer))};
@@ -32,22 +34,21 @@ public:
     }
 };
 
-template<class Transport, size_t messageSize = 64>
+template<class T, size_t messageSize = 64>
 class Pong {
-    Transport transport;
+    unique_ptr<TransportServer<T>> transport;
     array<uint8_t, messageSize> buffer;
 public:
-    explicit Pong(string_view port) : transport(port) {
-        transport.listen();
+    explicit Pong(unique_ptr<TransportServer<T>> transport) : transport(move(transport)) {
     };
 
     void start() {
-        transport.accept();
+        transport->accept();
     }
 
     void pong() {
-        transport.read(buffer.data(), buffer.size());
-        transport.write(buffer.data(), buffer.size());
+        transport->read(buffer.data(), buffer.size());
+        transport->write(buffer.data(), buffer.size());
     }
 };
 
@@ -61,7 +62,7 @@ int main(int argc, char **argv) {
 
     if (isClient) {
         const auto ip = argv[3];
-        auto client = Ping<RdmaTransport>(ip, port);
+        auto client = Ping(make_transportClient<DomainSocketsTransportClient>(), port);
         const auto start = chrono::steady_clock::now();
         for (size_t i = 0; i < MESSAGES; ++i) {
             client.ping();
@@ -72,7 +73,7 @@ int main(int argc, char **argv) {
         cout << MESSAGES << " messages exchanged in " << msTaken << "ms" << endl;
         cout << MESSAGES / sTaken << " msg/s" << endl;
     } else {
-        auto server = Pong<RdmaTransport>(port);
+        auto server = Pong(make_transportServer<DomainSocketsTransportServer>(port));
         server.start();
         for (size_t i = 0; i < MESSAGES; ++i) {
             server.pong();

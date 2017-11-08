@@ -5,11 +5,10 @@
 #include <cstdint>
 #include <stdexcept>
 
-class Buffer {
+struct Buffer {
     size_t size;
     uint8_t *ptr;
 
-public:
     Buffer(size_t size, uint8_t *ptr) : size(size), ptr(ptr) {}
 
     ~Buffer() {

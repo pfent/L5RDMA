@@ -15,16 +15,16 @@ DomainSocketsTransportServer::~DomainSocketsTransportServer() {
     }
 }
 
-void DomainSocketsTransportServer::accept() {
+void DomainSocketsTransportServer::accept_impl() {
     sockaddr_un remote{};
     communicationSocket = domain_accept(initialSocket, remote);
 }
 
-void DomainSocketsTransportServer::write(const uint8_t *data, size_t size) {
+void DomainSocketsTransportServer::write_impl(const uint8_t *data, size_t size) {
     domain_write(communicationSocket, data, size);
 }
 
-void DomainSocketsTransportServer::read(uint8_t *buffer, size_t size) {
+void DomainSocketsTransportServer::read_impl(uint8_t *buffer, size_t size) {
     domain_read(communicationSocket, buffer, size);
 }
 
@@ -34,14 +34,14 @@ DomainSocketsTransportClient::~DomainSocketsTransportClient() {
     domain_close(socket);
 }
 
-void DomainSocketsTransportClient::connect(std::string_view file) {
+void DomainSocketsTransportClient::connect_impl(std::string_view file) {
     domain_connect(socket, file);
 }
 
-void DomainSocketsTransportClient::write(const uint8_t *data, size_t size) {
+void DomainSocketsTransportClient::write_impl(const uint8_t *data, size_t size) {
     domain_write(socket, data, size);
 }
 
-void DomainSocketsTransportClient::read(uint8_t *buffer, size_t size) {
+void DomainSocketsTransportClient::read_impl(uint8_t *buffer, size_t size) {
     domain_read(socket, buffer, size);
 }

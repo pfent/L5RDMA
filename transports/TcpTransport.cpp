@@ -27,15 +27,15 @@ void TcpTransportServer::listen(uint16_t port) {
     tcp_listen(initialSocket);
 }
 
-void TcpTransportServer::write(const uint8_t *data, size_t size) {
+void TcpTransportServer::write_impl(const uint8_t *data, size_t size) {
     tcp_write(communicationSocket, data, size);
 }
 
-void TcpTransportServer::read(uint8_t *buffer, size_t size) {
+void TcpTransportServer::read_impl(uint8_t *buffer, size_t size) {
     tcp_read(communicationSocket, buffer, size);
 }
 
-void TcpTransportServer::accept() {
+void TcpTransportServer::accept_impl() {
     sockaddr_in ignored{};
     communicationSocket = tcp_accept(initialSocket, ignored);
 }
@@ -46,7 +46,7 @@ TcpTransportClient::~TcpTransportClient() {
     tcp_close(socket);
 }
 
-void TcpTransportClient::connect(std::string_view connection) {
+void TcpTransportClient::connect_impl(std::string_view connection) {
     const auto pos = connection.find(':');
     const auto ip = std::string(connection.data(), pos);
     const auto port = std::stoi(std::string(connection.begin() + pos, connection.end()));
@@ -58,10 +58,10 @@ void TcpTransportClient::connect(std::string_view connection) {
     tcp_connect(socket, addr);
 }
 
-void TcpTransportClient::write(const uint8_t *data, size_t size) {
+void TcpTransportClient::write_impl(const uint8_t *data, size_t size) {
     tcp_write(socket, data, size);
 }
 
-void TcpTransportClient::read(uint8_t *buffer, size_t size) {
+void TcpTransportClient::read_impl(uint8_t *buffer, size_t size) {
     tcp_read(socket, buffer, size);
 }

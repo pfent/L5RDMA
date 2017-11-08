@@ -6,26 +6,41 @@
 #include <string_view>
 #include <memory>
 #include <exchangableTransports/datastructures/RDMAMessageBuffer.h>
+#include "Transport.h"
 
-class RdmaTransport { // TODO
+class RdmaTransportServer : TransportServer<RdmaTransportServer> {
+    const int sock;
+    std::unique_ptr<RDMAMessageBuffer> rdma = nullptr;
+
+public:
+    explicit RdmaTransportServer(std::string_view port);
+
+    ~RdmaTransportServer();
+
+    void listen(uint16_t port);
+
+    void accept_impl();
+
+    void write_impl(const uint8_t *data, size_t size);
+
+    void read_impl(uint8_t *buffer, size_t size);
+};
+
+class RdmaTransportClient : TransportClient<RdmaTransportClient> {
     const int sock;
     const uint16_t port;
     std::unique_ptr<RDMAMessageBuffer> rdma = nullptr;
 
 public:
-    explicit RdmaTransport(std::string_view port);
+    RdmaTransportClient();
 
-    ~RdmaTransport();
+    ~RdmaTransportClient();
 
-    void connect(std::string_view ip);
+    void connect_impl(std::string_view port);
 
-    void listen();
+    void write_impl(const uint8_t *data, size_t size);
 
-    void accept();
-
-    void write(const uint8_t *data, size_t size);
-
-    void read(uint8_t *buffer, size_t size);
+    void read_impl(uint8_t *buffer, size_t size);
 };
 
 #endif //EXCHANGABLE_TRANSPORTS_MPITRANSPORT_H
