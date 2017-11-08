@@ -1,4 +1,4 @@
-#include <exchangableTransports/util/domainSocketsWrapper.h>
+#include <exchangeableTransports/util/domainSocketsWrapper.h>
 #include <sys/un.h>
 #include "DomainSocketsTransport.h"
 

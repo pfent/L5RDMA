@@ -3,9 +3,9 @@
 #include <chrono>
 #include <array>
 #include <memory>
-#include <exchangableTransports/transports/Transport.h>
-#include <exchangableTransports/transports/TcpTransport.h>
-#include <exchangableTransports/transports/DomainSocketsTransport.h>
+#include <exchangeableTransports/transports/Transport.h>
+#include <exchangeableTransports/transports/TcpTransport.h>
+#include <exchangeableTransports/transports/DomainSocketsTransport.h>
 
 using namespace std;
 using namespace std::string_view_literals;

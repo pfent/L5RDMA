@@ -1,4 +1,4 @@
-#include <exchangableTransports/util/tcpWrapper.h>
+#include <exchangeableTransports/util/tcpWrapper.h>
 #include <arpa/inet.h>
 #include "RdmaTransport.h"
 

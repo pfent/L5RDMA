@@ -5,7 +5,7 @@
 #include <cstddef>
 #include <string_view>
 #include <memory>
-#include <exchangableTransports/datastructures/RDMAMessageBuffer.h>
+#include <exchangeableTransports/datastructures/RDMAMessageBuffer.h>
 #include "Transport.h"
 
 class RdmaTransportServer : TransportServer<RdmaTransportServer> {

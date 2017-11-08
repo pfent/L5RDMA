@@ -1,6 +1,6 @@
 #include <string>
 #include <arpa/inet.h>
-#include "exchangableTransports/util/tcpWrapper.h"
+#include "exchangeableTransports/util/tcpWrapper.h"
 #include "TcpTransport.h"
 
 TcpTransportServer::TcpTransportServer(std::string_view port) :

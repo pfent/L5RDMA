@@ -1,8 +1,8 @@
 #include "RDMAMessageBuffer.h"
 #include <iostream>
 #include <infiniband/verbs.h>
-#include "exchangableTransports/rdma/WorkRequest.hpp"
-#include "exchangableTransports/util/tcpWrapper.h"
+#include "exchangeableTransports/rdma/WorkRequest.hpp"
+#include "exchangeableTransports/util/tcpWrapper.h"
 
 using namespace std;
 using namespace rdma;

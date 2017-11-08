@@ -2,10 +2,10 @@
 #define RDMA_HASH_MAP_RDMAMESSAGEBUFFER_H
 
 #include <atomic>
-#include "exchangableTransports/rdma/Network.hpp"
-#include "exchangableTransports/rdma/CompletionQueuePair.hpp"
-#include "exchangableTransports/rdma/QueuePair.hpp"
-#include "exchangableTransports/rdma/MemoryRegion.hpp"
+#include "exchangeableTransports/rdma/Network.hpp"
+#include "exchangeableTransports/rdma/CompletionQueuePair.hpp"
+#include "exchangeableTransports/rdma/QueuePair.hpp"
+#include "exchangeableTransports/rdma/MemoryRegion.hpp"
 
 struct RDMANetworking {
     rdma::Network network;
