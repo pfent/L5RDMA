@@ -6,7 +6,8 @@
 
 using namespace std;
 
-auto malloc_shared(string name, size_t size) {
+template<typename T>
+shared_ptr<T> malloc_shared(const string &name, size_t size) {
     // create a new mapping in /dev/shm
     const auto fd = shm_open(name.c_str(), O_CREAT | O_TRUNC | O_RDWR, 0666);
     if (fd < 0) {
@@ -25,9 +26,7 @@ auto malloc_shared(string name, size_t size) {
 
     close(fd); // no need to keep the fd open after the mapping
 
-    unique_ptr<uint8_t *, decltype(deleter)> uptr(reinterpret_cast<uint8_t **>(ptr), deleter);
-
-    return uptr;
+    return shared_ptr < T > (reinterpret_cast<T *>(ptr), deleter);
 }
 
 
@@ -41,6 +40,8 @@ size_t SharedMemoryMessageBuffer::receive(void *whereTo, size_t maxSize) {
 
 SharedMemoryMessageBuffer::SharedMemoryMessageBuffer(size_t size, int sock) :
         size(size) {
-    auto ptr = malloc_shared("test"s, 1024);
+    localSend = malloc_shared<uint8_t *>("test", size);
+    localReceive = malloc_shared<uint8_t *>("test2", size);
+    readPos = malloc_shared<std::atomic<size_t>>("test3", sizeof(std::atomic<size_t>));
     // TODO
 }

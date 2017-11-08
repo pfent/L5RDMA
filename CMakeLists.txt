@@ -22,5 +22,5 @@ set(OVERRIDES_FILES
 
 include_directories(..)
 
-add_executable(pingPong pingPong.cpp util/tcpWrapper.cpp transports/TcpTransport.cpp transports/RdmaTransport.cpp ${SOURCE_FILES} transports/DomainSocketsTransport.cpp transports/DomainSocketsTransport.h datastructures/SharedMemoryMessageBuffer.cpp datastructures/SharedMemoryMessageBuffer.h util/domainSocketsWrapper.cpp util/domainSocketsWrapper.h transports/Transport.h transports/Buffer.h)
+add_executable(pingPong pingPong.cpp util/tcpWrapper.cpp transports/TcpTransport.cpp transports/RdmaTransport.cpp ${SOURCE_FILES} transports/DomainSocketsTransport.cpp transports/DomainSocketsTransport.h datastructures/SharedMemoryMessageBuffer.cpp datastructures/SharedMemoryMessageBuffer.h util/domainSocketsWrapper.cpp util/domainSocketsWrapper.h transports/Transport.h transports/Buffer.h transports/SharedMemoryTransport.h transports/SharedMemoryTransport.cpp)
 target_link_libraries(pingPong ibverbs rt)

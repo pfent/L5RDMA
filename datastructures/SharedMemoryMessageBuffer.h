@@ -17,10 +17,10 @@ struct Message {
 struct SharedMemoryMessageBuffer {
     const size_t size;
 
-    std::unique_ptr<uint8_t[]> localSend;
-    std::unique_ptr<uint8_t[]> localReceive;
+    std::shared_ptr<uint8_t*> localSend;
+    std::shared_ptr<uint8_t*> localReceive;
 
-    std::unique_ptr<std::atomic<size_t>> readPos;
+    std::shared_ptr<std::atomic<size_t>> readPos;
     size_t sendPos;
 
     uint8_t *remoteSend;
