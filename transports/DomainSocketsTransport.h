@@ -9,6 +9,7 @@
 
 class DomainSocketsTransportServer : public TransportServer<DomainSocketsTransportServer> {
     const int initialSocket;
+    const std::string file;
     int communicationSocket = -1;
 
 public:

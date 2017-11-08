@@ -2,13 +2,16 @@
 #include <sys/un.h>
 #include "DomainSocketsTransport.h"
 
-DomainSocketsTransportServer::DomainSocketsTransportServer(std::string_view file) : initialSocket(domain_socket()) {
+DomainSocketsTransportServer::DomainSocketsTransportServer(std::string_view file) :
+        initialSocket(domain_socket()),
+        file(file) {
     domain_bind(initialSocket, file);
     domain_listen(initialSocket);
 }
 
 DomainSocketsTransportServer::~DomainSocketsTransportServer() {
     domain_close(initialSocket);
+    domain_unlink(file);
 
     if (communicationSocket != -1) {
         domain_close(communicationSocket);
@@ -36,6 +39,7 @@ DomainSocketsTransportClient::~DomainSocketsTransportClient() {
 
 void DomainSocketsTransportClient::connect_impl(std::string_view file) {
     domain_connect(socket, file);
+    domain_unlink(file);
 }
 
 void DomainSocketsTransportClient::write_impl(const uint8_t *data, size_t size) {

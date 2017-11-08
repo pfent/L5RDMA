@@ -24,4 +24,6 @@ void domain_setBlocking(int sock);
 
 void domain_close(int sock);
 
+void domain_unlink(std::string_view pathToFile);
+
 #endif //EXCHANGABLETRANSPORTS_DOMAINSOCKETSWRAPPER_H

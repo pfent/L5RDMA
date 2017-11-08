@@ -64,6 +64,13 @@ void domain_bind(int sock, std::string_view pathToFile) {
     }
 }
 
+void domain_unlink(std::string_view pathToFile) {
+    if(unlink(std::string(pathToFile.begin(), pathToFile.end()).c_str()) < 0) {
+        perror("unlink");
+        throw std::runtime_error{"error unlink'ing"};
+    }
+}
+
 int domain_accept(int sock, sockaddr_un &unAddr) {
     socklen_t unAddrLen = sizeof unAddr;
     auto acced = accept(sock, reinterpret_cast<sockaddr *>(&unAddr), &unAddrLen);
