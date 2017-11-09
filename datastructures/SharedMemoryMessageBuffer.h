@@ -13,19 +13,26 @@ struct Message {
     uint8_t data[];
 };
 
-// maybe do as comparison: http://people.cs.pitt.edu/~jacklange/teaching/cs2510-f12/papers/implementing_lock_free.pdf
+struct SharedMemoryInfo {
+    std::string remoteBufferName;
+    std::string remoteReadPosName;
+
+    /// Exchange shared memory information with the remote side of the socket
+    SharedMemoryInfo(int sock, const std::string &bufferName, const std::string &readPosName);
+};
+
 struct SharedMemoryMessageBuffer {
     const size_t size;
+    const SharedMemoryInfo info;
 
-    std::shared_ptr<uint8_t*> localSend;
-    std::shared_ptr<uint8_t*> localReceive;
-
-    std::shared_ptr<std::atomic<size_t>> readPos;
+    std::shared_ptr<uint8_t *> localSendBuffer;
+    std::shared_ptr<std::atomic<size_t>> remoteReadPos;
     size_t sendPos;
 
-    uint8_t *remoteSend;
-    uint8_t *remoteReceive;
+    std::shared_ptr<uint8_t *> remoteSendBuffer;
+    std::shared_ptr<std::atomic<size_t>> readPos;
 
+    /// Establish a shared memory region of size with the remote side of sock
     SharedMemoryMessageBuffer(size_t size, int sock);
 
     void send(const uint8_t *data, size_t length);

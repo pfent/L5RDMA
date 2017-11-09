@@ -14,7 +14,7 @@ void domain_connect(int sock, std::string_view pathToFile);
 
 void domain_write(int sock, const void *buffer, std::size_t size);
 
-void domain_read(int sock, void *buffer, std::size_t size);
+size_t domain_read(int sock, void *buffer, std::size_t size);
 
 void domain_bind(int sock, std::string_view pathToFile);
 

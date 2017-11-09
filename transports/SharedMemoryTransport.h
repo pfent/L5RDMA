@@ -5,11 +5,15 @@
 #include "Transport.h"
 
 class SharedMemoryTransportServer : public TransportServer<SharedMemoryTransportServer> {
-    const int initialSocket;
-    int communicationSocket = -1;
+    const std::string remoteBufferName;
+    const std::string remoteReadPosName;
 
 public:
-    SharedMemoryTransportServer(std::string_view port);
+    /**
+     * Exchange information about the shared memory via the given domain socket
+     * @param domainSocket filename of the domain socket
+     */
+    SharedMemoryTransportServer(std::string_view domainSocket);
 
     ~SharedMemoryTransportServer();
 
@@ -24,7 +28,8 @@ private:
 };
 
 class SharedMemoryTransportClient : public TransportClient<SharedMemoryTransportClient> {
-    const int socket;
+    const std::string remoteBufferName;
+    const std::string remoteReadPosName;
 
 public:
     SharedMemoryTransportClient();

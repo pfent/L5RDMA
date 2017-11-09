@@ -44,11 +44,13 @@ void domain_write(int sock, const void *buffer, std::size_t size) {
     }
 }
 
-void domain_read(int sock, void *buffer, std::size_t size) {
-    if (recv(sock, buffer, size, 0) < 0) {
+size_t domain_read(int sock, void *buffer, std::size_t size) {
+    ssize_t res = recv(sock, buffer, size, 0);
+    if (res < 0) {
         perror("recv");
         throw std::runtime_error{"error read'ing"};
     }
+    return static_cast<size_t>(res);
 }
 
 void domain_bind(int sock, std::string_view pathToFile) {
@@ -65,7 +67,7 @@ void domain_bind(int sock, std::string_view pathToFile) {
 }
 
 void domain_unlink(std::string_view pathToFile) {
-    if(unlink(std::string(pathToFile.begin(), pathToFile.end()).c_str()) < 0) {
+    if (unlink(std::string(pathToFile.begin(), pathToFile.end()).c_str()) < 0) {
         perror("unlink");
         throw std::runtime_error{"error unlink'ing"};
     }
