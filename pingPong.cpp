@@ -6,6 +6,7 @@
 #include <exchangeableTransports/transports/Transport.h>
 #include <exchangeableTransports/transports/TcpTransport.h>
 #include <exchangeableTransports/transports/DomainSocketsTransport.h>
+#include <exchangeableTransports/transports/SharedMemoryTransport.h>
 
 using namespace std;
 using namespace std::string_view_literals;
@@ -62,7 +63,7 @@ int main(int argc, char **argv) {
 
     if (isClient) {
         const auto ip = argv[3];
-        auto client = Ping(make_transportClient<DomainSocketsTransportClient>(), port);
+        auto client = Ping(make_transportClient<SharedMemoryTransportClient>(), port);
         const auto start = chrono::steady_clock::now();
         for (size_t i = 0; i < MESSAGES; ++i) {
             client.ping();
@@ -73,7 +74,7 @@ int main(int argc, char **argv) {
         cout << MESSAGES << " messages exchanged in " << msTaken << "ms" << endl;
         cout << MESSAGES / sTaken << " msg/s" << endl;
     } else {
-        auto server = Pong(make_transportServer<DomainSocketsTransportServer>(port));
+        auto server = Pong(make_transportServer<SharedMemoryTransportServer>(port));
         server.start();
         for (size_t i = 0; i < MESSAGES; ++i) {
             server.pong();

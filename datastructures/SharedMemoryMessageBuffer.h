@@ -4,33 +4,34 @@
 #include <cstdint>
 #include <cstddef>
 #include <atomic>
-#include <algorithm>
-#include <stdexcept>
 #include <memory>
+#include <unistd.h>
 
 struct Message {
     std::atomic<size_t> size;
     uint8_t data[];
 };
 
+struct SharedBuffer {
+    std::atomic<size_t> readPos;
+    uint8_t buffer[];
+};
+
 struct SharedMemoryInfo {
     std::string remoteBufferName;
-    std::string remoteReadPosName;
 
     /// Exchange shared memory information with the remote side of the socket
-    SharedMemoryInfo(int sock, const std::string &bufferName, const std::string &readPosName);
+    SharedMemoryInfo(int sock, const std::string &bufferName);
 };
 
 struct SharedMemoryMessageBuffer {
     const size_t size;
     const SharedMemoryInfo info;
+    const std::string bufferName = "sharedBuffer" + std::to_string(::getpid());
 
-    std::shared_ptr<uint8_t *> localSendBuffer;
-    std::shared_ptr<std::atomic<size_t>> remoteReadPos;
     size_t sendPos;
-
-    std::shared_ptr<uint8_t *> remoteSendBuffer;
-    std::shared_ptr<std::atomic<size_t>> readPos;
+    std::shared_ptr<SharedBuffer> local;
+    std::shared_ptr<SharedBuffer> remote;
 
     /// Establish a shared memory region of size with the remote side of sock
     SharedMemoryMessageBuffer(size_t size, int sock);
