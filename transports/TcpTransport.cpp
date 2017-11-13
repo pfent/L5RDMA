@@ -48,8 +48,11 @@ TcpTransportClient::~TcpTransportClient() {
 
 void TcpTransportClient::connect_impl(std::string_view connection) {
     const auto pos = connection.find(':');
+    if (pos == std::string::npos) {
+        throw std::runtime_error("usage: <0.0.0.0:port>");
+    }
     const auto ip = std::string(connection.data(), pos);
-    const auto port = std::stoi(std::string(connection.begin() + pos, connection.end()));
+    const auto port = std::stoi(std::string(connection.begin() + pos + 1, connection.end()));
     sockaddr_in addr = {};
     addr.sin_family = AF_INET;
     addr.sin_port = htons(port);

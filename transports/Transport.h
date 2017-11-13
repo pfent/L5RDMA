@@ -5,6 +5,10 @@
 #include <memory>
 #include "Buffer.h"
 
+
+// todo: mtcp transport / dpdk, MSG_ZEROCOPY kernel interface https://lwn.net/Articles/726917/
+
+
 /**
  * CRTP class used to specify the Transport interface via static polymorphism
  * Transports abstract from sockets as data communication to also provide mechanisms, that are useful to send data via

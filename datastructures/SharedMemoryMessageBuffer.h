@@ -7,6 +7,9 @@
 #include <memory>
 #include <unistd.h>
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
+
 struct Message {
     std::atomic<size_t> size;
     uint8_t data[];
@@ -16,6 +19,8 @@ struct SharedBuffer {
     std::atomic<size_t> readPos;
     uint8_t buffer[];
 };
+
+#pragma GCC diagnostic pop
 
 struct SharedMemoryInfo {
     std::string remoteBufferName;

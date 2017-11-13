@@ -14,13 +14,21 @@ set(SOURCE_FILES
         rdma/ReceiveQueue.cpp
         rdma/WorkRequest.cpp
         util/tcpWrapper.cpp
+        util/domainSocketsWrapper.cpp
         datastructures/RDMAMessageBuffer.cpp
-        )
+        datastructures/SharedMemoryMessageBuffer.cpp
+        transports/Transport.h
+        transports/Buffer.h
+        transports/TcpTransport.cpp
+        transports/RdmaTransport.cpp
+        transports/DomainSocketsTransport.cpp
+        transports/SharedMemoryTransport.cpp
+        apps/PingPong.h)
 set(OVERRIDES_FILES
         fileDescriptorOverrides/overrides.cpp
         fileDescriptorOverrides/realFunctions.cpp)
 
 include_directories(..)
 
-add_executable(pingPong pingPong.cpp util/tcpWrapper.cpp transports/TcpTransport.cpp transports/RdmaTransport.cpp ${SOURCE_FILES} transports/DomainSocketsTransport.cpp transports/DomainSocketsTransport.h datastructures/SharedMemoryMessageBuffer.cpp datastructures/SharedMemoryMessageBuffer.h util/domainSocketsWrapper.cpp util/domainSocketsWrapper.h transports/Transport.h transports/Buffer.h transports/SharedMemoryTransport.h transports/SharedMemoryTransport.cpp)
+add_executable(pingPong pingPong.cpp ${SOURCE_FILES})
 target_link_libraries(pingPong ibverbs rt)
