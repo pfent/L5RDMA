@@ -5,7 +5,7 @@
 #include <exchangeableTransports/datastructures/SharedMemoryMessageBuffer.h>
 #include "Transport.h"
 
-constexpr const size_t BUFFER_SIZE = 1024*1024*10;
+constexpr const size_t BUFFER_SIZE = 16 * 1024 * 1024;
 
 class SharedMemoryTransportServer : public TransportServer<SharedMemoryTransportServer> {
     const int initialSocket;

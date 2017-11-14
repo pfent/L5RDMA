@@ -30,9 +30,9 @@ struct SharedMemoryInfo {
 };
 
 struct SharedMemoryMessageBuffer {
+    const std::string bufferName = "sharedBuffer" + std::to_string(::getpid());
     const size_t size;
     const SharedMemoryInfo info;
-    const std::string bufferName = "sharedBuffer" + std::to_string(::getpid());
 
     size_t sendPos;
     std::shared_ptr<SharedBuffer> local;

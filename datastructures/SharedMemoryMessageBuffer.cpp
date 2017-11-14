@@ -4,20 +4,23 @@
 #include <unistd.h>
 #include <cstddef>
 #include <exchangeableTransports/util/domainSocketsWrapper.h>
+#include <cstring>
 
 using namespace std;
 
 template<typename T>
-std::shared_ptr<T> malloc_shared(const string &name, size_t size) {
+std::shared_ptr<T> malloc_shared(const string &name, size_t size, bool init) {
     // create a new mapping in /dev/shm
     const auto fd = shm_open(name.c_str(), O_CREAT | O_TRUNC | O_RDWR, 0666);
     if (fd < 0) {
         perror("shm_open");
         throw runtime_error{"shm_open failed"};
     }
-    if (ftruncate(fd, size) != 0) {
-        perror("ftruncate");
-        throw runtime_error{"ftruncate failed"};
+    if (init) {
+        if (ftruncate(fd, size) != 0) {
+            perror("ftruncate");
+            throw runtime_error{"ftruncate failed"};
+        }
     }
 
     auto deleter = [size](void *p) {
@@ -27,7 +30,11 @@ std::shared_ptr<T> malloc_shared(const string &name, size_t size) {
 
     close(fd); // no need to keep the fd open after the mapping
 
-    return shared_ptr < T > (reinterpret_cast<T *>(ptr), deleter);
+    if (init) {
+        memset(ptr, 0, size);
+    }
+
+    return shared_ptr<T>(reinterpret_cast<T *>(ptr), deleter);
 }
 
 SharedMemoryInfo::SharedMemoryInfo(int sock, const std::string &bufferName) {
@@ -72,8 +79,8 @@ SharedMemoryMessageBuffer::SharedMemoryMessageBuffer(size_t size, int sock) :
         size(size),
         info(sock, bufferName),
         sendPos(0),
-        local(malloc_shared<SharedBuffer>(bufferName, sizeof(std::atomic<size_t>) + size)),
-        remote(malloc_shared<SharedBuffer>(info.remoteBufferName, sizeof(std::atomic<size_t>) + size)) {
+        local(malloc_shared<SharedBuffer>(bufferName, sizeof(std::atomic<size_t>) + size, true)),
+        remote(malloc_shared<SharedBuffer>(info.remoteBufferName, sizeof(std::atomic<size_t>) + size, false)) {
     const bool powerOfTwo = (size != 0) && !(size & (size - 1));
     if (not powerOfTwo) {
         throw runtime_error{"size should be a power of 2"};

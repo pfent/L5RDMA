@@ -12,9 +12,9 @@ class Ping {
     std::unique_ptr<TransportClient<T>> transport;
     std::array<uint8_t, data.size()> buffer;
 public:
-    explicit Ping(std::unique_ptr<TransportClient<T>> transport, std::string_view ip) : transport(
+    explicit Ping(std::unique_ptr<TransportClient<T>> transport, std::string_view whereTo) : transport(
             std::move(transport)) {
-        this->transport->connect(ip);
+        this->transport->connect(whereTo);
     }
 
     void ping() {

@@ -53,5 +53,5 @@ void SharedMemoryTransportClient::write_impl(const uint8_t *data, size_t size) {
 }
 
 void SharedMemoryTransportClient::read_impl(uint8_t *buffer, size_t size) {
-
+    messageBuffer->receive(buffer, size);
 }
