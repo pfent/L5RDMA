@@ -16,11 +16,9 @@ std::shared_ptr<T> malloc_shared(const string &name, size_t size, bool init) {
         perror("shm_open");
         throw runtime_error{"shm_open failed"};
     }
-    if (init) {
-        if (ftruncate(fd, size) != 0) {
-            perror("ftruncate");
-            throw runtime_error{"ftruncate failed"};
-        }
+    if (ftruncate(fd, size) != 0) {
+        perror("ftruncate");
+        throw runtime_error{"ftruncate failed"};
     }
 
     auto deleter = [size](void *p) {
@@ -34,7 +32,7 @@ std::shared_ptr<T> malloc_shared(const string &name, size_t size, bool init) {
         memset(ptr, 0, size);
     }
 
-    return shared_ptr<T>(reinterpret_cast<T *>(ptr), deleter);
+    return shared_ptr < T > (reinterpret_cast<T *>(ptr), deleter);
 }
 
 SharedMemoryInfo::SharedMemoryInfo(int sock, const std::string &bufferName) {
@@ -70,16 +68,18 @@ size_t SharedMemoryMessageBuffer::receive(void *whereTo, size_t maxSize) {
 
     // TODO: wraparound?
     copy(message->data, &message->data[recvSize], reinterpret_cast<uint8_t *>(whereTo));
-    local->readPos += recvSize;
+
+    const auto messageSize = sizeof(message->size) + recvSize;
+    local->readPos += messageSize;
 
     return recvSize;
 }
 
 SharedMemoryMessageBuffer::SharedMemoryMessageBuffer(size_t size, int sock) :
         size(size),
-        info(sock, bufferName),
         sendPos(0),
         local(malloc_shared<SharedBuffer>(bufferName, sizeof(std::atomic<size_t>) + size, true)),
+        info(sock, bufferName),
         remote(malloc_shared<SharedBuffer>(info.remoteBufferName, sizeof(std::atomic<size_t>) + size, false)) {
     const bool powerOfTwo = (size != 0) && !(size & (size - 1));
     if (not powerOfTwo) {

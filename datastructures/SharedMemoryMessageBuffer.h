@@ -32,10 +32,10 @@ struct SharedMemoryInfo {
 struct SharedMemoryMessageBuffer {
     const std::string bufferName = "sharedBuffer" + std::to_string(::getpid());
     const size_t size;
-    const SharedMemoryInfo info;
-
     size_t sendPos;
+
     std::shared_ptr<SharedBuffer> local;
+    const SharedMemoryInfo info; // first init local, then exchange info
     std::shared_ptr<SharedBuffer> remote;
 
     /// Establish a shared memory region of size with the remote side of sock
