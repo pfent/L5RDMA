@@ -23,7 +23,7 @@ set(SOURCE_FILES
         transports/RdmaTransport.cpp
         transports/DomainSocketsTransport.cpp
         transports/SharedMemoryTransport.cpp
-        apps/PingPong.h)
+        apps/PingPong.h util/bench.h)
 set(OVERRIDES_FILES
         fileDescriptorOverrides/overrides.cpp
         fileDescriptorOverrides/realFunctions.cpp)

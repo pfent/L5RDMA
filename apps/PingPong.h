@@ -34,8 +34,7 @@ class Pong {
     std::unique_ptr<TransportServer<T>> transport;
     std::array<uint8_t, messageSize> buffer;
 public:
-    explicit Pong(std::unique_ptr<TransportServer<T>> transport) : transport(std::move(transport)) {
-    };
+    explicit Pong(std::unique_ptr<TransportServer<T>> transport) : transport(std::move(transport)) {};
 
     void start() {
         transport->accept();
