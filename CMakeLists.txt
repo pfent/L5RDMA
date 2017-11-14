@@ -17,6 +17,7 @@ set(SOURCE_FILES
         util/domainSocketsWrapper.cpp
         datastructures/RDMAMessageBuffer.cpp
         datastructures/SharedMemoryMessageBuffer.cpp
+        datastructures/SharedMemoryMessageQueue.cpp
         transports/Transport.h
         transports/Buffer.h
         transports/TcpTransport.cpp
