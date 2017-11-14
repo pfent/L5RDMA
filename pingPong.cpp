@@ -28,8 +28,7 @@ int main(int argc, char **argv) {
                     client.ping();
                 }
                 const auto end = chrono::steady_clock::now();
-                const auto msTaken = chrono::duration<double, milli>(end - start).count();
-                const auto sTaken = msTaken / 1000;
+                const auto sTaken = chrono::duration<double>(end - start).count();
                 cout << MESSAGES / sTaken << " msg/s, ";
             });
         }

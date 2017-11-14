@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <exchangeableTransports/util/domainSocketsWrapper.h>
 #include <cstring>
+#include <xmmintrin.h>
 
 using namespace std;
 
@@ -57,10 +58,15 @@ void SharedMemoryMessageBuffer::send(const uint8_t *data, size_t length) {
 size_t SharedMemoryMessageBuffer::receive(void *whereTo, size_t maxSize) {
     const auto currentPos = local->readPos.load();
     auto message = reinterpret_cast<Message *>(&remote->buffer[currentPos]);
-    size_t recvSize;
-    do {
+    size_t recvSize = message->size;
+
+    if (recvSize == 0) { // TODO probably be more clever here
+        sched_yield(); // _mm_pause(); or nanosleep(); depending on a sampling of the average wait times
+    }
+
+    while (recvSize == 0) {
         recvSize = message->size;
-    } while (recvSize == 0) /*Busy wait for now, probably should be more clever here*/;
+    }
 
     if (recvSize > maxSize) {
         throw runtime_error{"plz only read whole messages for now!"};
