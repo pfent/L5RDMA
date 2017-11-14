@@ -9,7 +9,6 @@
 #include <exchangeableTransports/transports/SharedMemoryTransport.h>
 #include <exchangeableTransports/apps/PingPong.h>
 #include <exchangeableTransports/util/bench.h>
-#include <fstream>
 
 using namespace std;
 using namespace std::string_view_literals;
@@ -17,33 +16,63 @@ using namespace std::string_view_literals;
 static const size_t MESSAGES = 1024 * 128; // approx 1s
 
 int main(int argc, char **argv) {
-    if (argc < 3) {
-        cout << "Usage: " << argv[0] << " <client / server> <connection string (e.g. 127.0.0.1:1234)>" << endl;
+    if (argc < 2) {
+        cout << "Usage: " << argv[0] << " <client / server>" << endl;
         return -1;
     }
     const auto isClient = argv[1][0] == 'c';
-    const auto port = argv[2];
 
     if (isClient) {
-        auto client = Ping(make_transportClient<TcpTransportClient>(), port);
-        bench([&]() {
-            const auto start = chrono::steady_clock::now();
-            for (size_t i = 0; i < MESSAGES; ++i) {
-                client.ping();
-            }
-            const auto end = chrono::steady_clock::now();
-            const auto msTaken = chrono::duration<double, milli>(end - start).count();
-            const auto sTaken = msTaken / 1000;
-            cout << MESSAGES / sTaken << " msg/s" << endl;
-        });
+        {
+            cout << "tcp, ";
+            auto client = Ping(make_transportClient<TcpTransportClient>(), "127.0.0.1:1234");
+            bench([&]() {
+                const auto start = chrono::steady_clock::now();
+                for (size_t i = 0; i < MESSAGES; ++i) {
+                    client.ping();
+                }
+                const auto end = chrono::steady_clock::now();
+                const auto msTaken = chrono::duration<double, milli>(end - start).count();
+                const auto sTaken = msTaken / 1000;
+                cout << MESSAGES / sTaken << " msg/s, ";
+            });
+        }
+        sleep(1); // wait for server to be started
+        {
+            cout << "domain sockets, ";
+            auto client = Ping(make_transportClient<DomainSocketsTransportClient>(), "/tmp/pingPong");
+            bench([&]() {
+                const auto start = chrono::steady_clock::now();
+                for (size_t i = 0; i < MESSAGES; ++i) {
+                    client.ping();
+                }
+                const auto end = chrono::steady_clock::now();
+                const auto msTaken = chrono::duration<double, milli>(end - start).count();
+                const auto sTaken = msTaken / 1000;
+                cout << MESSAGES / sTaken << " msg/s, ";
+            });
+        }
     } else {
-        auto server = Pong(make_transportServer<TcpTransportServer>(port));
-        server.start();
-        bench([&]() {
-            for (size_t i = 0; i < MESSAGES; ++i) {
-                server.pong();
-            }
-        });
+        {
+            cout << "tcp, ";
+            auto server = Pong(make_transportServer<TcpTransportServer>("1234"));
+            server.start();
+            bench([&]() {
+                for (size_t i = 0; i < MESSAGES; ++i) {
+                    server.pong();
+                }
+            });
+        }
+        {
+            cout << "domain sockets, ";
+            auto server = Pong(make_transportServer<DomainSocketsTransportServer>("/tmp/pingPong"));
+            server.start();
+            bench([&]() {
+                for (size_t i = 0; i < MESSAGES; ++i) {
+                    server.pong();
+                }
+            });
+        }
     }
 
     return 0;

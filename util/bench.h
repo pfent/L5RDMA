@@ -38,21 +38,38 @@ std::tuple<double, double> getOwnStat() {
 }
 
 template<typename T>
-auto bench(T &&fun) {
-    const auto before = getGlobalStat();
+auto bench(T &&fun, size_t repetitions = 1) {
+    std::vector<std::tuple<double, double, double>> runs;
+
+    for (size_t i = 0; i < repetitions; ++i) {
+        const auto before = getGlobalStat();
+        const auto
+        [ownUserBefore, ownSystemBefore] = getOwnStat();
+
+        fun();
+
+        const auto after = getGlobalStat();
+        const auto
+        [ownUserAfter, ownSystemAfter] = getOwnStat();
+
+        const auto diff = (after - before);
+        const auto userPercent = (ownUserAfter - ownUserBefore) / diff * 100.0;
+        const auto systemPercent = (ownSystemAfter - ownSystemBefore) / diff * 100.0;
+        const auto totalPercent = userPercent + systemPercent;
+
+        runs.emplace_back(userPercent, systemPercent, totalPercent);
+    }
+
     const auto
-    [ownUserBefore, ownSystemBefore] = getOwnStat();
-
-    fun();
-
-    const auto after = getGlobalStat();
-    const auto
-    [ownUserAfter, ownSystemAfter] = getOwnStat();
-
-    const auto diff = (after - before);
-    const auto userPercent = (ownUserAfter - ownUserBefore) / diff * 100.0;
-    const auto systemPercent = (ownSystemAfter - ownSystemBefore) / diff * 100.0;
-    const auto totalPercent = userPercent + systemPercent;
+    [userPercent, systemPercent, totalPercent] = [&]() {
+        double userTotal = 0, systemTotal = 0, totalTotal = 0;
+        for (auto[u, s, t] : runs) {
+            userTotal += u;
+            systemTotal += s;
+            totalTotal += t;
+        }
+        return std::make_tuple(userTotal / repetitions, systemTotal / repetitions, totalTotal / repetitions);
+    }();
 
     std::cout << userPercent << ", " << systemPercent << ", " << totalPercent << '\n';
 }
