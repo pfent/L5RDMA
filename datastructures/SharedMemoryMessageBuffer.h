@@ -6,6 +6,7 @@
 #include <atomic>
 #include <memory>
 #include <unistd.h>
+#include <exchangeableTransports/util/sharedMemory.h>
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"
@@ -21,13 +22,6 @@ struct SharedBuffer {
 };
 
 #pragma GCC diagnostic pop
-
-struct SharedMemoryInfo {
-    std::string remoteBufferName;
-
-    /// Exchange shared memory information with the remote side of the socket
-    SharedMemoryInfo(int sock, const std::string &bufferName);
-};
 
 struct SharedMemoryMessageBuffer {
     const std::string bufferName = "sharedBuffer" + std::to_string(::getpid());

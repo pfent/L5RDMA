@@ -1,58 +1,50 @@
 #include "SharedMemoryMessageQueue.h"
-#include <sys/mman.h>
-#include <sys/file.h>
-#include <unistd.h>
-#include <cstddef>
-#include <exchangeableTransports/util/domainSocketsWrapper.h>
-#include <cstring>
-#include <xmmintrin.h>
+#include <exchangeableTransports/util/sharedMemory.h>
 
 using namespace std;
 
-template<typename T>
-std::shared_ptr<T> malloc_shared(const string &name, size_t size, bool init) {
-    // create a new mapping in /dev/shm
-    const auto fd = shm_open(name.c_str(), O_CREAT | O_TRUNC | O_RDWR, 0666);
-    if (fd < 0) {
-        perror("shm_open");
-        throw runtime_error{"shm_open failed"};
+// TODO: this can't work, because we operate on separate virtual memory spaces, so we segfault when trying to access
+// the other processes memory. Better create offsets here
+QueueMessage *SharedMemoryMessageQueue::getNewMessage(size_t dataSize) {
+    const size_t messageLength = dataSize + QueueMessage::MESSAGE_HEADER_SIZE;
+
+    size_t bufferPos = endOfLastWrite % size;
+    if (bufferPos + messageLength > size) { // wraparound
+        bufferPos = 0;
     }
-    if (ftruncate(fd, size) != 0) {
-        perror("ftruncate");
-        throw runtime_error{"ftruncate failed"};
+    // get remote usage of the buffer and calculate safeToWrite
+    const size_t safeToWrite = [&]() {
+        size_t freePos = remote->freePos;
+        if (bufferPos > freePos) {
+            return size - bufferPos;
+        } else if (bufferPos < freePos) {
+            return freePos - bufferPos;
+        } else {
+            return size;
+        }
+    }();
+    if (safeToWrite < messageLength) {
+        throw runtime_error{"can't fit message into message queue"};
     }
 
-    auto deleter = [size](void *p) {
-        munmap(p, size);
-    };
-    auto ptr = mmap(nullptr, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    auto newMessage = reinterpret_cast<QueueMessage *>(&local->buffer[bufferPos]);
 
-    close(fd); // no need to keep the fd open after the mapping
+    endOfLastWrite = bufferPos + messageLength;
 
-    if (init) {
-        memset(ptr, 0, size);
-    }
-
-    return shared_ptr < T > (reinterpret_cast<T *>(ptr), deleter);
+    return newMessage;
 }
 
-SharedMemoryInfo::SharedMemoryInfo(int sock, const std::string &bufferName) {
-    domain_write(sock, bufferName.c_str(), bufferName.size());
-    uint8_t buffer[255];
-    size_t readCount = domain_read(sock, buffer, 255);
-    this->remoteBufferName = string(buffer, buffer + readCount);
+void SharedMemoryMessageQueue::releaseOld(QueueMessage *toRelease) {
+    size_t lastFreePos = local->freePos;
+    lastFreePos += QueueMessage::MESSAGE_HEADER_SIZE + toRelease->size;
+    local->freePos = lastFreePos % size;
 }
-
-Message *getNewMessage(size_t dataSize); // TODO
-void releaseNext(Message *);
 
 void SharedMemoryMessageQueue::send(const uint8_t *data, size_t length) {
-    const size_t sizeToWrite = sizeof(std::atomic<Message *>) + sizeof(size_t) + length;
-    if (sizeToWrite > size) throw runtime_error{"data > buffersize!"};
-    // TODO: safeToWrite
+    QueueMessage *newMsg = getNewMessage(length);
 
-    Message *newMsg = getNewMessage(length);
     newMsg->next.store(nullptr, memory_order::memory_order_relaxed);
+    newMsg->size = length;
     copy(data, &data[length], newMsg->data);
 
     // for multiple senders, this needs to happen atomically, but assume we have a single sender now
@@ -62,23 +54,30 @@ void SharedMemoryMessageQueue::send(const uint8_t *data, size_t length) {
 
 size_t SharedMemoryMessageQueue::receive(void *whereTo, size_t maxSize) {
     while (tail->next.load(memory_order::memory_order_consume) == nullptr) /* Busy wait for now */;
-    Message *next = tail->next.load(memory_order::memory_order_relaxed);
+    QueueMessage *next = tail->next.load(memory_order::memory_order_relaxed);
+    QueueMessage *old = tail;
     tail = next;
 
-    copy(next->data, &next->data[next->size], reinterpret_cast<uint8_t *>(whereTo));
     const size_t ret = next->size;
-    releaseNext(next);
+    if (ret > maxSize) {
+        throw runtime_error{"plz only read whole messages for now!"};
+    }
+    copy(next->data, &next->data[next->size], reinterpret_cast<uint8_t *>(whereTo));
+    releaseOld(old);
     return ret;
 }
 
-SharedMemoryMessageQueue::SharedMemoryMessageQueue(size_t size, int sock) : // TODO: init last / end
+SharedMemoryMessageQueue::SharedMemoryMessageQueue(size_t size, int sock) :
         size(size),
-        local(malloc_shared<SharedBuffer>(bufferName, sizeof(std::atomic<size_t>) + size, true)),
+        local(malloc_shared<QueueSharedBuffer>(bufferName, QueueSharedBuffer::BUFFER_HEADER_SIZE + size, true)),
         info(sock, bufferName),
-        remote(malloc_shared<SharedBuffer>(info.remoteBufferName, sizeof(std::atomic<size_t>) + size, false)) {
+        remote(malloc_shared<QueueSharedBuffer>(info.remoteBufferName, QueueSharedBuffer::BUFFER_HEADER_SIZE + size,
+                                                false)) {
     const bool powerOfTwo = (size != 0) && !(size & (size - 1));
     if (not powerOfTwo) {
         throw runtime_error{"size should be a power of 2"};
     }
-    // TODO
+    head = reinterpret_cast<QueueMessage *>(&local->buffer[0]);
+    tail = reinterpret_cast<QueueMessage *>(&remote->buffer[0]);
+    endOfLastWrite = QueueMessage::MESSAGE_HEADER_SIZE; // start with one zero size sentinel in the beginning
 }

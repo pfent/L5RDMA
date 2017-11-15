@@ -3,9 +3,12 @@
 
 
 #include <exchangeableTransports/datastructures/SharedMemoryMessageBuffer.h>
+#include <exchangeableTransports/datastructures/SharedMemoryMessageQueue.h>
 #include "Transport.h"
 
 constexpr const size_t BUFFER_SIZE = 16 * 1024 * 1024;
+
+using SharedMemoryDatastructure = SharedMemoryMessageQueue;
 
 class SharedMemoryTransportServer : public TransportServer<SharedMemoryTransportServer> {
     const int initialSocket;
@@ -13,7 +16,7 @@ class SharedMemoryTransportServer : public TransportServer<SharedMemoryTransport
     const std::string remoteBufferName;
     const std::string remoteReadPosName;
     int communicationSocket = -1;
-    std::unique_ptr<SharedMemoryMessageBuffer> messageBuffer;
+    std::unique_ptr<SharedMemoryDatastructure> messageBuffer;
 
 public:
     /**
@@ -33,7 +36,7 @@ public:
 
 class SharedMemoryTransportClient : public TransportClient<SharedMemoryTransportClient> {
     const int socket;
-    std::unique_ptr<SharedMemoryMessageBuffer> messageBuffer;
+    std::unique_ptr<SharedMemoryDatastructure> messageBuffer;
 
 public:
     SharedMemoryTransportClient();

@@ -24,7 +24,7 @@ void SharedMemoryTransportServer::accept_impl() {
     sockaddr_un remote{};
     communicationSocket = domain_accept(initialSocket, remote);
 
-    messageBuffer = std::make_unique<SharedMemoryMessageBuffer>(BUFFER_SIZE, communicationSocket);
+    messageBuffer = std::make_unique<SharedMemoryDatastructure>(BUFFER_SIZE, communicationSocket);
 }
 
 void SharedMemoryTransportServer::write_impl(const uint8_t *data, size_t size) {
@@ -45,7 +45,7 @@ void SharedMemoryTransportClient::connect_impl(std::string_view file) {
     domain_connect(socket, file);
     domain_unlink(file);
 
-    messageBuffer = std::make_unique<SharedMemoryMessageBuffer>(BUFFER_SIZE, socket);
+    messageBuffer = std::make_unique<SharedMemoryDatastructure>(BUFFER_SIZE, socket);
 }
 
 void SharedMemoryTransportClient::write_impl(const uint8_t *data, size_t size) {
