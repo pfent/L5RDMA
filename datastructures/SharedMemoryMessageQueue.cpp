@@ -43,41 +43,32 @@ SharedMemoryInfo::SharedMemoryInfo(int sock, const std::string &bufferName) {
     this->remoteBufferName = string(buffer, buffer + readCount);
 }
 
-Message *getNext(); // TODO
+Message *getNewMessage(size_t dataSize); // TODO
+void releaseNext(Message *);
 
 void SharedMemoryMessageQueue::send(const uint8_t *data, size_t length) {
     const size_t sizeToWrite = sizeof(std::atomic<Message *>) + sizeof(size_t) + length;
     if (sizeToWrite > size) throw runtime_error{"data > buffersize!"};
     // TODO: safeToWrite
 
-    // TODO implement
+    Message *newMsg = getNewMessage(length);
+    newMsg->next.store(nullptr, memory_order::memory_order_relaxed);
+    copy(data, &data[length], newMsg->data);
 
-    Message *newMsg = getNext();
-    Message *expected = nullptr;
-
-    Message *tmp = end.load();
-
-    if (not tmp->next.compare_exchange_strong(expected, newMsg)) {
-        send(data, length); // old end, restart
-    }
+    // for multiple senders, this needs to happen atomically, but assume we have a single sender now
+    head->next.store(newMsg, memory_order::memory_order_release);
+    head = newMsg;
 }
 
 size_t SharedMemoryMessageQueue::receive(void *whereTo, size_t maxSize) {
-
-    // TODO: implement
-    Message *tmp;
-    Message *next;
-    do {
-        tmp = last.load();
-        next = tmp->next.load();
-    } while (next == nullptr); // Busy wait
-
-    if (not last.compare_exchange_strong(tmp, next)) {
-        return receive(whereTo, maxSize); // read an old value, restart
-    }
+    while (tail->next.load(memory_order::memory_order_consume) == nullptr) /* Busy wait for now */;
+    Message *next = tail->next.load(memory_order::memory_order_relaxed);
+    tail = next;
 
     copy(next->data, &next->data[next->size], reinterpret_cast<uint8_t *>(whereTo));
-    return next->size;
+    const size_t ret = next->size;
+    releaseNext(next);
+    return ret;
 }
 
 SharedMemoryMessageQueue::SharedMemoryMessageQueue(size_t size, int sock) : // TODO: init last / end

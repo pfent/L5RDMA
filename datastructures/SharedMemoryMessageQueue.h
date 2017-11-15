@@ -27,12 +27,16 @@ struct SharedMemoryInfo {
     SharedMemoryInfo(int sock, const std::string &bufferName);
 };
 
+/**
+ * A single producer, single consumer lock-free message queue, as proposed by intel (esp. for memory orders):
+ * @link https://software.intel.com/en-us/articles/single-producer-single-consumer-queue
+ */
 struct SharedMemoryMessageQueue {
     const std::string bufferName = "sharedBuffer" + std::to_string(::getpid());
     const size_t size;
 
-    std::atomic<Message *> last; // TODO: init this pointers to the very first buffer position with next = nullptr, size = 0
-    std::atomic<Message *> end;
+    Message * head; // TODO: init this pointers to the very first buffer position with next = nullptr, size = 0
+    Message * tail;
 
     std::shared_ptr<SharedBuffer> local;
     const SharedMemoryInfo info; // first init local, then exchange info
