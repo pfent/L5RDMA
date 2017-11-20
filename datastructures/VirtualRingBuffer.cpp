@@ -17,9 +17,13 @@ VirtualRingBuffer::VirtualRingBuffer(size_t size, int sock) : size(size) {
 }
 
 void VirtualRingBuffer::send(const uint8_t *data, size_t length) {
-    const auto pos = localRw->written % size;
+    const auto localWritten = localRw->written.load();
+    const auto pos = localWritten % size;
 
-    // TODO: check, if we can write length bytes safely
+    size_t remoteRead;
+    do {
+        remoteRead = remoteRw->read; // probably buffer this in class, so we don't have as much remote reads
+    } while ((localWritten - remoteRead) > (size - length)); // block until there is some space
 
     std::copy(data, data + length, local1.get() + pos);
 
@@ -27,9 +31,13 @@ void VirtualRingBuffer::send(const uint8_t *data, size_t length) {
 }
 
 size_t VirtualRingBuffer::receive(void *whereTo, size_t maxSize) {
-    const auto pos = localRw->read % size;
+    const auto localRead = localRw->read.load();
+    const auto pos = localRead % size;
 
-    // TODO: check if maxSize bytes are available
+    size_t remoteWritten;
+    do {
+        remoteWritten = remoteRw->written; // probably buffer this in class, so we don't have as much remote reads
+    } while ((remoteWritten - localRead) < maxSize); // block until maxSize is available
 
     std::copy(remote1.get() + pos, remote1.get() + pos + maxSize, reinterpret_cast<uint8_t *>(whereTo));
 
