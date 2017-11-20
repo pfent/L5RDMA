@@ -23,7 +23,7 @@ struct SharedMemoryInfo {
 };
 
 template<typename T>
-std::shared_ptr<T> malloc_shared(const std::string &name, size_t size, bool init) {
+std::shared_ptr<T> malloc_shared(const std::string &name, size_t size, bool init, void *addr = nullptr) {
     // create a new mapping in /dev/shm
     const auto fd = shm_open(name.c_str(), O_CREAT | O_TRUNC | O_RDWR, 0666);
     if (fd < 0) {
@@ -38,7 +38,7 @@ std::shared_ptr<T> malloc_shared(const std::string &name, size_t size, bool init
     auto deleter = [size](void *p) {
         munmap(p, size);
     };
-    auto ptr = mmap(nullptr, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    auto ptr = mmap(addr, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
 
     close(fd); // no need to keep the fd open after the mapping
 
