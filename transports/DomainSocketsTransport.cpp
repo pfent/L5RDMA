@@ -11,7 +11,6 @@ DomainSocketsTransportServer::DomainSocketsTransportServer(std::string_view file
 
 DomainSocketsTransportServer::~DomainSocketsTransportServer() {
     domain_close(initialSocket);
-    domain_unlink(file);
 
     if (communicationSocket != -1) {
         domain_close(communicationSocket);

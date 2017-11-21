@@ -15,7 +15,7 @@ class RdmaTransportServer : TransportServer<RdmaTransportServer> {
 public:
     explicit RdmaTransportServer(std::string_view port);
 
-    ~RdmaTransportServer();
+    ~RdmaTransportServer() override;
 
     void listen(uint16_t port);
 
@@ -34,7 +34,7 @@ class RdmaTransportClient : TransportClient<RdmaTransportClient> {
 public:
     RdmaTransportClient();
 
-    ~RdmaTransportClient();
+    ~RdmaTransportClient() override;
 
     void connect_impl(std::string_view port);
 

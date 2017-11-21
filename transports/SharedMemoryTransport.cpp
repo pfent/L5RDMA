@@ -13,7 +13,6 @@ SharedMemoryTransportServer::SharedMemoryTransportServer(std::string_view domain
 SharedMemoryTransportServer::~SharedMemoryTransportServer() {
     // close socket
     domain_close(initialSocket);
-    domain_unlink(file);
 
     if (communicationSocket != -1) {
         domain_close(communicationSocket);

@@ -15,7 +15,7 @@ class DomainSocketsTransportServer : public TransportServer<DomainSocketsTranspo
 public:
     explicit DomainSocketsTransportServer(std::string_view file);
 
-    ~DomainSocketsTransportServer();
+    ~DomainSocketsTransportServer() override;
 
     void accept_impl();
 
@@ -30,7 +30,7 @@ class DomainSocketsTransportClient : public TransportClient<DomainSocketsTranspo
 public:
     DomainSocketsTransportClient();
 
-    ~DomainSocketsTransportClient();
+    ~DomainSocketsTransportClient() override;
 
     void connect_impl(std::string_view file);
 

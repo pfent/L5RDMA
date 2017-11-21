@@ -26,7 +26,7 @@ public:
      */
     explicit SharedMemoryTransportServer(std::string_view domainSocket);
 
-    ~SharedMemoryTransportServer();
+    ~SharedMemoryTransportServer() override;
 
     void accept_impl();
 
@@ -42,7 +42,7 @@ class SharedMemoryTransportClient : public TransportClient<SharedMemoryTransport
 public:
     SharedMemoryTransportClient();
 
-    ~SharedMemoryTransportClient();
+    ~SharedMemoryTransportClient() override;
 
     void connect_impl(std::string_view file);
 

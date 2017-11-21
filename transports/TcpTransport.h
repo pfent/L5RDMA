@@ -13,7 +13,7 @@ class TcpTransportServer : public TransportServer<TcpTransportServer> {
 public:
     explicit TcpTransportServer(std::string_view port);
 
-    ~TcpTransportServer();
+    ~TcpTransportServer() override;
 
     void accept_impl();
 
@@ -31,7 +31,7 @@ class TcpTransportClient : public TransportClient<TcpTransportClient> {
 public:
     TcpTransportClient();
 
-    ~ TcpTransportClient();
+    ~ TcpTransportClient() override;
 
     void connect_impl(std::string_view file);
 
