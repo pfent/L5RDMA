@@ -6,15 +6,22 @@
 #include <stdexcept>
 
 struct Buffer {
-    size_t size;
-    uint8_t *ptr;
+    size_t size = 0;
+    uint8_t *ptr = nullptr;
 
     Buffer(size_t size, uint8_t *ptr) : size(size), ptr(ptr) {}
 
-    // move-only type. Don't destruct it without markAsSent
-    Buffer(Buffer &&) = default;
+    // move-only type. Don't destruct it without markAsDone
+    Buffer(Buffer &&other) noexcept {
+        std::swap(size, other.size);
+        std::swap(ptr, other.ptr);
+    }
 
-    Buffer &operator=(Buffer &&) = default;
+    Buffer &operator=(Buffer &&other) noexcept {
+        std::swap(size, other.size);
+        std::swap(ptr, other.ptr);
+        return *this;
+    }
 
     Buffer(const Buffer &) = delete;
 
@@ -29,7 +36,7 @@ struct Buffer {
         }
     }
 
-    void markAsSent() {
+    void markAsDone() {
         ptr = nullptr;
     }
 };

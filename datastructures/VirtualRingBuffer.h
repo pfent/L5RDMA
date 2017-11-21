@@ -36,13 +36,18 @@ struct VirtualRingBuffer {
 
     size_t receive(void *whereTo, size_t maxSize);
 
-    Buffer reserveBuffer(size_t size);
+    Buffer reserveBufferForSending(size_t length);
 
     void send(Buffer buffer);
 
-    Buffer receiveIntoBuffer(size_t size);
+    Buffer receiveIntoBuffer(size_t length);
 
     void markAsRead(Buffer buffer);
+
+private:
+    void waitUntilSendFree(size_t localWritten, size_t length) const;
+
+    void waitUntilReceiveAvailable(size_t maxSize, size_t localRead) const;
 };
 
 #endif //EXCHANGABLE_TRANSPORTS_VIRTUALRINGBUFFER_H

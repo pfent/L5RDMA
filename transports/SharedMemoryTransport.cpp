@@ -35,19 +35,19 @@ void SharedMemoryTransportServer::read_impl(uint8_t *buffer, size_t size) {
 }
 
 Buffer SharedMemoryTransportServer::getBuffer_impl(size_t size) {
-    throw std::runtime_error{"not implemented!"}; // TODO
+    return messageBuffer->reserveBufferForSending(size);
 }
 
 void SharedMemoryTransportServer::write_impl(Buffer buffer) {
-    throw std::runtime_error{"not implemented!"}; // TODO
+    messageBuffer->send(std::move(buffer));
 }
 
 Buffer SharedMemoryTransportServer::read_impl(size_t size) {
-    throw std::runtime_error{"not implemented!"}; // TODO
+    return messageBuffer->receiveIntoBuffer(size);
 }
 
 void SharedMemoryTransportServer::markAsRead_impl(Buffer readBuffer) {
-    throw std::runtime_error{"not implemented!"}; // TODO
+    messageBuffer->markAsRead(std::move(readBuffer));
 }
 
 SharedMemoryTransportClient::SharedMemoryTransportClient() : socket(domain_socket()) {}
@@ -72,17 +72,17 @@ void SharedMemoryTransportClient::read_impl(uint8_t *buffer, size_t size) {
 }
 
 Buffer SharedMemoryTransportClient::getBuffer_impl(size_t size) {
-    throw std::runtime_error{"not implemented!"}; // TODO
+    return messageBuffer->reserveBufferForSending(size);
 }
 
 void SharedMemoryTransportClient::write_impl(Buffer buffer) {
-    throw std::runtime_error{"not implemented!"}; // TODO
+    messageBuffer->send(std::move(buffer));
 }
 
 void SharedMemoryTransportClient::markAsRead_impl(Buffer readBuffer) {
-    throw std::runtime_error{"not implemented!"}; // TODO
+    messageBuffer->markAsRead(std::move(readBuffer));
 }
 
 Buffer SharedMemoryTransportClient::read_impl(size_t size) {
-    throw std::runtime_error{"not implemented!"}; // TODO
+    return messageBuffer->receiveIntoBuffer(size);
 }

@@ -36,7 +36,7 @@ public:
         auto res = transport->read(data.size());
         for (size_t i = 0; i < data.size(); ++i) {
             if (res.ptr[i] != data[i]) {
-                throw std::runtime_error{"received unexpected data: " + std::string(begin(buffer), end(buffer))};
+                throw std::runtime_error{"received unexpected data: " + std::string(res.ptr, &res.ptr[data.size()])};
             }
         }
         transport->markAsRead(std::move(res));
