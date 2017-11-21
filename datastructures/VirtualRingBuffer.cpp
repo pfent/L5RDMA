@@ -1,7 +1,7 @@
 #include "VirtualRingBuffer.h"
 #include <exchangeableTransports/util/sharedMemory.h>
 
-VirtualRingBuffer::VirtualRingBuffer(size_t size, int sock) : size(size) {
+VirtualRingBuffer::VirtualRingBuffer(size_t size, int sock) : size(size), bitmask(size - 1) {
     localRw = malloc_shared<RingBufferInfo>(infoName + pid, sizeof(RingBufferInfo), true);
     local1 = malloc_shared<uint8_t>(bufferName + pid, size, true);
     local2 = malloc_shared<uint8_t>(bufferName + pid, size, false, &local1.get()[size]);
@@ -18,7 +18,7 @@ VirtualRingBuffer::VirtualRingBuffer(size_t size, int sock) : size(size) {
 
 void VirtualRingBuffer::send(const uint8_t *data, size_t length) {
     const auto localWritten = localRw->written.load();
-    const auto pos = localWritten % size;
+    const auto pos = localWritten & bitmask;
 
     size_t remoteRead;
     do {
@@ -32,7 +32,7 @@ void VirtualRingBuffer::send(const uint8_t *data, size_t length) {
 
 size_t VirtualRingBuffer::receive(void *whereTo, size_t maxSize) {
     const auto localRead = localRw->read.load();
-    const auto pos = localRead % size;
+    const auto pos = localRead & bitmask;
 
     size_t remoteWritten;
     do {

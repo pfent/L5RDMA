@@ -19,6 +19,7 @@ struct VirtualRingBuffer {
     const std::string infoName = "sharedRw";
     const std::string pid = std::to_string(::getpid());
     const size_t size;
+    const size_t bitmask;
 
     std::shared_ptr<RingBufferInfo> localRw;
     std::shared_ptr<uint8_t> local1;
