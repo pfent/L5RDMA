@@ -1,5 +1,5 @@
-#ifndef EXCHANGABLE_TRANSPORTS_SHAREDMEMORYMESSAGEQUEUE_H
-#define EXCHANGABLE_TRANSPORTS_SHAREDMEMORYMESSAGEQUEUE_H
+#ifndef EXCHANGABLE_TRANSPORTS_VIRTUALRINGBUFFER_H
+#define EXCHANGABLE_TRANSPORTS_VIRTUALRINGBUFFER_H
 
 #include <cstdint>
 #include <cstddef>
@@ -8,23 +8,17 @@
 #include <unistd.h>
 #include <exchangeableTransports/util/sharedMemory.h>
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wpedantic"
-
 struct RingBufferInfo {
     std::atomic<size_t> read;
     std::atomic<size_t> written;
 };
 
-#pragma GCC diagnostic pop
-
 /// http://ourmachinery.com/post/virtual-memory-tricks/
 struct VirtualRingBuffer {
-    const std::string pid = std::to_string(::getpid());
     const std::string bufferName = "sharedBuffer";
     const std::string infoName = "sharedRw";
+    const std::string pid = std::to_string(::getpid());
     const size_t size;
-
 
     std::shared_ptr<RingBufferInfo> localRw;
     std::shared_ptr<uint8_t> local1;
@@ -42,4 +36,4 @@ struct VirtualRingBuffer {
     size_t receive(void *whereTo, size_t maxSize);
 };
 
-#endif //EXCHANGABLE_TRANSPORTS_SHAREDMEMORYMESSAGEQUEUE_H
+#endif //EXCHANGABLE_TRANSPORTS_VIRTUALRINGBUFFER_H

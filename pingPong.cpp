@@ -9,7 +9,7 @@
 
 using namespace std;
 
-static const size_t MESSAGES = 1024 * 128; // approx 1s
+static const size_t MESSAGES = 1024 * 1024 * 8; // approx 1s
 
 int main(int argc, char **argv) {
     if (argc < 2) {
