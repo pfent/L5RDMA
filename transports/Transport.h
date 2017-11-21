@@ -40,7 +40,7 @@ public:
     /**
      * Get the buffer, where the latest message has been written to. This is useful from zero copy mechanisms
      */
-    Buffer read() { return static_cast<T *>(this)->read_impl(); };
+    Buffer read(size_t size) { return static_cast<T *>(this)->read_impl(size); };
 
     /**
      * Mark a buffer from read() as finished.
@@ -66,7 +66,6 @@ public:
 
     /**
      * Connect to a remote TransportServer, as specified in whereTo
-     * TODO: find a common interface
      */
     void connect(std::string_view whereTo) { static_cast<T *>(this)->connect_impl(whereTo); };
 
@@ -76,11 +75,11 @@ public:
 
     Buffer getBuffer(size_t size) { return static_cast<T *>(this)->getBuffer_impl(size); };
 
-    void write(Buffer &buffer) { static_cast<T *>(this)->write_impl(buffer); };
+    virtual void write(Buffer &buffer) { static_cast<T *>(this)->write_impl(buffer); };
 
-    Buffer read(size_t size) { return static_cast<T *>(this)->read_impl(size); };
+    virtual Buffer read(size_t size) { return static_cast<T *>(this)->read_impl(size); };
 
-    void markAsRead(Buffer &readBuffer) { static_cast<T *>(this)->markAsRead_impl(readBuffer); };
+    virtual void markAsRead(Buffer &readBuffer) { static_cast<T *>(this)->markAsRead_impl(readBuffer); };
 
     void write(const uint8_t *buffer, size_t size) { static_cast<T *>(this)->write_impl(buffer, size); };
 

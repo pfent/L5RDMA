@@ -22,6 +22,14 @@ public:
     void write_impl(const uint8_t *data, size_t size);
 
     void read_impl(uint8_t *buffer, size_t size);
+
+    Buffer getBuffer_impl(size_t size);
+
+    void write_impl(Buffer &buffer);
+
+    Buffer read_impl(size_t size);
+
+    void markAsRead_impl(Buffer &readBuffer);
 };
 
 class DomainSocketsTransportClient : public TransportClient<DomainSocketsTransportClient> {
@@ -37,6 +45,14 @@ public:
     void write_impl(const uint8_t *data, size_t size);
 
     void read_impl(uint8_t *buffer, size_t size);
+
+    Buffer getBuffer_impl(size_t size);
+
+    void write_impl(Buffer &buffer);
+
+    Buffer read_impl(size_t size);
+
+    void markAsRead_impl(Buffer &readBuffer);
 };
 
 #endif //EXCHANGABLE_TRANSPORTS_DOMAINSOCKETSTRANSPORT_H

@@ -40,7 +40,7 @@ int main(int argc, char **argv) {
             bench([&]() {
                 const auto start = chrono::steady_clock::now();
                 for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
-                    client.ping();
+                    client.pingZeroCopy();
                 }
                 const auto end = chrono::steady_clock::now();
                 const auto sTaken = chrono::duration<double>(end - start).count();
@@ -64,7 +64,7 @@ int main(int argc, char **argv) {
             server.start();
             bench([&]() {
                 for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
-                    server.pong();
+                    server.pongZeroCopy();
                 }
             });
         }
