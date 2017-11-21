@@ -21,7 +21,6 @@ int main(int argc, char **argv) {
 
     if (isClient) {
         {
-
             cout << "domainsockets, ";
             auto client = Ping(make_transportClient<DomainSocketsTransportClient>(), "/tmp/pingPong");
             bench([&]() {

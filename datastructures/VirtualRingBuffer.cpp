@@ -27,7 +27,8 @@ void VirtualRingBuffer::send(const uint8_t *data, size_t length) {
 
     std::copy(data, data + length, &local1.get()[pos]);
 
-    localRw->written += length;
+    // basically `localRw->written += length;`, but without the mfence or locked instructions
+    localRw->written.store(localWritten + length, std::memory_order_release);
 }
 
 size_t VirtualRingBuffer::receive(void *whereTo, size_t maxSize) {
@@ -41,7 +42,8 @@ size_t VirtualRingBuffer::receive(void *whereTo, size_t maxSize) {
 
     std::copy(&remote1.get()[pos], &remote1.get()[pos + maxSize], reinterpret_cast<uint8_t *>(whereTo));
 
-    localRw->read += maxSize;
+    // basically `localRw->read += maxSize;`, but without the mfence or locked instructions
+    localRw->read.store(localRead + maxSize, std::memory_order_release);
     return maxSize;
 }
 
