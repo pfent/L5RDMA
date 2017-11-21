@@ -35,7 +35,7 @@ public:
      * Send data from a buffer previously acquired with getBuffer(size_t)
      * @param buffer the buffer
      */
-    void write(Buffer &buffer) { static_cast<T *>(this)->write_impl(buffer); };
+    void write(Buffer buffer) { static_cast<T *>(this)->write_impl(std::move(buffer)); };
 
     /**
      * Get the buffer, where the latest message has been written to. This is useful from zero copy mechanisms
@@ -45,7 +45,7 @@ public:
     /**
      * Mark a buffer from read() as finished.
      */
-    void markAsRead(Buffer &readBuffer) { static_cast<T *>(this)->markAsRead_impl(readBuffer); };
+    void markAsRead(Buffer readBuffer) { static_cast<T *>(this)->markAsRead_impl(std::move(readBuffer)); };
 
     /**
      * Send data from an arbitrary memory location
@@ -75,11 +75,11 @@ public:
 
     Buffer getBuffer(size_t size) { return static_cast<T *>(this)->getBuffer_impl(size); };
 
-    virtual void write(Buffer &buffer) { static_cast<T *>(this)->write_impl(buffer); };
+    virtual void write(Buffer buffer) { static_cast<T *>(this)->write_impl(std::move(buffer)); };
 
     virtual Buffer read(size_t size) { return static_cast<T *>(this)->read_impl(size); };
 
-    virtual void markAsRead(Buffer &readBuffer) { static_cast<T *>(this)->markAsRead_impl(readBuffer); };
+    virtual void markAsRead(Buffer readBuffer) { static_cast<T *>(this)->markAsRead_impl(std::move(readBuffer)); };
 
     void write(const uint8_t *buffer, size_t size) { static_cast<T *>(this)->write_impl(buffer, size); };
 

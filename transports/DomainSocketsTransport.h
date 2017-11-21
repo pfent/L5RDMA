@@ -25,11 +25,11 @@ public:
 
     Buffer getBuffer_impl(size_t size);
 
-    void write_impl(Buffer &buffer);
+    void write_impl(Buffer buffer);
 
     Buffer read_impl(size_t size);
 
-    void markAsRead_impl(Buffer &readBuffer);
+    void markAsRead_impl(Buffer readBuffer);
 };
 
 class DomainSocketsTransportClient : public TransportClient<DomainSocketsTransportClient> {
@@ -48,11 +48,11 @@ public:
 
     Buffer getBuffer_impl(size_t size);
 
-    void write_impl(Buffer &buffer);
+    void write_impl(Buffer buffer);
 
     Buffer read_impl(size_t size);
 
-    void markAsRead_impl(Buffer &readBuffer);
+    void markAsRead_impl(Buffer readBuffer);
 };
 
 #endif //EXCHANGABLE_TRANSPORTS_DOMAINSOCKETSTRANSPORT_H

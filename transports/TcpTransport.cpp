@@ -44,7 +44,7 @@ Buffer TcpTransportServer::getBuffer_impl(size_t size) {
     throw std::runtime_error{"not implemented!"}; // TODO
 }
 
-void TcpTransportServer::write_impl(Buffer &buffer) {
+void TcpTransportServer::write_impl(Buffer buffer) {
     throw std::runtime_error{"not implemented!"}; // TODO
 }
 
@@ -52,7 +52,7 @@ Buffer TcpTransportServer::read_impl(size_t size) {
     throw std::runtime_error{"not implemented!"}; // TODO
 }
 
-void TcpTransportServer::markAsRead_impl(Buffer &readBuffer) {
+void TcpTransportServer::markAsRead_impl(Buffer readBuffer) {
     throw std::runtime_error{"not implemented!"}; // TODO
 }
 
@@ -89,7 +89,7 @@ Buffer TcpTransportClient::getBuffer_impl(size_t size) {
     throw std::runtime_error{"not implemented!"}; // TODO
 }
 
-void TcpTransportClient::write_impl(Buffer &buffer) {
+void TcpTransportClient::write_impl(Buffer buffer) {
     throw std::runtime_error{"not implemented!"}; // TODO
 }
 
@@ -97,6 +97,6 @@ Buffer TcpTransportClient::read_impl(size_t size) {
     throw std::runtime_error{"not implemented!"}; // TODO
 }
 
-void TcpTransportClient::markAsRead_impl(Buffer &readBuffer) {
+void TcpTransportClient::markAsRead_impl(Buffer readBuffer) {
     throw std::runtime_error{"not implemented!"}; // TODO
 }

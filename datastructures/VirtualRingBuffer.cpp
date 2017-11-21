@@ -47,4 +47,8 @@ size_t VirtualRingBuffer::receive(void *whereTo, size_t maxSize) {
     return maxSize;
 }
 
+Buffer VirtualRingBuffer::reserveBuffer(size_t size) {
+    return Buffer(0, nullptr);
+}
+
 

@@ -38,7 +38,7 @@ Buffer SharedMemoryTransportServer::getBuffer_impl(size_t size) {
     throw std::runtime_error{"not implemented!"}; // TODO
 }
 
-void SharedMemoryTransportServer::write_impl(Buffer &buffer) {
+void SharedMemoryTransportServer::write_impl(Buffer buffer) {
     throw std::runtime_error{"not implemented!"}; // TODO
 }
 
@@ -46,7 +46,7 @@ Buffer SharedMemoryTransportServer::read_impl(size_t size) {
     throw std::runtime_error{"not implemented!"}; // TODO
 }
 
-void SharedMemoryTransportServer::markAsRead_impl(Buffer &readBuffer) {
+void SharedMemoryTransportServer::markAsRead_impl(Buffer readBuffer) {
     throw std::runtime_error{"not implemented!"}; // TODO
 }
 
@@ -75,11 +75,11 @@ Buffer SharedMemoryTransportClient::getBuffer_impl(size_t size) {
     throw std::runtime_error{"not implemented!"}; // TODO
 }
 
-void SharedMemoryTransportClient::write_impl(Buffer &buffer) {
+void SharedMemoryTransportClient::write_impl(Buffer buffer) {
     throw std::runtime_error{"not implemented!"}; // TODO
 }
 
-void SharedMemoryTransportClient::markAsRead_impl(Buffer &readBuffer) {
+void SharedMemoryTransportClient::markAsRead_impl(Buffer readBuffer) {
     throw std::runtime_error{"not implemented!"}; // TODO
 }
 

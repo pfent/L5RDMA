@@ -11,6 +11,15 @@ struct Buffer {
 
     Buffer(size_t size, uint8_t *ptr) : size(size), ptr(ptr) {}
 
+    // move-only type. Don't destruct it without markAsSent
+    Buffer(Buffer &&) = default;
+
+    Buffer &operator=(Buffer &&) = default;
+
+    Buffer(const Buffer &) = delete;
+
+    Buffer &operator=(const Buffer &) = delete;
+
     ~Buffer() {
         if (ptr != nullptr) {
 #pragma GCC diagnostic push

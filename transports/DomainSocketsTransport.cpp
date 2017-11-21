@@ -34,7 +34,7 @@ Buffer DomainSocketsTransportServer::getBuffer_impl(size_t size) {
     throw std::runtime_error{"not implemented!"}; // TODO
 }
 
-void DomainSocketsTransportServer::write_impl(Buffer &buffer) {
+void DomainSocketsTransportServer::write_impl(Buffer buffer) {
     throw std::runtime_error{"not implemented!"}; // TODO
 }
 
@@ -42,7 +42,7 @@ Buffer DomainSocketsTransportServer::read_impl(size_t size) {
     throw std::runtime_error{"not implemented!"}; // TODO
 }
 
-void DomainSocketsTransportServer::markAsRead_impl(Buffer &readBuffer) {
+void DomainSocketsTransportServer::markAsRead_impl(Buffer readBuffer) {
     throw std::runtime_error{"not implemented!"}; // TODO
 }
 
@@ -69,7 +69,7 @@ Buffer DomainSocketsTransportClient::getBuffer_impl(size_t size) {
     throw std::runtime_error{"not implemented!"}; // TODO
 }
 
-void DomainSocketsTransportClient::write_impl(Buffer &buffer) {
+void DomainSocketsTransportClient::write_impl(Buffer buffer) {
     throw std::runtime_error{"not implemented!"}; // TODO
 }
 
@@ -77,6 +77,6 @@ Buffer DomainSocketsTransportClient::read_impl(size_t size) {
     throw std::runtime_error{"not implemented!"}; // TODO
 }
 
-void DomainSocketsTransportClient::markAsRead_impl(Buffer &readBuffer) {
+void DomainSocketsTransportClient::markAsRead_impl(Buffer readBuffer) {
     throw std::runtime_error{"not implemented!"}; // TODO
 }

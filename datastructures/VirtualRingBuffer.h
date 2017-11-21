@@ -6,6 +6,7 @@
 #include <atomic>
 #include <memory>
 #include <unistd.h>
+#include <exchangeableTransports/transports/Buffer.h>
 
 struct RingBufferInfo {
     std::atomic<size_t> read;
@@ -34,6 +35,14 @@ struct VirtualRingBuffer {
     void send(const uint8_t *data, size_t length);
 
     size_t receive(void *whereTo, size_t maxSize);
+
+    Buffer reserveBuffer(size_t size);
+
+    void send(Buffer buffer);
+
+    Buffer receiveIntoBuffer(size_t size);
+
+    void markAsRead(Buffer buffer);
 };
 
 #endif //EXCHANGABLE_TRANSPORTS_VIRTUALRINGBUFFER_H
