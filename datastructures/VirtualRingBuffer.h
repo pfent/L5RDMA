@@ -6,7 +6,6 @@
 #include <atomic>
 #include <memory>
 #include <unistd.h>
-#include <exchangeableTransports/util/sharedMemory.h>
 
 struct RingBufferInfo {
     std::atomic<size_t> read;

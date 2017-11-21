@@ -78,7 +78,7 @@ public:
 
     void write(Buffer &buffer) { static_cast<T *>(this)->write_impl(buffer); };
 
-    Buffer read() { return static_cast<T *>(this)->read_impl(); };
+    Buffer read(size_t size) { return static_cast<T *>(this)->read_impl(size); };
 
     void markAsRead(Buffer &readBuffer) { static_cast<T *>(this)->markAsRead_impl(readBuffer); };
 

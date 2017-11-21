@@ -27,6 +27,20 @@ public:
             }
         }
     }
+
+    void pingZeroCopy() {
+        auto buf = transport->getBuffer(data.size());
+        std::copy(data.begin(), data.end(), buf.ptr);
+        transport->write(buf); // TODO: probably handle lifetime with move-only type
+
+        auto res = transport->read(data.size());
+        for (size_t i = 0; i < data.size(); ++i) {
+            if (res.ptr[i] != data[i]) {
+                throw std::runtime_error{"received unexpected data: " + std::string(begin(buffer), end(buffer))};
+            }
+        }
+        transport->markAsRead(res);
+    }
 };
 
 template<class T, size_t messageSize = 64>
@@ -43,6 +57,14 @@ public:
     void pong() {
         transport->read(buffer.data(), buffer.size());
         transport->write(buffer.data(), buffer.size());
+    }
+
+    void pongZeroCopy() {
+        auto read = transport->read(messageSize);
+        auto send = transport->getBuffer(messageSize);
+        std::copy(read.ptr, &read.ptr[messageSize], send.ptr);
+        transport->markAsRead(read);
+        transport->write(send);
     }
 };
 
