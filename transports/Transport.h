@@ -56,6 +56,8 @@ public:
      * Receive data to an arbitrary memory location
      */
     void read(uint8_t *whereTo, size_t size) { static_cast<T *>(this)->read_impl(whereTo, size); };
+
+    virtual ~TransportServer() = default;
 };
 
 template<class T>
@@ -83,6 +85,8 @@ public:
     void write(const uint8_t *buffer, size_t size) { static_cast<T *>(this)->write_impl(buffer, size); };
 
     void read(uint8_t *whereTo, size_t size) { static_cast<T *>(this)->read_impl(whereTo, size); };
+
+    virtual ~TransportClient() = default;
 };
 
 template<typename Derived, typename... Args>
