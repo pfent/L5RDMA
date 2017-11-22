@@ -2,19 +2,7 @@
 #define RDMA_HASH_MAP_RDMAMESSAGEBUFFER_H
 
 #include <atomic>
-#include "exchangeableTransports/rdma/Network.hpp"
-#include "exchangeableTransports/rdma/CompletionQueuePair.hpp"
-#include "exchangeableTransports/rdma/QueuePair.hpp"
-#include "exchangeableTransports/rdma/MemoryRegion.hpp"
-
-struct RDMANetworking {
-    rdma::Network network;
-    rdma::CompletionQueuePair completionQueue;
-    rdma::QueuePair queuePair;
-
-    /// Exchange the basic RDMA connection info for the network and queues
-    RDMANetworking(int sock);
-};
+#include <exchangeableTransports/util/RDMANetworking.h>
 
 class RDMAMessageBuffer {
 public:

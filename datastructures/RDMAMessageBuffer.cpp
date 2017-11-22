@@ -9,41 +9,6 @@ using namespace rdma;
 
 static const size_t validity = 0xDEADDEADBEEFBEEF;
 
-struct RmrInfo {
-    uint32_t bufferKey;
-    uint32_t readPosKey;
-    uintptr_t bufferAddress;
-    uintptr_t readPosAddress;
-};
-
-static void receiveAndSetupRmr(int sock, RemoteMemoryRegion &buffer, RemoteMemoryRegion &readPos) {
-    RmrInfo rmrInfo{};
-    tcp_read(sock, &rmrInfo, sizeof(rmrInfo));
-    buffer.key = rmrInfo.bufferKey;
-    buffer.address = rmrInfo.bufferAddress;
-    readPos.key = rmrInfo.readPosKey;
-    readPos.address = rmrInfo.readPosAddress;
-}
-
-static void sendRmrInfo(int sock, const MemoryRegion &buffer, const MemoryRegion &readPos) {
-    RmrInfo rmrInfo{};
-    rmrInfo.bufferKey = buffer.key->rkey;
-    rmrInfo.bufferAddress = reinterpret_cast<uintptr_t>(buffer.address);
-    rmrInfo.readPosKey = readPos.key->rkey;
-    rmrInfo.readPosAddress = reinterpret_cast<uintptr_t>(readPos.address);
-    tcp_write(sock, &rmrInfo, sizeof(rmrInfo));
-}
-
-static void exchangeQPNAndConnect(int sock, Network &network, QueuePair &queuePair) {
-    Address addr{};
-    addr.lid = network.getLID();
-    addr.qpn = queuePair.getQPN();
-    tcp_write(sock, &addr, sizeof(addr)); // Send own qpn to server
-    tcp_read(sock, &addr, sizeof(addr)); // receive qpn
-    queuePair.connect(addr);
-    cout << "connected to qpn " << addr.qpn << " lid: " << addr.lid << endl;
-}
-
 vector<uint8_t> RDMAMessageBuffer::receive() {
     size_t receiveSize = 0;
     auto receiveValidity = static_cast<decltype(validity)>(0);
@@ -191,11 +156,4 @@ bool RDMAMessageBuffer::hasData() const {
     readFromReceiveBuffer(readPos + sizeof(receiveSize) + receiveSize, reinterpret_cast<uint8_t *>(&receiveValidity),
                           sizeof(receiveValidity));
     return (receiveValidity == validity);
-}
-
-RDMANetworking::RDMANetworking(int sock) :
-        completionQueue(network),
-        queuePair(network, completionQueue) {
-    tcp_setBlocking(sock); // just set the socket to block for our setup.
-    exchangeQPNAndConnect(sock, network, queuePair);
 }

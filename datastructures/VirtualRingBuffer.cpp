@@ -2,9 +2,14 @@
 #include <exchangeableTransports/util/sharedMemory.h>
 
 VirtualRingBuffer::VirtualRingBuffer(size_t size, int sock) : size(size), bitmask(size - 1) {
+    const bool powerOfTwo = (size != 0) && !(size & (size - 1));
+    if (not powerOfTwo) {
+        throw std::runtime_error{"size should be a power of 2"};
+    }
+
     localRw = malloc_shared<RingBufferInfo>(infoName + pid, sizeof(RingBufferInfo), true);
     local1 = malloc_shared<uint8_t>(bufferName + pid, size, true);
-    local2 = malloc_shared<uint8_t>(bufferName + pid, size, false, &local1.get()[size]);
+    local2 = malloc_shared<uint8_t>(bufferName + pid, size, false, &local1.get()[size]); // TODO: use MAP_FIXED for this mapping
 
     domain_write(sock, pid.c_str(), pid.size());
     uint8_t buffer[255];
