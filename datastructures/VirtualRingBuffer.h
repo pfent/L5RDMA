@@ -23,11 +23,11 @@ struct VirtualRingBuffer {
 
     std::shared_ptr<RingBufferInfo> localRw;
     std::shared_ptr<uint8_t> local1;
-    std::shared_ptr<uint8_t> local2;
+    std::shared_ptr<uint8_t> local2; // safeguarding virtual memory region, using the MMU for wraparound
 
     std::shared_ptr<RingBufferInfo> remoteRw;
     std::shared_ptr<uint8_t> remote1;
-    std::shared_ptr<uint8_t> remote2;
+    std::shared_ptr<uint8_t> remote2; // safeguarding virtual memory region, using the MMU for wraparound
 
     /// Establish a shared memory region of size with the remote side of sock
     VirtualRingBuffer(size_t size, int sock);
