@@ -1,12 +1,13 @@
 #include "VirtualRDMARingBuffer.h"
 #include <sys/mman.h>
 #include <fcntl.h>
+#include <exchangeableTransports/util/RDMANetworking.h>
+#include <exchangeableTransports/rdma/WorkRequest.hpp>
 
 void mmapRingBuffer(size_t size, const char *backingFile,
                     std::shared_ptr<uint8_t> &main,
                     std::shared_ptr<uint8_t> &wraparound) {
-    const auto name = "/tmp/rdmaLocal";
-    const auto fd = open(name, O_CREAT | O_TRUNC | O_RDWR, 0666);
+    const auto fd = open(backingFile, O_CREAT | O_TRUNC | O_RDWR, 0666);
     if (fd < 0) {
         perror("shm_open");
         throw std::runtime_error{"shm_open failed"};
@@ -19,7 +20,7 @@ void mmapRingBuffer(size_t size, const char *backingFile,
     // map the same file in virtual memory directly after the first one
     auto second = mmap(reinterpret_cast<uint8_t *>(first),
                        size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_FIXED, fd, 0);
-    if (second == (void *) -1) {
+    if (second == reinterpret_cast<void *>(-1)) {
         perror("mmap");
         throw std::runtime_error{"mmaping the wraparound failed"};
     }
@@ -41,4 +42,87 @@ VirtualRDMARingBuffer::VirtualRDMARingBuffer(size_t size, int sock) : size(size)
 
     mmapRingBuffer(size, "/tmp/rdmaLocal", this->local1, this->local2);
     mmapRingBuffer(size, "/tmp/rdmaRemote", this->remote1, this->remote2);
+
+    RDMANetworking net(sock);
+
+    // Since we mapped twice the virtual memory, we can create memory regions of twice the size of the actual buffer
+    rdma::MemoryRegion localSendMr(this->local1.get(), size * 2, net.network.getProtectionDomain(),
+                                   rdma::MemoryRegion::Permission::None);
+
+    rdma::MemoryRegion localReceiveMr(this->remote1.get(), size * 2, net.network.getProtectionDomain(),
+                                      rdma::MemoryRegion::Permission::LocalWrite |
+                                      rdma::MemoryRegion::Permission::RemoteWrite);
+
+    rdma::MemoryRegion localReadPosMr(&localReadPos, sizeof(localReadPos), net.network.getProtectionDomain(),
+                                      rdma::MemoryRegion::Permission::RemoteRead);
+
+    std::atomic<size_t> remoteReadPos;
+    rdma::MemoryRegion remoteReadPosMr(&remoteReadPos, sizeof(remoteReadPos), net.network.getProtectionDomain(),
+                                       rdma::MemoryRegion::Permission::RemoteRead);
+
+    rdma::RemoteMemoryRegion remoteReceiveRmr{};
+    rdma::RemoteMemoryRegion remoteReadPosRmr{};
+
+    sendRmrInfo(sock, localReadPosMr, remoteReadPosMr);
+    receiveAndSetupRmr(sock, remoteReceiveRmr, remoteReadPosRmr);
+
+}
+
+void VirtualRDMARingBuffer::send(const uint8_t *data, size_t length) {
+    const size_t sizeToWrite = sizeof(length) + length + sizeof(validity);
+    if (sizeToWrite > size) throw std::runtime_error{"data > buffersize!"};
+
+    const size_t startOfWrite = sendPos & bitmask;
+    size_t whereToWrite = startOfWrite;
+    auto write = [&](auto what, auto howManyBytes) {
+        std::copy(reinterpret_cast<const uint8_t *>(what), &reinterpret_cast<const uint8_t *>(what)[howManyBytes],
+                  &local1.get()[whereToWrite]);
+        whereToWrite += howManyBytes;
+    };
+
+    // TODO: check if it's safe to write (compare RDMAMessageBuffer::writeToSendBuffer)
+
+    // first write the data
+    write(&length, sizeof(length));
+    write(data, length);
+    write(&validity, sizeof(validity));
+
+    // then request it to be sent via RDMA
+    // TODO
+    //const auto sendSlice = localSendMr.slice(startOfWrite, sizeToWrite);
+    //const auto remoteSlice = remoteReceive.slice(startOfWrite);
+    //rdma::WriteWorkRequestBuilder(sendSlice, remoteSlice, false)
+    //        .setInline(inln && sendSlice.size <= net.queuePair.getMaxInlineSize())
+    //        .send(net.queuePair);
+
+    // finally, update sendPos
+    sendPos += sizeToWrite;
+}
+
+size_t VirtualRDMARingBuffer::receive(void *whereTo, size_t maxSize) {
+    const size_t sizeToRead = sizeof(maxSize) + maxSize + sizeof(validity);
+    if(sizeToRead > size) throw std::runtime_error{"receiveSize > buffersize!"};
+
+    const size_t lastReadPos = localReadPos.load();
+    const size_t startOfRead = lastReadPos & bitmask;
+    auto readFromBuffer = [&](auto fromOffset, auto dest, auto howManyBytes) {
+        std::copy(&local1.get()[fromOffset], &local1.get()[fromOffset + howManyBytes], reinterpret_cast<uint8_t *>(dest));
+    };
+
+    // TODO: check messageLength != 0
+    std::atomic<size_t> length;
+    std::atomic<size_t> checkMe;
+    do {
+        readFromBuffer(startOfRead, &length, sizeof(length));
+        readFromBuffer(startOfRead + sizeof(length) + length, &checkMe, sizeof(checkMe));
+    } while (checkMe.load() != validity);
+    const size_t finalLength = length;
+    // TODO: check length == maxSize
+
+    readFromBuffer(startOfRead + sizeof(length), whereTo, finalLength);
+    // TODO: zero receiveBuffer
+
+    localReadPos.store(lastReadPos + sizeToRead, std::memory_order_release);
+
+    return finalLength;
 }

@@ -9,14 +9,16 @@
 #include <exchangeableTransports/transports/Buffer.h>
 
 class VirtualRDMARingBuffer {
+    static constexpr size_t validity = 0xDEADDEADBEEFBEEF;
     const size_t size;
     const size_t bitmask;
 
-    //std::shared_ptr<RingBufferInfo> localRw;
+    size_t sendPos = 0;
+    std::atomic<size_t> localReadPos = 0;
     std::shared_ptr<uint8_t> local1;
     std::shared_ptr<uint8_t> local2; // safeguarding virtual memory region, using the MMU for wraparound
 
-    //std::shared_ptr<RingBufferInfo> remoteRw;
+    std::atomic<size_t> remoteReadPos;
     std::shared_ptr<uint8_t> remote1;
     std::shared_ptr<uint8_t> remote2; // safeguarding virtual memory region, using the MMU for wraparound
 
