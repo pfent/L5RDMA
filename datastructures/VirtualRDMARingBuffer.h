@@ -52,6 +52,9 @@ class VirtualRDMARingBuffer {
     Buffer receiveIntoBuffer(size_t length);
 
     void markAsRead(Buffer buffer);
+
+private:
+    void waitUntilSendFree(size_t sizeToWrite);
 };
 
 #endif //EXCHANGABLETRANSPORTS_VIRTUALRDMARINGBUFFER_H

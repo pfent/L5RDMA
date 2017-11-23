@@ -66,7 +66,7 @@ void VirtualRDMARingBuffer::send(const uint8_t *data, size_t length) {
         whereToWrite += howManyBytes;
     };
 
-    // TODO: check if it's safe to write (compare RDMAMessageBuffer::writeToSendBuffer)
+    waitUntilSendFree(sizeToWrite);
 
     // first write the data
     write(&length, sizeof(length));
@@ -85,8 +85,8 @@ void VirtualRDMARingBuffer::send(const uint8_t *data, size_t length) {
 }
 
 size_t VirtualRDMARingBuffer::receive(void *whereTo, size_t maxSize) {
-    const auto sizeToRead = sizeof(maxSize) + maxSize + sizeof(validity);
-    if (sizeToRead > size) throw std::runtime_error{"receiveSize > buffersize!"};
+    const auto maxSizeToRead = sizeof(maxSize) + maxSize + sizeof(validity);
+    if (maxSizeToRead > size) throw std::runtime_error{"receiveSize > buffersize!"};
 
     const auto lastReadPos = localReadPos.load();
     const auto startOfRead = lastReadPos & bitmask;
@@ -94,21 +94,36 @@ size_t VirtualRDMARingBuffer::receive(void *whereTo, size_t maxSize) {
         std::copy(&local.get()[fromOffset], &local.get()[fromOffset + howManyBytes], reinterpret_cast<uint8_t *>(dest));
     };
 
-    // TODO: check messageLength != 0
-    std::atomic<size_t> length;
+    std::atomic<size_t> receiveSize;
     std::atomic<size_t> checkMe;
     do {
-        readFromBuffer(startOfRead, &length, sizeof(length));
-        readFromBuffer(startOfRead + sizeof(length) + length, &checkMe, sizeof(checkMe));
+        readFromBuffer(startOfRead, &receiveSize, sizeof(receiveSize));
+        readFromBuffer(startOfRead + sizeof(receiveSize) + receiveSize.load(), &checkMe, sizeof(checkMe));
     } while (checkMe.load() != validity);
     // TODO probably need a second readFromBuffer of length, so we didn't by chance read the validity
-    const auto finalLength = length.load();
-    // TODO: check length == maxSize
+    const auto finalLength = receiveSize.load();
 
-    readFromBuffer(startOfRead + sizeof(length), whereTo, finalLength);
-    // TODO: zero receiveBuffer
+    if (finalLength > maxSize) {
+        throw std::runtime_error{"plz only read whole messages for now!"}; // probably buffer partially read msgs
+    }
+
+    readFromBuffer(startOfRead + sizeof(receiveSize), whereTo, finalLength);
+
+    const auto sizeToRead = sizeof(maxSize) + finalLength + sizeof(validity);
+    std::fill(&local.get()[startOfRead], &local.get()[startOfRead + sizeToRead], 0);
 
     localReadPos.store(lastReadPos + sizeToRead, std::memory_order_release);
 
     return finalLength;
+}
+
+void VirtualRDMARingBuffer::waitUntilSendFree(size_t sizeToWrite) {
+    // Make sure, there is enough space
+    size_t safeToWrite = size - (sendPos - remoteReadPos.load());
+    while (sizeToWrite > safeToWrite) {
+        rdma::ReadWorkRequestBuilder(remoteReadPosMr, remoteReadPosRmr, true).send(net.queuePair);
+        while (net.completionQueue.pollSendCompletionQueue() != rdma::ReadWorkRequest::getId());
+        // Poll until read has finished
+        safeToWrite = size - (sendPos - remoteReadPos.load());
+    }
 }
