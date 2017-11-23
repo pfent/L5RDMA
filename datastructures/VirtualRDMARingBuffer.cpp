@@ -1,8 +1,9 @@
 #include "VirtualRDMARingBuffer.h"
+#include <exchangeableTransports/rdma/WorkRequest.hpp>
 #include <sys/mman.h>
 #include <fcntl.h>
-#include <exchangeableTransports/util/RDMANetworking.h>
-#include <exchangeableTransports/rdma/WorkRequest.hpp>
+
+using Permission = rdma::MemoryRegion::Permission;
 
 WraparoundBuffer mmapRingBuffer(size_t size, const char *backingFile) {
     const auto fd = open(backingFile, O_CREAT | O_TRUNC | O_RDWR, 0666);
@@ -24,7 +25,7 @@ WraparoundBuffer mmapRingBuffer(size_t size, const char *backingFile) {
     }
     close(fd); // no need to keep the writeFd open after the mapping
 
-    auto deleter = [size](void *p) {
+    const auto deleter = [size](void *p) {
         munmap(p, size);
     };
 
@@ -32,46 +33,34 @@ WraparoundBuffer mmapRingBuffer(size_t size, const char *backingFile) {
             std::shared_ptr < uint8_t > (reinterpret_cast<uint8_t *>(second), deleter)};
 }
 
-VirtualRDMARingBuffer::VirtualRDMARingBuffer(size_t size, int sock) : size(size), bitmask(size - 1) {
+constexpr auto localRw = Permission::LocalWrite | Permission::RemoteWrite;
+
+VirtualRDMARingBuffer::VirtualRDMARingBuffer(size_t size, int sock) :
+        size(size), bitmask(size - 1), net(sock),
+        local(mmapRingBuffer(size, "/tmp/rdmaLocal")),
+        // Since we mapped twice the virtual memory, we can create memory regions of twice the size of the actual buffer
+        localSendMr(this->local.get(), size * 2, net.network.getProtectionDomain(), Permission::None),
+        localReadPosMr(&localReadPos, sizeof(localReadPos), net.network.getProtectionDomain(), Permission::RemoteRead),
+        remote(mmapRingBuffer(size, "/tmp/rdmaRemote")),
+        localReceiveMr(this->remote.get(), size * 2, net.network.getProtectionDomain(), localRw),
+        remoteReadPosMr(&remoteReadPos, sizeof(remoteReadPos), net.network.getProtectionDomain(),
+                        Permission::RemoteRead) {
     const bool powerOfTwo = (size != 0) && !(size & (size - 1));
     if (not powerOfTwo) {
         throw std::runtime_error{"size should be a power of 2"};
     }
 
-    this->local = mmapRingBuffer(size, "/tmp/rdmaLocal");
-    this->remote = mmapRingBuffer(size, "/tmp/rdmaRemote");
-
-    const RDMANetworking net(sock);
-
-    // Since we mapped twice the virtual memory, we can create memory regions of twice the size of the actual buffer
-    rdma::MemoryRegion localSendMr(this->local.get(), size * 2, net.network.getProtectionDomain(),
-                                   rdma::MemoryRegion::Permission::None);
-
-    rdma::MemoryRegion localReceiveMr(this->remote.get(), size * 2, net.network.getProtectionDomain(),
-                                      rdma::MemoryRegion::Permission::LocalWrite |
-                                      rdma::MemoryRegion::Permission::RemoteWrite);
-
-    rdma::MemoryRegion localReadPosMr(&localReadPos, sizeof(localReadPos), net.network.getProtectionDomain(),
-                                      rdma::MemoryRegion::Permission::RemoteRead);
-
-    rdma::MemoryRegion remoteReadPosMr(&remoteReadPos, sizeof(remoteReadPos), net.network.getProtectionDomain(),
-                                       rdma::MemoryRegion::Permission::RemoteRead);
-
-    rdma::RemoteMemoryRegion remoteReceiveRmr{};
-    rdma::RemoteMemoryRegion remoteReadPosRmr{};
-
     sendRmrInfo(sock, localReadPosMr, remoteReadPosMr);
     receiveAndSetupRmr(sock, remoteReceiveRmr, remoteReadPosRmr);
-
 }
 
 void VirtualRDMARingBuffer::send(const uint8_t *data, size_t length) {
-    const size_t sizeToWrite = sizeof(length) + length + sizeof(validity);
+    const auto sizeToWrite = sizeof(length) + length + sizeof(validity);
     if (sizeToWrite > size) throw std::runtime_error{"data > buffersize!"};
 
-    const size_t startOfWrite = sendPos & bitmask;
-    size_t whereToWrite = startOfWrite;
-    auto write = [&](auto what, auto howManyBytes) {
+    const auto startOfWrite = sendPos & bitmask;
+    auto whereToWrite = startOfWrite;
+    const auto write = [&](auto what, auto howManyBytes) {
         std::copy(reinterpret_cast<const uint8_t *>(what), &reinterpret_cast<const uint8_t *>(what)[howManyBytes],
                   &local.get()[whereToWrite]);
         whereToWrite += howManyBytes;
@@ -85,24 +74,23 @@ void VirtualRDMARingBuffer::send(const uint8_t *data, size_t length) {
     write(&validity, sizeof(validity));
 
     // then request it to be sent via RDMA
-    // TODO
-    //const auto sendSlice = localSendMr.slice(startOfWrite, sizeToWrite);
-    //const auto remoteSlice = remoteReceive.slice(startOfWrite);
-    //rdma::WriteWorkRequestBuilder(sendSlice, remoteSlice, false)
-    //        .setInline(inln && sendSlice.size <= net.queuePair.getMaxInlineSize())
-    //        .send(net.queuePair);
+    const auto sendSlice = localSendMr.slice(startOfWrite, sizeToWrite);
+    const auto remoteSlice = remoteReadPosRmr.slice(startOfWrite);
+    rdma::WriteWorkRequestBuilder(sendSlice, remoteSlice, false)
+            .setInline(sendSlice.size <= net.queuePair.getMaxInlineSize())
+            .send(net.queuePair);
 
     // finally, update sendPos
     sendPos += sizeToWrite;
 }
 
 size_t VirtualRDMARingBuffer::receive(void *whereTo, size_t maxSize) {
-    const size_t sizeToRead = sizeof(maxSize) + maxSize + sizeof(validity);
+    const auto sizeToRead = sizeof(maxSize) + maxSize + sizeof(validity);
     if (sizeToRead > size) throw std::runtime_error{"receiveSize > buffersize!"};
 
-    const size_t lastReadPos = localReadPos.load();
-    const size_t startOfRead = lastReadPos & bitmask;
-    auto readFromBuffer = [&](auto fromOffset, auto dest, auto howManyBytes) {
+    const auto lastReadPos = localReadPos.load();
+    const auto startOfRead = lastReadPos & bitmask;
+    const auto readFromBuffer = [&](auto fromOffset, auto dest, auto howManyBytes) {
         std::copy(&local.get()[fromOffset], &local.get()[fromOffset + howManyBytes], reinterpret_cast<uint8_t *>(dest));
     };
 
@@ -113,7 +101,8 @@ size_t VirtualRDMARingBuffer::receive(void *whereTo, size_t maxSize) {
         readFromBuffer(startOfRead, &length, sizeof(length));
         readFromBuffer(startOfRead + sizeof(length) + length, &checkMe, sizeof(checkMe));
     } while (checkMe.load() != validity);
-    const size_t finalLength = length;
+    // TODO probably need a second readFromBuffer of length, so we didn't by chance read the validity
+    const auto finalLength = length.load();
     // TODO: check length == maxSize
 
     readFromBuffer(startOfRead + sizeof(length), whereTo, finalLength);

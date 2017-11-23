@@ -65,10 +65,10 @@ namespace rdma {
 
         void postWorkRequest(const WorkRequest &workRequest);
 
-        uint32_t getMaxInlineSize();
+        uint32_t getMaxInlineSize() const;
 
         /// Print detailed information about this queue pair
-        void printQueuePairDetails();
+        void printQueuePairDetails() const;
 
         CompletionQueuePair &getCompletionQueuePair() { return completionQueuePair; }
     };

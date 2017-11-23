@@ -198,7 +198,7 @@ string queuePairAccessFlagsToString(int qp_access_flags)
 // -------------------------------------------------------------------------
 } // end of anonymous helper namespace
 // -------------------------------------------------------------------------
-void QueuePair::printQueuePairDetails()
+    void QueuePair::printQueuePairDetails() const
 {
    struct ibv_qp_attr attr;
    struct ibv_qp_init_attr init_attr;
@@ -241,7 +241,7 @@ void QueuePair::printQueuePairDetails()
    cout << left << setw(44) << "alt_timeout:" << static_cast<int>(attr.alt_timeout) << endl;
 }
 
-    uint32_t QueuePair::getMaxInlineSize() {
+    uint32_t QueuePair::getMaxInlineSize() const {
         return maxInlineSize;
     }
 //---------------------------------------------------------------------------

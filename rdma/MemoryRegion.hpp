@@ -69,11 +69,11 @@ public:
    void operator=(MemoryRegion const &) = delete;
 };
 //---------------------------------------------------------------------------
-inline MemoryRegion::Permission operator|(MemoryRegion::Permission a, MemoryRegion::Permission b) {
+    constexpr MemoryRegion::Permission operator|(MemoryRegion::Permission a, MemoryRegion::Permission b) {
    return static_cast<MemoryRegion::Permission>(static_cast<std::underlying_type<MemoryRegion::Permission>::type>(a) | static_cast<std::underlying_type<MemoryRegion::Permission>::type>(b));
 }
 //---------------------------------------------------------------------------
-inline MemoryRegion::Permission operator&(MemoryRegion::Permission a, MemoryRegion::Permission b) {
+    constexpr MemoryRegion::Permission operator&(MemoryRegion::Permission a, MemoryRegion::Permission b) {
    return static_cast<MemoryRegion::Permission>(static_cast<std::underlying_type<MemoryRegion::Permission>::type>(a) & static_cast<std::underlying_type<MemoryRegion::Permission>::type>(b));
 }
 //---------------------------------------------------------------------------

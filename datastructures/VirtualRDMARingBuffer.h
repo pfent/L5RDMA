@@ -7,6 +7,7 @@
 #include <memory>
 #include <unistd.h>
 #include <exchangeableTransports/transports/Buffer.h>
+#include <exchangeableTransports/util/RDMANetworking.h>
 
 struct WraparoundBuffer {
     std::shared_ptr<uint8_t> local1;
@@ -21,13 +22,21 @@ class VirtualRDMARingBuffer {
     static constexpr size_t validity = 0xDEADDEADBEEFBEEF;
     const size_t size;
     const size_t bitmask;
+    RDMANetworking net;
 
     size_t sendPos = 0;
     std::atomic<size_t> localReadPos = 0;
     WraparoundBuffer local;
+    rdma::MemoryRegion localSendMr;
+    rdma::MemoryRegion localReadPosMr;
 
     std::atomic<size_t> remoteReadPos = 0;
     WraparoundBuffer remote;
+    rdma::MemoryRegion localReceiveMr;
+    rdma::MemoryRegion remoteReadPosMr;
+
+    rdma::RemoteMemoryRegion remoteReceiveRmr{};
+    rdma::RemoteMemoryRegion remoteReadPosRmr{};
 
     /// Establish a shared memory region of size with the remote side of sock
     VirtualRDMARingBuffer(size_t size, int sock);
