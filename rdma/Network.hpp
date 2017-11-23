@@ -113,7 +113,7 @@ namespace rdma {
         uint16_t getLID();
 
         /// Get the protection domain
-        ibv_pd *getProtectionDomain() { return protectionDomain; }
+        ibv_pd *getProtectionDomain() const { return protectionDomain; }
 
         /// Print the capabilities of the RDMA host channel adapter
         void printCapabilities();

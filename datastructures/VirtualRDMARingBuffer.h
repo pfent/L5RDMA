@@ -8,6 +8,15 @@
 #include <unistd.h>
 #include <exchangeableTransports/transports/Buffer.h>
 
+struct WraparoundBuffer {
+    std::shared_ptr<uint8_t> local1;
+    std::shared_ptr<uint8_t> local2; // safeguarding virtual memory region, using the MMU for wraparound
+
+    uint8_t *get() {
+        return local1.get();
+    }
+};
+
 class VirtualRDMARingBuffer {
     static constexpr size_t validity = 0xDEADDEADBEEFBEEF;
     const size_t size;
@@ -15,12 +24,10 @@ class VirtualRDMARingBuffer {
 
     size_t sendPos = 0;
     std::atomic<size_t> localReadPos = 0;
-    std::shared_ptr<uint8_t> local1;
-    std::shared_ptr<uint8_t> local2; // safeguarding virtual memory region, using the MMU for wraparound
+    WraparoundBuffer local;
 
-    std::atomic<size_t> remoteReadPos;
-    std::shared_ptr<uint8_t> remote1;
-    std::shared_ptr<uint8_t> remote2; // safeguarding virtual memory region, using the MMU for wraparound
+    std::atomic<size_t> remoteReadPos = 0;
+    WraparoundBuffer remote;
 
     /// Establish a shared memory region of size with the remote side of sock
     VirtualRDMARingBuffer(size_t size, int sock);

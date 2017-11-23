@@ -4,9 +4,7 @@
 #include <exchangeableTransports/util/RDMANetworking.h>
 #include <exchangeableTransports/rdma/WorkRequest.hpp>
 
-void mmapRingBuffer(size_t size, const char *backingFile,
-                    std::shared_ptr<uint8_t> &main,
-                    std::shared_ptr<uint8_t> &wraparound) {
+WraparoundBuffer mmapRingBuffer(size_t size, const char *backingFile) {
     const auto fd = open(backingFile, O_CREAT | O_TRUNC | O_RDWR, 0666);
     if (fd < 0) {
         perror("shm_open");
@@ -30,8 +28,8 @@ void mmapRingBuffer(size_t size, const char *backingFile,
         munmap(p, size);
     };
 
-    main = std::shared_ptr < uint8_t > (reinterpret_cast<uint8_t *>(first), deleter);
-    wraparound = std::shared_ptr < uint8_t > (reinterpret_cast<uint8_t *>(second), deleter);
+    return {std::shared_ptr < uint8_t > (reinterpret_cast<uint8_t *>(first), deleter),
+            std::shared_ptr < uint8_t > (reinterpret_cast<uint8_t *>(second), deleter)};
 }
 
 VirtualRDMARingBuffer::VirtualRDMARingBuffer(size_t size, int sock) : size(size), bitmask(size - 1) {
@@ -40,23 +38,22 @@ VirtualRDMARingBuffer::VirtualRDMARingBuffer(size_t size, int sock) : size(size)
         throw std::runtime_error{"size should be a power of 2"};
     }
 
-    mmapRingBuffer(size, "/tmp/rdmaLocal", this->local1, this->local2);
-    mmapRingBuffer(size, "/tmp/rdmaRemote", this->remote1, this->remote2);
+    this->local = mmapRingBuffer(size, "/tmp/rdmaLocal");
+    this->remote = mmapRingBuffer(size, "/tmp/rdmaRemote");
 
-    RDMANetworking net(sock);
+    const RDMANetworking net(sock);
 
     // Since we mapped twice the virtual memory, we can create memory regions of twice the size of the actual buffer
-    rdma::MemoryRegion localSendMr(this->local1.get(), size * 2, net.network.getProtectionDomain(),
+    rdma::MemoryRegion localSendMr(this->local.get(), size * 2, net.network.getProtectionDomain(),
                                    rdma::MemoryRegion::Permission::None);
 
-    rdma::MemoryRegion localReceiveMr(this->remote1.get(), size * 2, net.network.getProtectionDomain(),
+    rdma::MemoryRegion localReceiveMr(this->remote.get(), size * 2, net.network.getProtectionDomain(),
                                       rdma::MemoryRegion::Permission::LocalWrite |
                                       rdma::MemoryRegion::Permission::RemoteWrite);
 
     rdma::MemoryRegion localReadPosMr(&localReadPos, sizeof(localReadPos), net.network.getProtectionDomain(),
                                       rdma::MemoryRegion::Permission::RemoteRead);
 
-    std::atomic<size_t> remoteReadPos;
     rdma::MemoryRegion remoteReadPosMr(&remoteReadPos, sizeof(remoteReadPos), net.network.getProtectionDomain(),
                                        rdma::MemoryRegion::Permission::RemoteRead);
 
@@ -76,7 +73,7 @@ void VirtualRDMARingBuffer::send(const uint8_t *data, size_t length) {
     size_t whereToWrite = startOfWrite;
     auto write = [&](auto what, auto howManyBytes) {
         std::copy(reinterpret_cast<const uint8_t *>(what), &reinterpret_cast<const uint8_t *>(what)[howManyBytes],
-                  &local1.get()[whereToWrite]);
+                  &local.get()[whereToWrite]);
         whereToWrite += howManyBytes;
     };
 
@@ -101,12 +98,12 @@ void VirtualRDMARingBuffer::send(const uint8_t *data, size_t length) {
 
 size_t VirtualRDMARingBuffer::receive(void *whereTo, size_t maxSize) {
     const size_t sizeToRead = sizeof(maxSize) + maxSize + sizeof(validity);
-    if(sizeToRead > size) throw std::runtime_error{"receiveSize > buffersize!"};
+    if (sizeToRead > size) throw std::runtime_error{"receiveSize > buffersize!"};
 
     const size_t lastReadPos = localReadPos.load();
     const size_t startOfRead = lastReadPos & bitmask;
     auto readFromBuffer = [&](auto fromOffset, auto dest, auto howManyBytes) {
-        std::copy(&local1.get()[fromOffset], &local1.get()[fromOffset + howManyBytes], reinterpret_cast<uint8_t *>(dest));
+        std::copy(&local.get()[fromOffset], &local.get()[fromOffset + howManyBytes], reinterpret_cast<uint8_t *>(dest));
     };
 
     // TODO: check messageLength != 0
