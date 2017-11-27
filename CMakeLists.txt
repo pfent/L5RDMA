@@ -28,6 +28,7 @@ set(SOURCE_FILES
         transports/SharedMemoryTransport.cpp
         apps/PingPong.h
         util/bench.h
+        test/pingPongTest.h
         util/virtualMemory.cpp
         datastructures/VirtualRingBuffer.cpp
         datastructures/VirtualRDMARingBuffer.cpp

@@ -9,7 +9,7 @@
 
 using namespace std;
 
-const size_t DOMAIN_MESSAGES = 256 * 1024; // ~ 1s
+const size_t MESSAGES = 256 * 1024; // ~ 1s
 const size_t SHAREDMEM_MESSAGES = 4 * 1024 * 1024;
 
 int main(int argc, char **argv) {
@@ -25,12 +25,12 @@ int main(int argc, char **argv) {
             auto client = Ping(make_transportClient<DomainSocketsTransportClient>(), "/tmp/pingPong");
             bench([&]() {
                 const auto start = chrono::steady_clock::now();
-                for (size_t i = 0; i < DOMAIN_MESSAGES; ++i) {
+                for (size_t i = 0; i < MESSAGES; ++i) {
                     client.ping();
                 }
                 const auto end = chrono::steady_clock::now();
                 const auto sTaken = chrono::duration<double>(end - start).count();
-                cout << DOMAIN_MESSAGES / sTaken << " msg/s, ";
+                cout << MESSAGES / sTaken << " msg/s, ";
             });
         }
         sleep(1);
@@ -53,7 +53,7 @@ int main(int argc, char **argv) {
             auto server = Pong(make_transportServer<DomainSocketsTransportServer>("/tmp/pingPong"));
             server.start();
             bench([&]() {
-                for (size_t i = 0; i < DOMAIN_MESSAGES; ++i) {
+                for (size_t i = 0; i < MESSAGES; ++i) {
                     server.pong();
                 }
             });
