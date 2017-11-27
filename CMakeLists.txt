@@ -1,4 +1,5 @@
 cmake_minimum_required(VERSION 3.0)
+enable_testing()
 project(exchangableTransports)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -33,7 +34,21 @@ set(SOURCE_FILES
         util/RDMANetworking.cpp
         )
 
+SET(LINK_LIBRARIES
+        ibverbs
+        rt
+        pthread
+        )
+
 include_directories(..)
 
 add_executable(pingPong pingPong.cpp ${SOURCE_FILES})
-target_link_libraries(pingPong ibverbs rt)
+target_link_libraries(pingPong ${LINK_LIBRARIES})
+
+file(GLOB tests "test/*Test.cpp")
+foreach (test ${tests})
+    get_filename_component(testName ${test} NAME_WE)
+    add_executable(${testName} ${test} ${SOURCE_FILES})
+    target_link_libraries(${testName} ${LINK_LIBRARIES})
+    add_test(${testName} ${testName})
+endforeach ()
