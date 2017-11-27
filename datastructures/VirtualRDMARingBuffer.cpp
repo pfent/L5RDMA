@@ -5,43 +5,15 @@
 
 using Permission = rdma::MemoryRegion::Permission;
 
-WraparoundBuffer mmapRingBuffer(size_t size, const char *backingFile) {
-    const auto fd = open(backingFile, O_CREAT | O_TRUNC | O_RDWR, 0666);
-    if (fd < 0) {
-        perror("shm_open");
-        throw std::runtime_error{"shm_open failed"};
-    }
-    if (ftruncate(fd, size) != 0) {
-        perror("ftruncate");
-        throw std::runtime_error{"ftruncate failed"};
-    }
-    auto first = mmap(nullptr, size, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
-    // map the same file in virtual memory directly after the first one
-    auto second = mmap(reinterpret_cast<uint8_t *>(first),
-                       size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_FIXED, fd, 0);
-    if (second == reinterpret_cast<void *>(-1)) {
-        perror("mmap");
-        throw std::runtime_error{"mmaping the wraparound failed"};
-    }
-    close(fd); // no need to keep the writeFd open after the mapping
-
-    const auto deleter = [size](void *p) {
-        munmap(p, size);
-    };
-
-    return {std::shared_ptr < uint8_t > (reinterpret_cast<uint8_t *>(first), deleter),
-            std::shared_ptr < uint8_t > (reinterpret_cast<uint8_t *>(second), deleter)};
-}
-
 constexpr auto localRw = Permission::LocalWrite | Permission::RemoteWrite;
 
 VirtualRDMARingBuffer::VirtualRDMARingBuffer(size_t size, int sock) :
         size(size), bitmask(size - 1), net(sock),
-        local(mmapRingBuffer(size, "/tmp/rdmaLocal")),
+        local(mmapRDMARingBuffer("/tmp/rdmaLocal", size, true)),
         // Since we mapped twice the virtual memory, we can create memory regions of twice the size of the actual buffer
         localSendMr(this->local.get(), size * 2, net.network.getProtectionDomain(), Permission::None),
         localReadPosMr(&localReadPos, sizeof(localReadPos), net.network.getProtectionDomain(), Permission::RemoteRead),
-        remote(mmapRingBuffer(size, "/tmp/rdmaRemote")),
+        remote(mmapRDMARingBuffer("/tmp/rdmaRemote", size, true)),
         localReceiveMr(this->remote.get(), size * 2, net.network.getProtectionDomain(), localRw),
         remoteReadPosMr(&remoteReadPos, sizeof(remoteReadPos), net.network.getProtectionDomain(),
                         Permission::RemoteRead) {

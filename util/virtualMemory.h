@@ -1,5 +1,5 @@
-#ifndef EXCHANGABLETRANSPORTS_SHAREDMEMORY_H
-#define EXCHANGABLETRANSPORTS_SHAREDMEMORY_H
+#ifndef EXCHANGABLETRANSPORTS_VIRTUALMEMORY_H
+#define EXCHANGABLETRANSPORTS_VIRTUALMEMORY_H
 
 #include <cstdint>
 #include <cstddef>
@@ -21,6 +21,8 @@ struct SharedMemoryInfo {
         this->remoteBufferName = std::string(buffer, buffer + readCount);
     }
 };
+
+using WraparoundBuffer = std::shared_ptr<uint8_t>;
 
 template<typename T>
 std::shared_ptr<T> malloc_shared(const std::string &name, size_t size, bool init, void *addr = nullptr) {
@@ -49,4 +51,11 @@ std::shared_ptr<T> malloc_shared(const std::string &name, size_t size, bool init
     return std::shared_ptr < T > (reinterpret_cast<T *>(ptr), deleter);
 }
 
-#endif //EXCHANGABLETRANSPORTS_SHAREDMEMORY_H
+// see https://github.com/willemt/cbuffer
+WraparoundBuffer mmapRingBuffer(int fd, size_t size, bool init);
+
+WraparoundBuffer mmapSharedRingBuffer(const std::string &name, size_t size, bool init = false);
+
+WraparoundBuffer mmapRDMARingBuffer(const std::string &name, size_t size, bool init = false);
+
+#endif //EXCHANGABLETRANSPORTS_VIRTUALMEMORY_H

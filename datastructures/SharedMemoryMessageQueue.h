@@ -6,7 +6,7 @@
 #include <atomic>
 #include <memory>
 #include <unistd.h>
-#include <exchangeableTransports/util/sharedMemory.h>
+#include <exchangeableTransports/util/virtualMemory.h>
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"

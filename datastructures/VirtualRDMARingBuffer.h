@@ -8,15 +8,7 @@
 #include <unistd.h>
 #include <exchangeableTransports/transports/Buffer.h>
 #include <exchangeableTransports/util/RDMANetworking.h>
-
-struct WraparoundBuffer {
-    std::shared_ptr<uint8_t> local1;
-    std::shared_ptr<uint8_t> local2; // safeguarding virtual memory region, using the MMU for wraparound
-
-    uint8_t *get() {
-        return local1.get();
-    }
-};
+#include <exchangeableTransports/util/virtualMemory.h>
 
 class VirtualRDMARingBuffer {
     static constexpr size_t validity = 0xDEADDEADBEEFBEEF;

@@ -25,10 +25,13 @@ set(SOURCE_FILES
         transports/RdmaTransport.cpp
         transports/DomainSocketsTransport.cpp
         transports/SharedMemoryTransport.cpp
-        apps/PingPong.h util/bench.h util/sharedMemory.h datastructures/VirtualRingBuffer.h datastructures/VirtualRingBuffer.cpp datastructures/VirtualRDMARingBuffer.cpp datastructures/VirtualRDMARingBuffer.h util/RDMANetworking.cpp util/RDMANetworking.h)
-set(OVERRIDES_FILES
-        fileDescriptorOverrides/overrides.cpp
-        fileDescriptorOverrides/realFunctions.cpp)
+        apps/PingPong.h
+        util/bench.h
+        util/virtualMemory.cpp
+        datastructures/VirtualRingBuffer.cpp
+        datastructures/VirtualRDMARingBuffer.cpp
+        util/RDMANetworking.cpp
+        )
 
 include_directories(..)
 

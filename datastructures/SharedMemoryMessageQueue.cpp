@@ -1,5 +1,5 @@
 #include "SharedMemoryMessageQueue.h"
-#include <exchangeableTransports/util/sharedMemory.h>
+#include <exchangeableTransports/util/virtualMemory.h>
 
 using namespace std;
 

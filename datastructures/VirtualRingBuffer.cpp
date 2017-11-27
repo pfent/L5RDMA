@@ -1,5 +1,6 @@
 #include "VirtualRingBuffer.h"
-#include <exchangeableTransports/util/sharedMemory.h>
+#include <sys/mman.h>
+#include <exchangeableTransports/util/virtualMemory.h>
 
 VirtualRingBuffer::VirtualRingBuffer(size_t size, int sock) : size(size), bitmask(size - 1) {
     const bool powerOfTwo = (size != 0) && !(size & (size - 1));
@@ -8,8 +9,7 @@ VirtualRingBuffer::VirtualRingBuffer(size_t size, int sock) : size(size), bitmas
     }
 
     localRw = malloc_shared<RingBufferInfo>(infoName + pid, sizeof(RingBufferInfo), true);
-    local1 = malloc_shared<uint8_t>(bufferName + pid, size, true);
-    local2 = malloc_shared<uint8_t>(bufferName + pid, size, false, &local1.get()[size]); // TODO: use MAP_FIXED for this mapping
+    local = mmapSharedRingBuffer(bufferName + pid, size, true);
 
     domain_write(sock, pid.c_str(), pid.size());
     uint8_t buffer[255];
@@ -17,8 +17,7 @@ VirtualRingBuffer::VirtualRingBuffer(size_t size, int sock) : size(size), bitmas
     const auto remotePid = std::string(buffer, buffer + readCount);
 
     remoteRw = malloc_shared<RingBufferInfo>(infoName + remotePid, sizeof(RingBufferInfo), false);
-    remote1 = malloc_shared<uint8_t>(bufferName + remotePid, size, false);
-    remote2 = malloc_shared<uint8_t>(bufferName + remotePid, size, false, &remote1.get()[size]);
+    remote = mmapSharedRingBuffer(bufferName + remotePid, size);
 }
 
 void VirtualRingBuffer::waitUntilSendFree(size_t localWritten, size_t length) const {
@@ -34,7 +33,7 @@ void VirtualRingBuffer::send(const uint8_t *data, size_t length) {
 
     waitUntilSendFree(localWritten, length);
 
-    std::copy(data, data + length, &local1.get()[pos]);
+    std::copy(data, data + length, &local.get()[pos]);
 
     // basically `localRw->written += length;`, but without the mfence or locked instructions
     localRw->written.store(localWritten + length, std::memory_order_release);
@@ -46,7 +45,7 @@ size_t VirtualRingBuffer::receive(void *whereTo, size_t maxSize) {
 
     waitUntilReceiveAvailable(maxSize, localRead);
 
-    std::copy(&remote1.get()[pos], &remote1.get()[pos + maxSize], reinterpret_cast<uint8_t *>(whereTo));
+    std::copy(&remote.get()[pos], &remote.get()[pos + maxSize], reinterpret_cast<uint8_t *>(whereTo));
 
     // basically `localRw->read += maxSize;`, but without the mfence or locked instructions
     localRw->read.store(localRead + maxSize, std::memory_order_release);
@@ -66,7 +65,7 @@ Buffer VirtualRingBuffer::reserveBufferForSending(size_t length) {
 
     waitUntilSendFree(localWritten, length);
 
-    return Buffer(length, &local1.get()[pos]);
+    return Buffer(length, &local.get()[pos]);
 }
 
 void VirtualRingBuffer::send(Buffer buffer) {
@@ -80,7 +79,7 @@ Buffer VirtualRingBuffer::receiveIntoBuffer(size_t length) {
 
     waitUntilReceiveAvailable(length, localRead);
 
-    return Buffer(length, &remote1.get()[pos]);
+    return Buffer(length, &remote.get()[pos]);
 }
 
 void VirtualRingBuffer::markAsRead(Buffer buffer) {
