@@ -22,15 +22,15 @@ int main() {
 
     const auto clientPid = fork();
     if (clientPid == 0) {
-        sleep(1);
+        sleep(1); // server needs some time to start
         auto ping = Ping(make_transportClient<SharedMemoryTransportClient>(), "/tmp/pingPong");
         for (size_t i = 0; i < MESSAGES; ++i) {
             ping.ping();
         }
     }
 
-    int secs = 0;
-    for (int status; secs < 5; ++secs, sleep(1)) {
+    size_t secs = 0;
+    for (int status; secs < TIMEOUT_IN_SECONDS; ++secs, sleep(1)) {
         auto serverTerminated = waitpid(serverPid, &status, WNOHANG) != 0;
         auto clientTerminated = waitpid(clientPid, &status, WNOHANG) != 0;
         if (serverTerminated && clientTerminated) {
@@ -38,7 +38,7 @@ int main() {
         }
     }
 
-    if (secs >= 5) {
+    if (secs >= TIMEOUT_IN_SECONDS) {
         std::cerr << "timeout" << std::endl;
         return 1;
     }

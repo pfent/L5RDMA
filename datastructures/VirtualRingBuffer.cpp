@@ -1,6 +1,7 @@
 #include "VirtualRingBuffer.h"
 #include <sys/mman.h>
 #include <exchangeableTransports/util/virtualMemory.h>
+#include <exchangeableTransports/util/busywait.h>
 
 VirtualRingBuffer::VirtualRingBuffer(size_t size, int sock) : size(size), bitmask(size - 1) {
     const bool powerOfTwo = (size != 0) && !(size & (size - 1));
@@ -22,9 +23,9 @@ VirtualRingBuffer::VirtualRingBuffer(size_t size, int sock) : size(size), bitmas
 
 void VirtualRingBuffer::waitUntilSendFree(size_t localWritten, size_t length) const {
     size_t remoteRead;
-    do {
+    loop_while([&]() {
         remoteRead = remoteRw->read; // probably buffer this in class, so we don't have as much remote reads
-    } while ((localWritten - remoteRead) > (size - length)); // block until there is some space
+    }, [&]() { return (localWritten - remoteRead) > (size - length); }); // block until there is some space
 }
 
 void VirtualRingBuffer::send(const uint8_t *data, size_t length) {
@@ -54,9 +55,9 @@ size_t VirtualRingBuffer::receive(void *whereTo, size_t maxSize) {
 
 void VirtualRingBuffer::waitUntilReceiveAvailable(size_t maxSize, size_t localRead) const {
     size_t remoteWritten;
-    do {
+    loop_while([&]() {
         remoteWritten = remoteRw->written; // probably buffer this in class, so we don't have as much remote reads
-    } while ((remoteWritten - localRead) < maxSize); // block until maxSize is available
+    }, [&]() { return (remoteWritten - localRead) < maxSize; }); // block until maxSize is available
 }
 
 Buffer VirtualRingBuffer::reserveBufferForSending(size_t length) {
