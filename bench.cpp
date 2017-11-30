@@ -20,54 +20,58 @@ int main(int argc, char **argv) {
     const auto isClient = argv[1][0] == 'c';
 
     if (isClient) {
+        cout << "implementation, messages, time, msg/s, user, system, total\n";
         {
             cout << "domainsockets, ";
             auto client = Ping(make_transportClient<DomainSocketsTransportClient>(), "/tmp/pingPong");
-            bench([&]() {
-                const auto start = chrono::steady_clock::now();
-                for (size_t i = 0; i < MESSAGES; ++i) {
-                    client.ping();
-                }
-                const auto end = chrono::steady_clock::now();
-                const auto sTaken = chrono::duration<double>(end - start).count();
-                cout << MESSAGES / sTaken << " msg/s, ";
+            bench(MESSAGES, [&]() {
+                client.ping();
             });
         }
         sleep(1);
         {
             cout << "shared memory, ";
             auto client = Ping(make_transportClient<SharedMemoryTransportClient>(), "/tmp/pingPong");
-            bench([&]() {
-                const auto start = chrono::steady_clock::now();
-                for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
-                    client.ping();
-                }
-                const auto end = chrono::steady_clock::now();
-                const auto sTaken = chrono::duration<double>(end - start).count();
-                cout << SHAREDMEM_MESSAGES / sTaken << " msg/s, ";
+            bench(SHAREDMEM_MESSAGES, [&]() {
+                client.ping();
             });
         }
+        sleep(1);
+        {
+            cout << "tcp, ";
+            auto client = Ping(make_transportClient<TcpTransportClient>(), "127.0.0.1:1234");
+            bench(MESSAGES, [&]() {
+                client.ping();
+            });
+        }
+        cout << flush;
     } else {
+        cout << "implementation, messages, time, msg/s, user, system, total\n";
         {
             cout << "domainsockets, ";
             auto server = Pong(make_transportServer<DomainSocketsTransportServer>("/tmp/pingPong"));
             server.start();
-            bench([&]() {
-                for (size_t i = 0; i < MESSAGES; ++i) {
-                    server.pong();
-                }
+            bench(MESSAGES, [&]() {
+                server.pong();
             });
         }
         {
             cout << "shared memory, ";
             auto server = Pong(make_transportServer<SharedMemoryTransportServer>("/tmp/pingPong"));
             server.start();
-            bench([&]() {
-                for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
-                    server.pong();
-                }
+            bench(SHAREDMEM_MESSAGES, [&]() {
+                server.pong();
             });
         }
+        {
+            cout << "tcp, ";
+            auto server = Pong(make_transportServer<TcpTransportServer>("1234"));
+            server.start();
+            bench(MESSAGES, [&]() {
+                server.pong();
+            });
+        }
+        cout << flush;
     }
 
     return 0;

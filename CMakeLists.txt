@@ -42,8 +42,8 @@ SET(LINK_LIBRARIES
 
 include_directories(..)
 
-add_executable(pingPong pingPong.cpp ${SOURCE_FILES})
-target_link_libraries(pingPong ${LINK_LIBRARIES})
+add_executable(bench bench.cpp ${SOURCE_FILES})
+target_link_libraries(bench ${LINK_LIBRARIES})
 
 file(GLOB tests "test/*Test.cpp")
 foreach (test ${tests})

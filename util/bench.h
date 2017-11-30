@@ -38,15 +38,20 @@ std::tuple<double, double> getOwnStat() {
 }
 
 template<typename T>
-auto bench(T &&fun, size_t repetitions = 1) {
-    std::vector<std::tuple<double, double, double>> runs;
+auto bench(size_t workSize, T &&fun, size_t repetitions = 1) {
+    std::vector<std::tuple<double, double, double>> cpuLoads;
+    std::vector<double> times;
 
     for (size_t i = 0; i < repetitions; ++i) {
         const auto before = getGlobalStat();
         const auto
         [ownUserBefore, ownSystemBefore] = getOwnStat();
 
-        fun();
+        const auto start = std::chrono::steady_clock::now();
+        for (size_t j = 0; j < workSize; ++j) {
+            fun();
+        }
+        const auto end = std::chrono::steady_clock::now();
 
         const auto after = getGlobalStat();
         const auto
@@ -57,13 +62,16 @@ auto bench(T &&fun, size_t repetitions = 1) {
         const auto systemPercent = (ownSystemAfter - ownSystemBefore) / diff * 100.0;
         const auto totalPercent = userPercent + systemPercent;
 
-        runs.emplace_back(userPercent, systemPercent, totalPercent);
+        const auto sTaken = std::chrono::duration<double>(end - start).count();
+
+        cpuLoads.emplace_back(userPercent, systemPercent, totalPercent);
+        times.emplace_back(sTaken);
     }
 
     const auto
     [userPercent, systemPercent, totalPercent] = [&]() {
         double userTotal = 0, systemTotal = 0, totalTotal = 0;
-        for (auto[u, s, t] : runs) {
+        for (auto[u, s, t] : cpuLoads) {
             userTotal += u;
             systemTotal += s;
             totalTotal += t;
@@ -71,7 +79,20 @@ auto bench(T &&fun, size_t repetitions = 1) {
         return std::make_tuple(userTotal / repetitions, systemTotal / repetitions, totalTotal / repetitions);
     }();
 
-    std::cout << userPercent << ", " << systemPercent << ", " << totalPercent << '\n';
+    const auto avgTime = [&]() {
+        double total = 0;
+        for (auto time : times) {
+            total += time;
+        }
+        return total / repetitions;
+    }();
+
+    std::cout << workSize << ", "
+              << avgTime << ", "
+              << (workSize / avgTime) << ", "
+              << userPercent << ", "
+              << systemPercent << ", "
+              << totalPercent << '\n';
 }
 
 #endif //EXCHANGABLETRANSPORTS_BENCH_H
