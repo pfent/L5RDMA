@@ -3,20 +3,19 @@
 #include <sys/mman.h>
 #include <fcntl.h>
 
-using Permission = rdma::MemoryRegion::Permission;
+using Perm = rdma::MemoryRegion::Permission;
 
-constexpr auto localRw = Permission::LocalWrite | Permission::RemoteWrite;
+constexpr auto localRw = Perm::LocalWrite | Perm::RemoteWrite;
 
 VirtualRDMARingBuffer::VirtualRDMARingBuffer(size_t size, int sock) :
         size(size), bitmask(size - 1), net(sock),
-        local(mmapRDMARingBuffer("/tmp/rdmaLocal", size, true)),
+        local(mmapSharedRingBuffer("/rdmaLocal", size, true)),
         // Since we mapped twice the virtual memory, we can create memory regions of twice the size of the actual buffer
-        localSendMr(this->local.get(), size * 2, net.network.getProtectionDomain(), Permission::None),
-        localReadPosMr(&localReadPos, sizeof(localReadPos), net.network.getProtectionDomain(), Permission::RemoteRead),
-        remote(mmapRDMARingBuffer("/tmp/rdmaRemote", size, true)),
+        localSendMr(this->local.get(), size * 2, net.network.getProtectionDomain(), Perm::None),
+        localReadPosMr(&localReadPos, sizeof(localReadPos), net.network.getProtectionDomain(), Perm::RemoteRead),
+        remote(mmapSharedRingBuffer("/rdmaRemote", size, true)),
         localReceiveMr(this->remote.get(), size * 2, net.network.getProtectionDomain(), localRw),
-        remoteReadPosMr(&remoteReadPos, sizeof(remoteReadPos), net.network.getProtectionDomain(),
-                        Permission::RemoteRead) {
+        remoteReadPosMr(&remoteReadPos, sizeof(remoteReadPos), net.network.getProtectionDomain(), Perm::RemoteRead) {
     const bool powerOfTwo = (size != 0) && !(size & (size - 1));
     if (not powerOfTwo) {
         throw std::runtime_error{"size should be a power of 2"};
@@ -33,8 +32,8 @@ void VirtualRDMARingBuffer::send(const uint8_t *data, size_t length) {
     const auto startOfWrite = sendPos & bitmask;
     auto whereToWrite = startOfWrite;
     const auto write = [&](auto what, auto howManyBytes) {
-        std::copy(reinterpret_cast<const uint8_t *>(what), &reinterpret_cast<const uint8_t *>(what)[howManyBytes],
-                  &local.get()[whereToWrite]);
+        auto whatPtr = reinterpret_cast<const uint8_t *>(what);
+        std::copy(whatPtr, &whatPtr[howManyBytes], &local.get()[whereToWrite]);
         whereToWrite += howManyBytes;
     };
 

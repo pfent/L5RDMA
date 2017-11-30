@@ -23,7 +23,7 @@ int main(int argc, char **argv) {
         cout << "implementation, messages, time, msg/s, user, system, total\n";
 //        {
 //            cout << "domainsockets, ";
-//            auto client = Ping(make_transportClient<DomainSocketsTransportClient>(), "/tmp/pingPong");
+//            auto client = Ping(make_transportClient<DomainSocketsTransportClient>(), "/dev/shm/pingPong");
 //            bench(MESSAGES, [&]() {
 //                client.ping();
 //            }, 5);
@@ -31,7 +31,7 @@ int main(int argc, char **argv) {
 //        sleep(1);
         {
             cout << "shared memory, ";
-            auto client = Ping(make_transportClient<SharedMemoryTransportClient>(), "/tmp/pingPong");
+            auto client = Ping(make_transportClient<SharedMemoryTransportClient>(), "/dev/shm/pingPong");
             bench(SHAREDMEM_MESSAGES, [&]() {
                 client.ping();
             }, 5);
@@ -49,7 +49,7 @@ int main(int argc, char **argv) {
         cout << "implementation, messages, time, msg/s, user, system, total\n";
 //        {
 //            cout << "domainsockets, ";
-//            auto server = Pong(make_transportServer<DomainSocketsTransportServer>("/tmp/pingPong"));
+//            auto server = Pong(make_transportServer<DomainSocketsTransportServer>("/dev/shm/pingPong"));
 //            server.start();
 //            bench(MESSAGES, [&]() {
 //                server.pong();
@@ -57,7 +57,7 @@ int main(int argc, char **argv) {
 //        }
         {
             cout << "shared memory, ";
-            auto server = Pong(make_transportServer<SharedMemoryTransportServer>("/tmp/pingPong"));
+            auto server = Pong(make_transportServer<SharedMemoryTransportServer>("/dev/shm/pingPong"));
             server.start();
             bench(SHAREDMEM_MESSAGES, [&]() {
                 server.pong();

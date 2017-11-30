@@ -16,8 +16,8 @@ struct RingBufferInfo {
 
 /// http://ourmachinery.com/post/virtual-memory-tricks/
 struct VirtualRingBuffer {
-    const std::string bufferName = "sharedBuffer";
-    const std::string infoName = "sharedRw";
+    const std::string bufferName = "/sharedBuffer";
+    const std::string infoName = "/sharedRw";
     const std::string pid = std::to_string(::getpid());
     const size_t size;
     const size_t bitmask;

@@ -10,15 +10,6 @@ WraparoundBuffer mmapSharedRingBuffer(const std::string &name, size_t size, bool
     return mmapRingBuffer(fd, size, init);
 }
 
-WraparoundBuffer mmapRDMARingBuffer(const std::string &name, size_t size, bool init) {
-    const auto fd = open(name.c_str(), O_CREAT | O_TRUNC | O_RDWR, 0666);
-    if (fd < 0) {
-        perror("open");
-        throw std::runtime_error{"open failed"};
-    }
-    return mmapRingBuffer(fd, size, init);
-}
-
 WraparoundBuffer mmapRingBuffer(int fd, size_t size, bool init) {
     if (ftruncate(fd, size) != 0) {
         perror("ftruncate");
