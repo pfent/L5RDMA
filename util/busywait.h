@@ -1,39 +1,44 @@
 #ifndef EXCHANGABLETRANSPORTS_BUSYWAIT_H
 #define EXCHANGABLETRANSPORTS_BUSYWAIT_H
 
+#include <unistd.h>
 #include <xmmintrin.h>
 
-template<typename Fun, typename Cond>
-void busyWait(Fun &&fun, Cond &&cond) {
-    do { // TODO: don't busy wait
-        fun();
-    } while (cond());
-}
-
-void yield(int tries) {
-    if (tries < 4) { // nop
-    } else if (tries < 16) {
-        _mm_pause();
-    } else if (tries < 32) {
-        sched_yield();
-    } else {
-        usleep(1);
+namespace {
+    template<typename Fun, typename Cond>
+    void busyWait(Fun &&fun, Cond &&cond) {
+        do {
+            fun();
+        } while (cond());
     }
-}
 
-template<typename Fun, typename Cond>
-void niceWait(Fun &&fun, Cond &&cond) {
-    int tries = 0;
-    do {
-        yield(tries);
-        fun();
-        ++tries;
-    } while (cond());
+    // TODO: those values are a bit arbitrary, maybe more intelligence here?
+    // E.g. sample expected and deviation and set pause / yield accordingly
+    void yield(int tries) {
+        if (tries < 2) { // nop
+        } else if (tries < 64) {
+            _mm_pause();
+        } else if (tries < 128) {
+            sched_yield();
+        } else {
+            usleep(1);
+        }
+    }
+
+    template<typename Fun, typename Cond>
+    void niceWait(Fun &&fun, Cond &&cond) {
+        int tries = 0;
+        do {
+            yield(tries);
+            fun();
+            ++tries;
+        } while (cond());
+    }
 }
 
 template<typename... Args>
 void loop_while(Args &&... args) {
-    return busyWait(std::forward<Args>(args)...);
+    return niceWait(std::forward<Args>(args)...);
 }
 
 #endif //EXCHANGABLETRANSPORTS_BUSYWAIT_H
