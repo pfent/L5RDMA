@@ -30,10 +30,12 @@ int main() {
         }
     }
 
+    int serverStatus = 1;
+    int clientStatus = 1;
     size_t secs = 0;
-    for (int status; secs < TIMEOUT_IN_SECONDS; ++secs, sleep(1)) {
-        auto serverTerminated = waitpid(serverPid, &status, WNOHANG) != 0;
-        auto clientTerminated = waitpid(clientPid, &status, WNOHANG) != 0;
+    for (; secs < TIMEOUT_IN_SECONDS; ++secs, sleep(1)) {
+        auto serverTerminated = waitpid(serverPid, &serverStatus, WNOHANG) != 0;
+        auto clientTerminated = waitpid(clientPid, &clientStatus, WNOHANG) != 0;
         if (serverTerminated && clientTerminated) {
             break;
         }
@@ -44,6 +46,5 @@ int main() {
         return 1;
     }
 
-    return 0;
+    return serverStatus + clientStatus;
 }
-
