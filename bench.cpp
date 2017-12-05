@@ -6,6 +6,7 @@
 #include <exchangeableTransports/apps/PingPong.h>
 #include <exchangeableTransports/util/bench.h>
 #include <exchangeableTransports/util/pinthread.h>
+#include <exchangeableTransports/transports/RdmaTransport.h>
 
 using namespace std;
 
@@ -30,13 +31,13 @@ int main(int argc, char **argv) {
 //            }, 5);
 //        }
 //        sleep(1);
-        {
-            cout << "shared memory, ";
-            auto client = Ping(make_transportClient<SharedMemoryTransportClient>(), "/dev/shm/pingPong");
-            bench(SHAREDMEM_MESSAGES, [&]() {
-                client.ping();
-            }, 5);
-        }
+//        {
+//            cout << "shared memory, ";
+//            auto client = Ping(make_transportClient<SharedMemoryTransportClient>(), "/dev/shm/pingPong");
+//            bench(SHAREDMEM_MESSAGES, [&]() {
+//                client.ping();
+//            }, 5);
+//        }
 //        sleep(1);
 //        {
 //            cout << "tcp, ";
@@ -45,7 +46,14 @@ int main(int argc, char **argv) {
 //                client.ping();
 //            }, 5);
 //        }
-        cout << flush;
+//        sleep(1);
+        {
+            cout << "rdma, ";
+            auto client = Ping(make_transportClient<RdmaTransportClient>(), "127.0.0.1:1234");
+            bench(SHAREDMEM_MESSAGES, [&]() {
+                client.ping();
+            }, 5);
+        }
     } else {
         pinThread(1);
         cout << "implementation, messages, time, msg/s, user, system, total\n";
@@ -57,14 +65,14 @@ int main(int argc, char **argv) {
 //                server.pong();
 //            }, 5);
 //        }
-        {
-            cout << "shared memory, ";
-            auto server = Pong(make_transportServer<SharedMemoryTransportServer>("/dev/shm/pingPong"));
-            server.start();
-            bench(SHAREDMEM_MESSAGES, [&]() {
-                server.pong();
-            }, 5);
-        }
+//        {
+//            cout << "shared memory, ";
+//            auto server = Pong(make_transportServer<SharedMemoryTransportServer>("/dev/shm/pingPong"));
+//            server.start();
+//            bench(SHAREDMEM_MESSAGES, [&]() {
+//                server.pong();
+//            }, 5);
+//        }
 //        {
 //            cout << "tcp, ";
 //            auto server = Pong(make_transportServer<TcpTransportServer>("1234"));
@@ -73,7 +81,14 @@ int main(int argc, char **argv) {
 //                server.pong();
 //            }, 5);
 //        }
-        cout << flush;
+        {
+            cout << "rdma, ";
+            auto server = Pong(make_transportServer<RdmaTransportServer>("1234"));
+            server.start();
+            bench(SHAREDMEM_MESSAGES, [&]() {
+                server.pong();
+            }, 5);
+        }
     }
 
     return 0;

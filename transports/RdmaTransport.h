@@ -8,9 +8,8 @@
 #include <exchangeableTransports/datastructures/RDMAMessageBuffer.h>
 #include "Transport.h"
 
-constexpr const size_t BUFFER_SIZE = 16 * 1024 * 1024;
-
 class RdmaTransportServer : public TransportServer<RdmaTransportServer> {
+    static constexpr size_t BUFFER_SIZE = 16 * 1024 * 1024;
     const int sock;
     std::unique_ptr<RDMAMessageBuffer> rdma = nullptr;
 
@@ -37,6 +36,7 @@ public:
 };
 
 class RdmaTransportClient : public TransportClient<RdmaTransportClient> {
+    static constexpr size_t BUFFER_SIZE = 16 * 1024 * 1024;
     const int sock;
     std::unique_ptr<RDMAMessageBuffer> rdma = nullptr;
 

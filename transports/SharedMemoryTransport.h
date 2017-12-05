@@ -7,11 +7,10 @@
 #include <exchangeableTransports/datastructures/VirtualRingBuffer.h>
 #include "Transport.h"
 
-constexpr const size_t BUFFER_SIZE = 16 * 1024 * 1024;
-
 using SharedMemoryDatastructure = VirtualRingBuffer;
 
 class SharedMemoryTransportServer : public TransportServer<SharedMemoryTransportServer> {
+    static constexpr size_t BUFFER_SIZE = 16 * 1024 * 1024;
     const int initialSocket;
     const std::string file;
     const std::string remoteBufferName;
@@ -44,6 +43,7 @@ public:
 };
 
 class SharedMemoryTransportClient : public TransportClient<SharedMemoryTransportClient> {
+    static constexpr size_t BUFFER_SIZE = 16 * 1024 * 1024;
     const int socket;
     std::unique_ptr<SharedMemoryDatastructure> messageBuffer;
 
