@@ -12,8 +12,7 @@ class Ping {
     std::unique_ptr<TransportClient<T>> transport;
     std::array<uint8_t, data.size()> buffer;
 public:
-    explicit Ping(std::unique_ptr<TransportClient<T>> transport, std::string_view whereTo) : transport(
-            std::move(transport)) {
+    Ping(std::unique_ptr<TransportClient<T>> t, std::string_view whereTo) : transport(std::move(t)) {
         this->transport->connect(whereTo);
     }
 

@@ -27,6 +27,7 @@ set(SOURCE_FILES
         transports/DomainSocketsTransport.cpp
         transports/SharedMemoryTransport.cpp
         apps/PingPong.h
+        apps/KVStore.h
         util/bench.h
         util/virtualMemory.cpp
         datastructures/VirtualRingBuffer.cpp
