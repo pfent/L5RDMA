@@ -72,7 +72,7 @@ void TcpTransportClient::connect_impl(std::string_view connection) {
     sockaddr_in addr = {};
     addr.sin_family = AF_INET;
     addr.sin_port = htons(port);
-    inet_pton(AF_INET, ip.data(), &addr.sin_addr);
+    inet_pton(AF_INET, ip.c_str(), &addr.sin_addr);
 
     tcp_connect(socket, addr);
 }
