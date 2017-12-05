@@ -1,11 +1,11 @@
 #include <iostream>
-#include <chrono>
 #include <exchangeableTransports/transports/Transport.h>
 #include <exchangeableTransports/transports/TcpTransport.h>
 #include <exchangeableTransports/transports/DomainSocketsTransport.h>
 #include <exchangeableTransports/transports/SharedMemoryTransport.h>
 #include <exchangeableTransports/apps/PingPong.h>
 #include <exchangeableTransports/util/bench.h>
+#include <exchangeableTransports/util/pinthread.h>
 
 using namespace std;
 
@@ -20,6 +20,7 @@ int main(int argc, char **argv) {
     const auto isClient = argv[1][0] == 'c';
 
     if (isClient) {
+        pinThread(0);
         cout << "implementation, messages, time, msg/s, user, system, total\n";
 //        {
 //            cout << "domainsockets, ";
@@ -46,6 +47,7 @@ int main(int argc, char **argv) {
 //        }
         cout << flush;
     } else {
+        pinThread(1);
         cout << "implementation, messages, time, msg/s, user, system, total\n";
 //        {
 //            cout << "domainsockets, ";

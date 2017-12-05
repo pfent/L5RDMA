@@ -29,6 +29,7 @@ set(SOURCE_FILES
         apps/PingPong.h
         apps/KVStore.h
         util/bench.h
+        util/pinthread.h
         util/virtualMemory.cpp
         datastructures/VirtualRingBuffer.cpp
         datastructures/VirtualRDMARingBuffer.cpp
