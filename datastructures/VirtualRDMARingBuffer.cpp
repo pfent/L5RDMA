@@ -65,27 +65,26 @@ size_t VirtualRDMARingBuffer::receive(void *whereTo, size_t maxSize) {
         std::copy(&local.get()[fromOffset], &local.get()[fromOffset + howManyBytes], reinterpret_cast<uint8_t *>(dest));
     };
 
-    std::atomic<size_t> receiveSize;
-    std::atomic<size_t> checkMe;
+    size_t receiveSize;
+    size_t checkMe;
     do {
         readFromBuffer(startOfRead, &receiveSize, sizeof(receiveSize));
-        readFromBuffer(startOfRead + sizeof(receiveSize) + receiveSize.load(), &checkMe, sizeof(checkMe));
-    } while (checkMe.load() != validity);
+        readFromBuffer(startOfRead + sizeof(receiveSize) + receiveSize, &checkMe, sizeof(checkMe));
+    } while (checkMe != validity);
     // TODO probably need a second readFromBuffer of length, so we didn't by chance read the validity
-    const auto finalLength = receiveSize.load();
 
-    if (finalLength > maxSize) {
+    if (receiveSize > maxSize) {
         throw std::runtime_error{"plz only read whole messages for now!"}; // probably buffer partially read msgs
     }
 
-    readFromBuffer(startOfRead + sizeof(receiveSize), whereTo, finalLength);
+    readFromBuffer(startOfRead + sizeof(receiveSize), whereTo, receiveSize);
 
-    const auto sizeToRead = sizeof(maxSize) + finalLength + sizeof(validity);
-    std::fill(&local.get()[startOfRead], &local.get()[startOfRead + sizeToRead], 0);
+    const auto totalSizeRead = sizeof(receiveSize) + receiveSize + sizeof(validity);
+    std::fill(&local.get()[startOfRead], &local.get()[startOfRead + totalSizeRead], 0);
 
-    localReadPos.store(lastReadPos + sizeToRead, std::memory_order_release);
+    localReadPos.store(lastReadPos + receiveSize, std::memory_order_release);
 
-    return finalLength;
+    return receiveSize;
 }
 
 void VirtualRDMARingBuffer::waitUntilSendFree(size_t sizeToWrite) {
