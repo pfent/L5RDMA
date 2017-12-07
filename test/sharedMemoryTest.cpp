@@ -42,6 +42,8 @@ int main() {
 
     if (secs >= TIMEOUT_IN_SECONDS) {
         std::cerr << "timeout" << std::endl;
+        kill(serverPid, SIGTERM);
+        kill(clientPid, SIGTERM);
         return 1;
     }
 
