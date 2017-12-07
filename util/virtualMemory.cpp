@@ -10,6 +10,7 @@ WraparoundBuffer mmapSharedRingBuffer(const std::string &name, size_t size, bool
     return mmapRingBuffer(fd, size, init);
 }
 
+// see https://github.com/willemt/cbuffer
 WraparoundBuffer mmapRingBuffer(int fd, size_t size, bool init) {
     if (ftruncate(fd, size) != 0) {
         perror("ftruncate");

@@ -51,11 +51,8 @@ std::shared_ptr<T> malloc_shared(const std::string &name, size_t size, bool init
     return std::shared_ptr < T > (reinterpret_cast<T *>(ptr), deleter);
 }
 
-// see https://github.com/willemt/cbuffer
 WraparoundBuffer mmapRingBuffer(int fd, size_t size, bool init);
 
 WraparoundBuffer mmapSharedRingBuffer(const std::string &name, size_t size, bool init = false);
-
-WraparoundBuffer mmapRDMARingBuffer(const std::string &name, size_t size, bool init = false);
 
 #endif //EXCHANGABLETRANSPORTS_VIRTUALMEMORY_H
