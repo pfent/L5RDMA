@@ -6,12 +6,15 @@
 #include <string_view>
 #include <memory>
 #include <exchangeableTransports/datastructures/RDMAMessageBuffer.h>
+#include <exchangeableTransports/datastructures/VirtualRDMARingBuffer.h>
 #include "Transport.h"
+
+using RdmaMemoryDatastructure = VirtualRDMARingBuffer;
 
 class RdmaTransportServer : public TransportServer<RdmaTransportServer> {
     static constexpr size_t BUFFER_SIZE = 16 * 1024 * 1024;
     const int sock;
-    std::unique_ptr<RDMAMessageBuffer> rdma = nullptr;
+    std::unique_ptr<RdmaMemoryDatastructure> rdma = nullptr;
 
 public:
     explicit RdmaTransportServer(std::string_view port);
@@ -38,7 +41,7 @@ public:
 class RdmaTransportClient : public TransportClient<RdmaTransportClient> {
     static constexpr size_t BUFFER_SIZE = 16 * 1024 * 1024;
     const int sock;
-    std::unique_ptr<RDMAMessageBuffer> rdma = nullptr;
+    std::unique_ptr<RdmaMemoryDatastructure> rdma = nullptr;
 
 public:
     RdmaTransportClient();

@@ -15,7 +15,7 @@ RdmaTransportServer::~RdmaTransportServer() {
 void RdmaTransportServer::accept_impl() {
     sockaddr_in ignored{};
     auto acced = tcp_accept(sock, ignored);
-    rdma = std::make_unique<RDMAMessageBuffer>(BUFFER_SIZE, acced);
+    rdma = std::make_unique<RdmaMemoryDatastructure>(BUFFER_SIZE, acced);
 }
 
 void RdmaTransportServer::listen(uint16_t port) {
@@ -65,7 +65,7 @@ void RdmaTransportClient::connect_impl(std::string_view connection) {
     inet_pton(AF_INET, ip.c_str(), &addr.sin_addr);
 
     tcp_connect(sock, addr);
-    rdma = std::make_unique<RDMAMessageBuffer>(BUFFER_SIZE, sock);
+    rdma = std::make_unique<RdmaMemoryDatastructure>(BUFFER_SIZE, sock);
 }
 
 RdmaTransportClient::RdmaTransportClient() : sock(tcp_socket()) {}
