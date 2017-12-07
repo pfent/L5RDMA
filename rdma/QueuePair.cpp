@@ -75,8 +75,6 @@ QueuePair::QueuePair(Network &network, CompletionQueuePair &completionQueuePair,
       cerr << reason << endl;
       throw NetworkException(reason);
    }
-
-   cout << "create qp: " << qp << endl;
 }
 //---------------------------------------------------------------------------
 QueuePair::~QueuePair()

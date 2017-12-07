@@ -10,7 +10,6 @@ static void exchangeQPNAndConnect(int sock, rdma::Network &network, rdma::QueueP
     tcp_write(sock, &addr, sizeof(addr)); // Send own qpn to server
     tcp_read(sock, &addr, sizeof(addr)); // receive qpn
     queuePair.connect(addr);
-    std::cout << "connected to qpn " << addr.qpn << " lid: " << addr.lid << std::endl;
 }
 
 RDMANetworking::RDMANetworking(int sock) :
