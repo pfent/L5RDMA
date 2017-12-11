@@ -7,13 +7,12 @@ constexpr auto localRw = Perm::LocalWrite | Perm::RemoteWrite;
 
 VirtualRDMARingBuffer::VirtualRDMARingBuffer(size_t size, int sock) :
         size(size), bitmask(size - 1), net(sock),
-        local(mmapSharedRingBuffer("/rdmaLocal" + std::to_string(::getpid()), size, true)),
+        sendBuf(mmapSharedRingBuffer("/rdmaLocal" + std::to_string(::getpid()), size, true)),
         // Since we mapped twice the virtual memory, we can create memory regions of twice the size of the actual buffer
-        localSendMr(local.get(), size * 2, net.network.getProtectionDomain(), Perm::None),
-        // TODO: sendbuffer / receivebuffer is still not clearly marked
+        localSendMr(sendBuf.get(), size * 2, net.network.getProtectionDomain(), Perm::None),
         localReadPosMr(&localReadPos, sizeof(localReadPos), net.network.getProtectionDomain(), Perm::RemoteRead),
-        remote(mmapSharedRingBuffer("/rdmaRemote" + std::to_string(::getpid()), size, true)),
-        localReceiveMr(remote.get(), size * 2, net.network.getProtectionDomain(), localRw),
+        receiveBuf(mmapSharedRingBuffer("/rdmaRemote" + std::to_string(::getpid()), size, true)),
+        localReceiveMr(receiveBuf.get(), size * 2, net.network.getProtectionDomain(), localRw),
         remoteReadPosMr(&remoteReadPos, sizeof(remoteReadPos), net.network.getProtectionDomain(), Perm::RemoteRead) {
     const bool powerOfTwo = (size != 0) && !(size & (size - 1));
     if (not powerOfTwo) {
@@ -32,7 +31,7 @@ void VirtualRDMARingBuffer::send(const uint8_t *data, size_t length) {
     auto whereToWrite = startOfWrite;
     const auto write = [&](auto what, auto howManyBytes) {
         auto whatPtr = reinterpret_cast<const uint8_t *>(what);
-        std::copy(whatPtr, &whatPtr[howManyBytes], &local.get()[whereToWrite]);
+        std::copy(whatPtr, &whatPtr[howManyBytes], &sendBuf.get()[whereToWrite]);
         whereToWrite += howManyBytes;
     };
 
@@ -61,7 +60,7 @@ size_t VirtualRDMARingBuffer::receive(void *whereTo, size_t maxSize) {
     const auto lastReadPos = localReadPos.load();
     const auto startOfRead = lastReadPos & bitmask;
     const auto readFromBuffer = [&](auto fromOffset, auto dest, auto howManyBytes) {
-        std::copy(&local.get()[fromOffset], &local.get()[fromOffset + howManyBytes], reinterpret_cast<uint8_t *>(dest));
+        std::copy(&receiveBuf.get()[fromOffset], &receiveBuf.get()[fromOffset + howManyBytes], reinterpret_cast<uint8_t *>(dest));
     };
 
     size_t receiveSize;
@@ -79,7 +78,7 @@ size_t VirtualRDMARingBuffer::receive(void *whereTo, size_t maxSize) {
     readFromBuffer(startOfRead + sizeof(receiveSize), whereTo, receiveSize);
 
     const auto totalSizeRead = sizeof(receiveSize) + receiveSize + sizeof(validity);
-    std::fill(&local.get()[startOfRead], &local.get()[startOfRead + totalSizeRead], 0);
+    std::fill(&receiveBuf.get()[startOfRead], &receiveBuf.get()[startOfRead + totalSizeRead], 0);
 
     localReadPos.store(lastReadPos + receiveSize, std::memory_order_release);
 

@@ -18,12 +18,12 @@ class VirtualRDMARingBuffer {
 
     size_t sendPos = 0;
     std::atomic<size_t> localReadPos = 0;
-    WraparoundBuffer local;
+    WraparoundBuffer sendBuf;
     rdma::MemoryRegion localSendMr;
     rdma::MemoryRegion localReadPosMr;
 
     std::atomic<size_t> remoteReadPos = 0;
-    WraparoundBuffer remote;
+    WraparoundBuffer receiveBuf;
     rdma::MemoryRegion localReceiveMr;
     rdma::MemoryRegion remoteReadPosMr;
 
