@@ -21,7 +21,7 @@ VirtualRDMARingBuffer::VirtualRDMARingBuffer(size_t size, int sock) :
         throw std::runtime_error{"size should be a power of 2"};
     }
 
-    sendRmrInfo(sock, localReadPosMr, remoteReadPosMr);
+    sendRmrInfo(sock, localSendMr, localReadPosMr);
     receiveAndSetupRmr(sock, remoteReceiveRmr, remoteReadPosRmr);
 }
 
@@ -46,7 +46,7 @@ void VirtualRDMARingBuffer::send(const uint8_t *data, size_t length) {
 
     // then request it to be sent via RDMA
     const auto sendSlice = localSendMr.slice(startOfWrite, sizeToWrite);
-    const auto remoteSlice = remoteReadPosRmr.slice(startOfWrite);
+    const auto remoteSlice = remoteReceiveRmr.slice(startOfWrite);
     rdma::WriteWorkRequestBuilder(sendSlice, remoteSlice, false)
             .setInline(sendSlice.size <= net.queuePair.getMaxInlineSize())
             .send(net.queuePair);
