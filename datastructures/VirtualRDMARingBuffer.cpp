@@ -1,5 +1,6 @@
 #include "VirtualRDMARingBuffer.h"
 #include <exchangeableTransports/rdma/WorkRequest.hpp>
+#include <iostream>
 
 using Perm = rdma::MemoryRegion::Permission;
 
@@ -80,7 +81,7 @@ size_t VirtualRDMARingBuffer::receive(void *whereTo, size_t maxSize) {
     const auto totalSizeRead = sizeof(receiveSize) + receiveSize + sizeof(validity);
     std::fill(&receiveBuf.get()[startOfRead], &receiveBuf.get()[startOfRead + totalSizeRead], 0);
 
-    localReadPos.store(lastReadPos + receiveSize, std::memory_order_release);
+    localReadPos.store(lastReadPos + totalSizeRead, std::memory_order_release);
 
     return receiveSize;
 }
