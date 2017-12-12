@@ -46,8 +46,8 @@ void VirtualRDMARingBuffer::send(const uint8_t *data, size_t length) {
     // then request it to be sent via RDMA
     const auto sendSlice = localSendMr.slice(startOfWrite, sizeToWrite);
     const auto remoteSlice = remoteReceiveRmr.slice(startOfWrite);
-    rdma::WriteWorkRequestBuilder(sendSlice, remoteSlice, false)
-            .setInline(sendSlice.size <= net.queuePair.getMaxInlineSize())
+    rdma::WriteWorkRequestBuilder(sendSlice, remoteSlice, false) // TODO: probably compare this with librdmacm and debug the OOM
+            .setInline(sendSlice.size <= net.queuePair.getMaxInlineSize()) // TODO: maybe the inline causes the OOM?
             .send(net.queuePair);
 
     // finally, update sendPos
