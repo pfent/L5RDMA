@@ -7,10 +7,15 @@
 
 using namespace std;
 
-const size_t MESSAGES = 4 * 1024; // ~ 1s
-const size_t TIMEOUT_IN_SECONDS = 5;
+size_t MESSAGES = 4 * 1024; // ~ 1s
+size_t TIMEOUT_IN_SECONDS = 5;
 
-int main() {
+int main(int, const char** args) {
+    if(string(args[0]).find("rdmaLargeTest") != string::npos) {
+        MESSAGES *= 1024;
+        TIMEOUT_IN_SECONDS *= 1024;
+    }
+
     const auto serverPid = fork();
     if (serverPid == 0) {
         auto pong = Pong(make_transportServer<RdmaTransportServer>("1234"));

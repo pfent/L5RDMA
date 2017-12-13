@@ -66,14 +66,6 @@ namespace rdma {
         else
             wr->send_flags = wr->send_flags & ~IBV_SEND_SIGNALED;
     }
-    /*
-     * TODO: this seems to be bogus
-     * https://thegeekinthecorner.wordpress.com/2010/09/28/rdma-read-and-write-with-ib-verbs/
-     * You can prevent the generation of completion queue entries (CQEs) for successful sends by creating the queue pair
-     * with sq_sig_all set to 0 (which is how my code sets up the queue pair) and by not setting IBV_SEND_SIGNALED in
-     * the send_flags member of struct ibv_send_wr. Note, however, that a CQE will still be generated if the operation
-     * failed.
-     */
 
 //---------------------------------------------------------------------------
     bool WorkRequest::getCompletion() const {
