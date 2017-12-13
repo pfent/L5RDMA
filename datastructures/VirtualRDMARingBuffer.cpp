@@ -32,7 +32,8 @@ void VirtualRDMARingBuffer::send(const uint8_t *data, size_t length) {
     auto whereToWrite = startOfWrite;
     const auto write = [&](auto what, auto howManyBytes) {
         auto whatPtr = reinterpret_cast<const uint8_t *>(what);
-        std::copy(whatPtr, &whatPtr[howManyBytes], &sendBuf.get()[whereToWrite]);
+        volatile auto dest = &sendBuf.get()[whereToWrite];
+        std::copy(whatPtr, &whatPtr[howManyBytes], dest);
         whereToWrite += howManyBytes;
     };
 
@@ -61,7 +62,9 @@ size_t VirtualRDMARingBuffer::receive(void *whereTo, size_t maxSize) {
     const auto lastReadPos = localReadPos.load();
     const auto startOfRead = lastReadPos & bitmask;
     const auto readFromBuffer = [&](auto fromOffset, auto dest, auto howManyBytes) {
-        std::copy(&receiveBuf.get()[fromOffset], &receiveBuf.get()[fromOffset + howManyBytes], reinterpret_cast<uint8_t *>(dest));
+        volatile auto begin = &receiveBuf.get()[fromOffset];
+        volatile auto end = &receiveBuf.get()[fromOffset + howManyBytes];
+        std::copy(begin, end, reinterpret_cast<uint8_t *>(dest));
     };
 
     size_t receiveSize;
