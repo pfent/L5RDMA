@@ -12,8 +12,8 @@ size_t TIMEOUT_IN_SECONDS = 5;
 
 int main(int, const char** args) {
     if(string(args[0]).find("rdmaLargeTest") != string::npos) {
-        MESSAGES *= 1024;
-        TIMEOUT_IN_SECONDS *= 1024;
+        MESSAGES *= 32;
+        TIMEOUT_IN_SECONDS *= 32;
     }
 
     const auto serverPid = fork();

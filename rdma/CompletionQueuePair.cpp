@@ -241,11 +241,9 @@ pair<bool, uint64_t> CompletionQueuePair::waitForCompletion(bool restricted, boo
 uint64_t CompletionQueuePair::pollSendCompletionQueue()
 /// Poll the send completion queue
 {
-    int status;
-
     // Poll for a work completion
-   ibv_wc completion{};
-    status = ::ibv_poll_cq(sendQueue, 1, &completion);
+    ibv_wc completion{};
+    auto status = ::ibv_poll_cq(sendQueue, 1, &completion);
     if (status == 0) {
         return numeric_limits<uint64_t>::max();
     }
@@ -261,9 +259,9 @@ uint64_t CompletionQueuePair::pollSendCompletionQueue()
     }
 }
 
-    uint64_t CompletionQueuePair::pollSendCompletionQueue(int type) {
-        return pollCompletionQueue(sendQueue, type);
-    }
+ uint64_t CompletionQueuePair::pollSendCompletionQueue(int type) {
+     return pollCompletionQueue(sendQueue, type);
+ }
 //---------------------------------------------------------------------------
 uint64_t CompletionQueuePair::pollRecvCompletionQueue()
 /// Poll the receive completion queue
