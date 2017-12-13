@@ -112,9 +112,15 @@ void RDMAMessageBuffer::send(const uint8_t *data, size_t length, bool inln) {
     wraparound(size, sizeToWrite, startOfWrite, [&](auto, auto beginPos, auto endPos) {
         const auto sendSlice = localSend.slice(beginPos, endPos - beginPos);
         const auto remoteSlice = remoteReceive.slice(beginPos);
-        WriteWorkRequestBuilder(sendSlice, remoteSlice, false)
+        // occasionally clear the queue (this can probably also happen only every 16k times)
+        const auto shouldClearQueue = messageCounter % (4 * 1024) == 0;
+        WriteWorkRequestBuilder(sendSlice, remoteSlice, shouldClearQueue)
                 .setInline(inln && sendSlice.size <= net.queuePair.getMaxInlineSize())
                 .send(net.queuePair);
+        if (shouldClearQueue) {
+            net.queuePair.getCompletionQueuePair().waitForCompletion();
+        }
+        ++messageCounter;
     });
 }
 

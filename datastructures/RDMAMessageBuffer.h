@@ -31,6 +31,7 @@ private:
     std::unique_ptr<volatile uint8_t[]> receiveBuffer;
     std::atomic<size_t> readPos{0};
     std::unique_ptr<uint8_t[]> sendBuffer;
+    size_t messageCounter = 0;
     size_t sendPos = 0;
     volatile size_t currentRemoteReceive = 0;
     rdma::MemoryRegion localSend;

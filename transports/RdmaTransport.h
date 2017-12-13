@@ -9,7 +9,7 @@
 #include <exchangeableTransports/datastructures/VirtualRDMARingBuffer.h>
 #include "Transport.h"
 
-using RdmaMemoryDatastructure = VirtualRDMARingBuffer;
+using RdmaMemoryDatastructure = VirtualRDMARingBuffer; // TODO: make this a template and benchmark the difference
 
 class RdmaTransportServer : public TransportServer<RdmaTransportServer> {
     static constexpr size_t BUFFER_SIZE = 16 * 1024 * 1024;
