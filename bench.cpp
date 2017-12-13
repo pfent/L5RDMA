@@ -11,7 +11,7 @@
 using namespace std;
 
 const size_t MESSAGES = 256 * 1024; // ~ 1s
-const size_t SHAREDMEM_MESSAGES = 4 * 1024;
+const size_t SHAREDMEM_MESSAGES = 4 * 1024 * 128;
 
 int main(int argc, char **argv) {
     if (argc < 2) {

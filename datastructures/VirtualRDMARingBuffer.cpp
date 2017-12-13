@@ -48,11 +48,15 @@ void VirtualRDMARingBuffer::send(const uint8_t *data, size_t length) {
     // then request it to be sent via RDMA
     const auto sendSlice = localSendMr.slice(startOfWrite, sizeToWrite);
     const auto remoteSlice = remoteReceiveRmr.slice(startOfWrite);
-    rdma::WriteWorkRequestBuilder(sendSlice, remoteSlice, true)
+    // occasionally clear the queue (this can probably also happen only every 16k times)
+    const auto shouldClearQueue = messageCounter % (4 * 1024) == 0;
+    rdma::WriteWorkRequestBuilder(sendSlice, remoteSlice, shouldClearQueue)
             .setInline(sendSlice.size <= net.queuePair.getMaxInlineSize())
             .send(net.queuePair);
-
-    net.queuePair.getCompletionQueuePair().waitForCompletion();
+    if (shouldClearQueue) {
+        net.queuePair.getCompletionQueuePair().waitForCompletion();
+    }
+    ++messageCounter;
 
     // finally, update sendPos
     sendPos += sizeToWrite;
@@ -73,8 +77,8 @@ size_t VirtualRDMARingBuffer::receive(void *whereTo, size_t maxSize) {
     size_t receiveSize;
     size_t checkMe;
     do {
-        readFromBuffer(startOfRead, &receiveSize, sizeof(receiveSize));
-        readFromBuffer(startOfRead + sizeof(receiveSize) + receiveSize, &checkMe, sizeof(checkMe));
+        receiveSize = *reinterpret_cast<volatile size_t *>(&receiveBuf.get()[startOfRead]);
+        checkMe = *reinterpret_cast<volatile size_t *>(&receiveBuf.get()[startOfRead + sizeof(size_t) + receiveSize]);
     } while (checkMe != validity);
     // TODO probably need a second readFromBuffer of length, so we didn't by chance read the validity
 

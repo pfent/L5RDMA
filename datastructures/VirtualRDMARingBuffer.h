@@ -16,6 +16,7 @@ class VirtualRDMARingBuffer {
     const size_t bitmask;
     RDMANetworking net;
 
+    size_t messageCounter = 0;
     size_t sendPos = 0;
     std::atomic<size_t> localReadPos = 0;
     WraparoundBuffer sendBuf;
