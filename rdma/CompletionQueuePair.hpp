@@ -57,6 +57,8 @@ namespace rdma {
 
         std::pair<bool, uint64_t> waitForCompletion(bool restrict, bool onlySend);
 
+        std::vector<ibv_cq *> eventsToAck;
+
     public:
         /// Ctor
         CompletionQueuePair(Network &network);
@@ -82,7 +84,7 @@ namespace rdma {
         uint64_t pollRecvCompletionQueueBlocking();
 
         /// Wait for a work request completion
-        std::pair<bool, uint64_t> waitForCompletion();
+        void waitForCompletion();
 
         uint64_t waitForCompletionSend();
 

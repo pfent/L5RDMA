@@ -109,10 +109,12 @@ CompletionQueuePair::CompletionQueuePair(Network &network)
 //---------------------------------------------------------------------------
 CompletionQueuePair::~CompletionQueuePair()
 {
-   int status;
+   for(auto event : eventsToAck) {
+      ::ibv_ack_cq_events(event, 1);
+   }
 
    // Destroy the completion queues
-   status = ::ibv_destroy_cq(sendQueue);
+   int status = ::ibv_destroy_cq(sendQueue);
    if (status != 0) {
       string reason = "destroying the send completion queue failed with error " + to_string(errno) + ": " + strerror(errno);
       cerr << reason << endl;
@@ -309,10 +311,46 @@ uint64_t CompletionQueuePair::pollRecvCompletionQueueBlocking()
    return pollCompletionQueueBlocking(receiveQueue, IBV_WC_RECV);
 }
 //---------------------------------------------------------------------------
-pair<bool, uint64_t> CompletionQueuePair::waitForCompletion()
+void CompletionQueuePair::waitForCompletion()
 /// Wait for a work completion
 {
-   return waitForCompletion(false, false);
+    // Wait for completion queue event
+    ibv_cq *event;
+    void *ctx;
+    if (::ibv_get_cq_event(channel, &event, &ctx) != 0) {
+        string reason = "receiving the completion queue event failed with error " + to_string(errno) + ": " + strerror(errno);
+        cerr << reason << endl;
+        throw NetworkException(reason);
+    }
+    eventsToAck.push_back(event);
+
+    // Request a completion queue event
+    if (::ibv_req_notify_cq(event, 0) != 0) {
+        string reason = "requesting a completion queue event failed with error " + to_string(errno) + ": " + strerror(errno);
+        cerr << reason << endl;
+        throw NetworkException(reason);
+    }
+
+    // Poll all work completions
+    ibv_wc completion;
+    for(;;) {
+        auto status = ::ibv_poll_cq(event, 1, &completion);
+
+        if (status < 0) {
+            string reason = "failed to poll completions";
+            cerr << reason << endl;
+            throw NetworkException(reason);
+        }
+        if (status == 0) {
+            break;
+        }
+        if (completion.status != IBV_WC_SUCCESS) {
+            string reason = "unexpected completion status " + to_string(completion.status) + ": " + ibv_wc_status_str(completion.status);
+            cerr << reason << endl;
+            throw NetworkException(reason);
+        }
+    };
+
 }
 //---------------------------------------------------------------------------
 uint64_t CompletionQueuePair::waitForCompletionSend()

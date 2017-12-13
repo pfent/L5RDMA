@@ -10,7 +10,8 @@ VirtualRDMARingBuffer::VirtualRDMARingBuffer(size_t size, int sock) :
         size(size), bitmask(size - 1), net(sock),
         sendBuf(mmapSharedRingBuffer("/rdmaLocal" + std::to_string(::getpid()), size, true)),
         // Since we mapped twice the virtual memory, we can create memory regions of twice the size of the actual buffer
-        localSendMr(sendBuf.get(), size * 2, net.network.getProtectionDomain(), Perm::All), // TODO: All permissions is probably too much
+        localSendMr(sendBuf.get(), size * 2, net.network.getProtectionDomain(),
+                    Perm::All), // TODO: All permissions is probably too much
         localReadPosMr(&localReadPos, sizeof(localReadPos), net.network.getProtectionDomain(), Perm::All),
         receiveBuf(mmapSharedRingBuffer("/rdmaRemote" + std::to_string(::getpid()), size, true)),
         localReceiveMr(receiveBuf.get(), size * 2, net.network.getProtectionDomain(), Perm::All),
@@ -47,8 +48,8 @@ void VirtualRDMARingBuffer::send(const uint8_t *data, size_t length) {
     // then request it to be sent via RDMA
     const auto sendSlice = localSendMr.slice(startOfWrite, sizeToWrite);
     const auto remoteSlice = remoteReceiveRmr.slice(startOfWrite);
-    rdma::WriteWorkRequestBuilder(sendSlice, remoteSlice, true) // TODO: probably compare this with librdmacm and debug the OOM
-            .setInline(sendSlice.size <= net.queuePair.getMaxInlineSize()) // TODO: maybe the inline causes the OOM?
+    rdma::WriteWorkRequestBuilder(sendSlice, remoteSlice, true)
+            .setInline(sendSlice.size <= net.queuePair.getMaxInlineSize())
             .send(net.queuePair);
 
     net.queuePair.getCompletionQueuePair().waitForCompletion();

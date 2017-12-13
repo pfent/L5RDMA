@@ -11,7 +11,7 @@
 using namespace std;
 
 const size_t MESSAGES = 256 * 1024; // ~ 1s
-const size_t SHAREDMEM_MESSAGES = 4 * 1024 * 1024;
+const size_t SHAREDMEM_MESSAGES = 4 * 1024;
 
 int main(int argc, char **argv) {
     if (argc < 2) {
@@ -60,7 +60,7 @@ int main(int argc, char **argv) {
             auto client = Ping(make_transportClient<RdmaTransportClient>(), "127.0.0.1:1234");
             bench(SHAREDMEM_MESSAGES, [&]() {
                 client.ping();
-            }, 5);
+            }, 1);
         }
     } else {
         pinThread(1);
@@ -95,7 +95,7 @@ int main(int argc, char **argv) {
             server.start();
             bench(SHAREDMEM_MESSAGES, [&]() {
                 server.pong();
-            }, 5);
+            }, 1);
         }
     }
 
