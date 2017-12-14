@@ -1,9 +1,6 @@
 #ifndef EXCHANGABLETRANSPORTS_SHAREDMEMORYTRANSPORT_H
 #define EXCHANGABLETRANSPORTS_SHAREDMEMORYTRANSPORT_H
 
-
-#include <exchangeableTransports/datastructures/SharedMemoryMessageBuffer.h>
-#include <exchangeableTransports/datastructures/SharedMemoryMessageQueue.h>
 #include <exchangeableTransports/datastructures/VirtualRingBuffer.h>
 #include "Transport.h"
 

@@ -148,7 +148,7 @@ void QueuePair::connect(const Address &address, unsigned retryCount)
 }
 // -------------------------------------------------------------------------
 void QueuePair::postWorkRequest(WorkRequest &workRequest)
-{ // TODO: keep track of outstanding work requests
+{
    ibv_send_wr *badWorkRequest = nullptr;
    int status = ::ibv_post_send(qp, workRequest.get(), &badWorkRequest);
    if (status != 0) {

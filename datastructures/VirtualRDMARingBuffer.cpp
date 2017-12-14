@@ -53,7 +53,7 @@ void VirtualRDMARingBuffer::send(const uint8_t *data, size_t length) {
             .setInline(sendSlice.size <= net.queuePair.getMaxInlineSize())
             .send(net.queuePair);
     if (shouldClearQueue) {
-        net.queuePair.getCompletionQueuePair().waitForCompletion();
+        net.completionQueue.waitForCompletion();
     }
     ++messageCounter;
 
@@ -79,7 +79,7 @@ size_t VirtualRDMARingBuffer::receive(void *whereTo, size_t maxSize) {
         receiveSize = *reinterpret_cast<volatile size_t *>(&receiveBuf.get()[startOfRead]);
         checkMe = *reinterpret_cast<volatile size_t *>(&receiveBuf.get()[startOfRead + sizeof(size_t) + receiveSize]);
     } while (checkMe != validity);
-    // TODO probably need a second readFromBuffer of length, so we didn't by chance read the validity
+    // There might be a small chance, the length hadn't been written fully, yet and the validity somehow appeared in the data
 
     if (receiveSize > maxSize) {
         throw std::runtime_error{"plz only read whole messages for now!"}; // probably buffer partially read msgs
