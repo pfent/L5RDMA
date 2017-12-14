@@ -18,8 +18,6 @@ set(SOURCE_FILES
         util/tcpWrapper.cpp
         util/domainSocketsWrapper.cpp
         datastructures/RDMAMessageBuffer.cpp
-        datastructures/SharedMemoryMessageBuffer.cpp
-        datastructures/SharedMemoryMessageQueue.cpp
         transports/Transport.h
         transports/Buffer.h
         transports/TcpTransport.cpp
@@ -46,6 +44,9 @@ include_directories(..)
 
 add_executable(bench bench.cpp ${SOURCE_FILES})
 target_link_libraries(bench ${LINK_LIBRARIES})
+
+add_executable(kv kvbench.cpp ${SOURCE_FILES})
+target_link_libraries(kv ${LINK_LIBRARIES})
 
 file(GLOB tests "test/*Test.cpp")
 foreach (test ${tests})
