@@ -63,7 +63,7 @@ namespace rdma {
 
         void connect(const Address &address, unsigned retryCount = 0);
 
-        void postWorkRequest(const WorkRequest &workRequest);
+        void postWorkRequest(WorkRequest &workRequest);
 
         uint32_t getMaxInlineSize() const;
 

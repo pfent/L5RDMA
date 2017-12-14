@@ -22,10 +22,9 @@
 //---------------------------------------------------------------------------
 #include <memory>
 #include <vector>
+#include <infiniband/verbs.h>
 #include "MemoryRegion.hpp"
 
-//---------------------------------------------------------------------------
-struct ibv_send_wr;
 //---------------------------------------------------------------------------
 namespace rdma {
     class QueuePair;
@@ -40,22 +39,21 @@ namespace rdma {
         friend class QueuePair;
 
     protected:
-        std::unique_ptr<ibv_send_wr> wr;
+        ibv_send_wr wr;
+        ibv_sge sge;
         const WorkRequest *next;
 
         WorkRequest();
-
-        WorkRequest(const WorkRequest &) = delete;
 
         WorkRequest(WorkRequest &&) = default;
 
         WorkRequest &operator=(WorkRequest &&) = default;
 
-        const WorkRequest &operator=(const WorkRequest &) = delete;
-
-        ~WorkRequest();
-
     public:
+
+        WorkRequest(const WorkRequest &) = delete;
+
+        const WorkRequest &operator=(const WorkRequest &) = delete;
 
         /// Clear all set data and restore to original state after construction
         void reset();
@@ -71,7 +69,9 @@ namespace rdma {
         bool getCompletion() const;
 
         /// Build a chain of work requests
-        void setNextWorkRequest(const WorkRequest *workRequest);
+        void setNextWorkRequest(WorkRequest *workRequest);
+
+        ibv_send_wr* get();
 
         const WorkRequest *getNextWorkRequest();
     };
@@ -92,10 +92,6 @@ namespace rdma {
         void setLocalAddress(const MemoryRegion &localAddress);
 
         void setLocalAddress(const MemoryRegion::Slice &localAddress);
-
-        /// Set a variable number of MemoryRegions, from with data is sent / written to in a single request.
-        /// The total message size then is the sum of all MRs
-        void setLocalAddress(const std::vector<MemoryRegion::Slice> localAddresses);
     };
 
 //---------------------------------------------------------------------------
@@ -117,7 +113,7 @@ namespace rdma {
         ReadWorkRequestBuilder(const MemoryRegion::Slice &localAddress, const RemoteMemoryRegion &remoteAddress,
                                bool completion);
 
-        ReadWorkRequestBuilder &setNextWorkRequest(const WorkRequest *workRequest);
+        ReadWorkRequestBuilder &setNextWorkRequest(WorkRequest *workRequest);
 
         void send(QueuePair &qp);
 
@@ -146,7 +142,7 @@ namespace rdma {
         WriteWorkRequestBuilder(const MemoryRegion::Slice &localAddress, const RemoteMemoryRegion &remoteAddress,
                                 bool completion);
 
-        WriteWorkRequestBuilder &setNextWorkRequest(const WorkRequest *workRequest);
+        WriteWorkRequestBuilder &setNextWorkRequest(WorkRequest *workRequest);
 
         WriteWorkRequestBuilder &send(QueuePair &qp);
 
@@ -191,7 +187,7 @@ namespace rdma {
                                             const RemoteMemoryRegion &remoteAddress, uint64_t addValue,
                                             bool completion);
 
-        AtomicFetchAndAddWorkRequestBuilder &setNextWorkRequest(const WorkRequest *workRequest);
+        AtomicFetchAndAddWorkRequestBuilder &setNextWorkRequest(WorkRequest *workRequest);
 
         void send(QueuePair &qp);
 

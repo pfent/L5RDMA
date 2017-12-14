@@ -22,68 +22,65 @@
 #include "Network.hpp"
 #include "QueuePair.hpp"
 //---------------------------------------------------------------------------
-#include <infiniband/verbs.h>
 #include <cstring>
 //---------------------------------------------------------------------------
 using namespace std;
 //---------------------------------------------------------------------------
 namespace rdma {
 //---------------------------------------------------------------------------
-    WorkRequest::WorkRequest() {
-        wr = unique_ptr<ibv_send_wr>(new ibv_send_wr());
-        wr->sg_list = new ibv_sge();
-        reset();
-    }
-
-//---------------------------------------------------------------------------
-    WorkRequest::~WorkRequest() {
-        delete wr->sg_list;
+    WorkRequest::WorkRequest() : wr{}, sge{} {
+        wr.sg_list = &sge;
+        wr.num_sge = 1;
     }
 
 //---------------------------------------------------------------------------
     void WorkRequest::reset() {
-        auto tmp = wr->sg_list;
-        memset(wr.get(), 0, sizeof(ibv_send_wr));
-        wr->sg_list = tmp;
-        wr->num_sge = 1;
-        memset(wr->sg_list, 0, sizeof(ibv_sge));
+        auto tmp = wr.sg_list;
+        memset(&wr, 0, sizeof(ibv_send_wr));
+        wr.sg_list = tmp;
+        wr.num_sge = 1;
+        memset(wr.sg_list, 0, sizeof(ibv_sge));
     }
 
 //---------------------------------------------------------------------------
     void WorkRequest::setId(uint64_t id) {
-        wr->wr_id = id;
+        wr.wr_id = id;
     }
 
 //---------------------------------------------------------------------------
     uint64_t WorkRequest::getId() const {
-        return wr->wr_id;
+        return wr.wr_id;
     }
 
 //---------------------------------------------------------------------------
     void WorkRequest::setCompletion(bool flag) {
         if (flag)
-            wr->send_flags = wr->send_flags | IBV_SEND_SIGNALED;
+            wr.send_flags = wr.send_flags | IBV_SEND_SIGNALED;
         else
-            wr->send_flags = wr->send_flags & ~IBV_SEND_SIGNALED;
+            wr.send_flags = wr.send_flags & ~IBV_SEND_SIGNALED;
     }
 
 //---------------------------------------------------------------------------
     bool WorkRequest::getCompletion() const {
-        return wr->send_flags & IBV_SEND_SIGNALED;
+        return wr.send_flags & IBV_SEND_SIGNALED;
     }
 
 //---------------------------------------------------------------------------
-    void WorkRequest::setNextWorkRequest(const WorkRequest *workRequest) {
+    void WorkRequest::setNextWorkRequest(WorkRequest *workRequest) {
         next = workRequest;
         if (next == nullptr)
-            wr->next = nullptr;
+            wr.next = nullptr;
         else
-            wr->next = workRequest->wr.get();
+            wr.next = &workRequest->wr;
     }
 
 //---------------------------------------------------------------------------
     const WorkRequest *WorkRequest::getNextWorkRequest() {
         return next;
+    }
+
+    ibv_send_wr *WorkRequest::get() {
+        return &wr;
     }
 
 //---------------------------------------------------------------------------
@@ -92,53 +89,40 @@ namespace rdma {
 
 //---------------------------------------------------------------------------
     void RDMAWorkRequest::setLocalAddress(const MemoryRegion &localAddress) {
-        wr->sg_list->addr = reinterpret_cast<uintptr_t>(localAddress.address);
-        wr->sg_list->length = localAddress.size;
-        wr->sg_list->lkey = localAddress.key->lkey;
+        wr.sg_list->addr = reinterpret_cast<uintptr_t>(localAddress.address);
+        wr.sg_list->length = localAddress.size;
+        wr.sg_list->lkey = localAddress.key->lkey;
     }
 
 //---------------------------------------------------------------------------
     void RDMAWorkRequest::setLocalAddress(const MemoryRegion::Slice &localAddress) {
-        wr->sg_list->addr = reinterpret_cast<uintptr_t>(localAddress.address);
-        wr->sg_list->length = localAddress.size;
-        wr->sg_list->lkey = localAddress.lkey;
+        wr.sg_list->addr = reinterpret_cast<uintptr_t>(localAddress.address);
+        wr.sg_list->length = localAddress.size;
+        wr.sg_list->lkey = localAddress.lkey;
     }
 
 //---------------------------------------------------------------------------
     void RDMAWorkRequest::setRemoteAddress(const RemoteMemoryRegion &remoteAddress) {
-        wr->wr.rdma.remote_addr = remoteAddress.address;
-        wr->wr.rdma.rkey = remoteAddress.key;
-    }
-
-    void RDMAWorkRequest::setLocalAddress(const std::vector<MemoryRegion::Slice> localAddresses) {
-        delete wr->sg_list;
-        wr->sg_list = new ibv_sge[localAddresses.size()]();
-        wr->num_sge = localAddresses.size();
-        for (size_t i = 0; i < localAddresses.size(); ++i) {
-            wr->sg_list[i].addr = reinterpret_cast<uintptr_t>(localAddresses[i].address);
-            wr->sg_list[i].length = localAddresses[i].size;
-            wr->sg_list[i].lkey = localAddresses[i].lkey;
-        }
-
-        // TODO: manage a sensible way of keeping track of the new'ed array
+        wr.wr.rdma.remote_addr = remoteAddress.address;
+        wr.wr.rdma.rkey = remoteAddress.key;
     }
 
 //---------------------------------------------------------------------------
     WriteWorkRequest::WriteWorkRequest() {
-        wr->opcode = IBV_WR_RDMA_WRITE;
+        wr.opcode = IBV_WR_RDMA_WRITE;
     }
 
     void WriteWorkRequest::setSendInline(bool flag) {
         if (flag) {
-            wr->send_flags |= IBV_SEND_INLINE;
+            wr.send_flags |= IBV_SEND_INLINE;
         } else {
-            wr->send_flags &= ~IBV_SEND_INLINE;
+            wr.send_flags &= ~IBV_SEND_INLINE;
         }
     }
 
 //---------------------------------------------------------------------------
     ReadWorkRequest::ReadWorkRequest() {
-        wr->opcode = IBV_WR_RDMA_READ;
+        wr.opcode = IBV_WR_RDMA_READ;
     }
 
 //---------------------------------------------------------------------------
@@ -147,61 +131,61 @@ namespace rdma {
 
 //---------------------------------------------------------------------------
     void AtomicWorkRequest::setRemoteAddress(const RemoteMemoryRegion &remoteAddress) {
-        wr->wr.atomic.remote_addr = remoteAddress.address;
-        wr->wr.atomic.rkey = remoteAddress.key;
+        wr.wr.atomic.remote_addr = remoteAddress.address;
+        wr.wr.atomic.rkey = remoteAddress.key;
     }
 
 //---------------------------------------------------------------------------
     void AtomicWorkRequest::setLocalAddress(const MemoryRegion &localAddress) {
-        wr->sg_list->addr = reinterpret_cast<uintptr_t>(localAddress.address);
-        wr->sg_list->length = localAddress.size;
-        wr->sg_list->lkey = localAddress.key->lkey;
+        wr.sg_list->addr = reinterpret_cast<uintptr_t>(localAddress.address);
+        wr.sg_list->length = localAddress.size;
+        wr.sg_list->lkey = localAddress.key->lkey;
     }
 
     void AtomicWorkRequest::setLocalAddress(const MemoryRegion::Slice &localAddress) {
-        wr->sg_list->addr = reinterpret_cast<uintptr_t>(localAddress.address);
-        wr->sg_list->length = localAddress.size;
-        wr->sg_list->lkey = localAddress.lkey;
+        wr.sg_list->addr = reinterpret_cast<uintptr_t>(localAddress.address);
+        wr.sg_list->length = localAddress.size;
+        wr.sg_list->lkey = localAddress.lkey;
     }
 
 //---------------------------------------------------------------------------
     AtomicFetchAndAddWorkRequest::AtomicFetchAndAddWorkRequest() {
-        wr->opcode = IBV_WR_ATOMIC_FETCH_AND_ADD;
+        wr.opcode = IBV_WR_ATOMIC_FETCH_AND_ADD;
     }
 
 //---------------------------------------------------------------------------
     void AtomicFetchAndAddWorkRequest::setAddValue(uint64_t value) {
-        wr->wr.atomic.compare_add = value;
+        wr.wr.atomic.compare_add = value;
     }
 
 //---------------------------------------------------------------------------
     uint64_t AtomicFetchAndAddWorkRequest::getAddValue() const {
-        return wr->wr.atomic.compare_add;
+        return wr.wr.atomic.compare_add;
     }
 
 //---------------------------------------------------------------------------
     AtomicCompareAndSwapWorkRequest::AtomicCompareAndSwapWorkRequest() {
-        wr->opcode = IBV_WR_ATOMIC_CMP_AND_SWP;
+        wr.opcode = IBV_WR_ATOMIC_CMP_AND_SWP;
     }
 
 //---------------------------------------------------------------------------
     void AtomicCompareAndSwapWorkRequest::setCompareValue(uint64_t value) {
-        wr->wr.atomic.compare_add = value;
+        wr.wr.atomic.compare_add = value;
     }
 
 //---------------------------------------------------------------------------
     uint64_t AtomicCompareAndSwapWorkRequest::getCompareValue() const {
-        return wr->wr.atomic.compare_add;
+        return wr.wr.atomic.compare_add;
     }
 
 //---------------------------------------------------------------------------
     void AtomicCompareAndSwapWorkRequest::setSwapValue(uint64_t value) {
-        wr->wr.atomic.swap = value;
+        wr.wr.atomic.swap = value;
     }
 
 //---------------------------------------------------------------------------
     uint64_t AtomicCompareAndSwapWorkRequest::getSwapValue() const {
-        return wr->wr.atomic.swap;
+        return wr.wr.atomic.swap;
     }
 
 //---------------------------------------------------------------------------
@@ -218,7 +202,7 @@ namespace rdma {
         wr.setId(42);
     }
 
-    ReadWorkRequestBuilder &ReadWorkRequestBuilder::setNextWorkRequest(const WorkRequest *workRequest) {
+    ReadWorkRequestBuilder &ReadWorkRequestBuilder::setNextWorkRequest(WorkRequest *workRequest) {
         wr.setNextWorkRequest(workRequest);
         return *this;
     }
@@ -249,7 +233,7 @@ namespace rdma {
         return *this;
     }
 
-    WriteWorkRequestBuilder &WriteWorkRequestBuilder::setNextWorkRequest(const WorkRequest *workRequest) {
+    WriteWorkRequestBuilder &WriteWorkRequestBuilder::setNextWorkRequest(WorkRequest *workRequest) {
         wr.setNextWorkRequest(workRequest);
         return *this;
     }
@@ -286,7 +270,7 @@ namespace rdma {
     }
 
     AtomicFetchAndAddWorkRequestBuilder &
-    AtomicFetchAndAddWorkRequestBuilder::setNextWorkRequest(const WorkRequest *workRequest) {
+    AtomicFetchAndAddWorkRequestBuilder::setNextWorkRequest(WorkRequest *workRequest) {
         wr.setNextWorkRequest(workRequest);
         return *this;
     }

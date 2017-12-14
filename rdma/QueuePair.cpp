@@ -147,10 +147,10 @@ void QueuePair::connect(const Address &address, unsigned retryCount)
    }
 }
 // -------------------------------------------------------------------------
-void QueuePair::postWorkRequest(const WorkRequest &workRequest)
+void QueuePair::postWorkRequest(WorkRequest &workRequest)
 { // TODO: keep track of outstanding work requests
    ibv_send_wr *badWorkRequest = nullptr;
-   int status = ::ibv_post_send(qp, workRequest.wr.get(), &badWorkRequest);
+   int status = ::ibv_post_send(qp, workRequest.get(), &badWorkRequest);
    if (status != 0) {
       string reason = "posting the work request failed with error " + to_string(status) + ": " + strerror(status);
       cerr << reason << endl;
