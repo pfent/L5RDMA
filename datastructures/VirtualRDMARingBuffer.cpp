@@ -10,12 +10,11 @@ VirtualRDMARingBuffer::VirtualRDMARingBuffer(size_t size, int sock) :
         size(size), bitmask(size - 1), net(sock),
         sendBuf(mmapSharedRingBuffer("/rdmaLocal" + std::to_string(::getpid()), size, true)),
         // Since we mapped twice the virtual memory, we can create memory regions of twice the size of the actual buffer
-        localSendMr(sendBuf.get(), size * 2, net.network.getProtectionDomain(),
-                    Perm::All), // TODO: All permissions is probably too much
-        localReadPosMr(&localReadPos, sizeof(localReadPos), net.network.getProtectionDomain(), Perm::All),
+        localSendMr(sendBuf.get(), size * 2, net.network.getProtectionDomain(), Perm::None),
+        localReadPosMr(&localReadPos, sizeof(localReadPos), net.network.getProtectionDomain(), Perm::RemoteRead),
         receiveBuf(mmapSharedRingBuffer("/rdmaRemote" + std::to_string(::getpid()), size, true)),
-        localReceiveMr(receiveBuf.get(), size * 2, net.network.getProtectionDomain(), Perm::All),
-        remoteReadPosMr(&remoteReadPos, sizeof(remoteReadPos), net.network.getProtectionDomain(), Perm::All) {
+        localReceiveMr(receiveBuf.get(), size * 2, net.network.getProtectionDomain(), localRw),
+        remoteReadPosMr(&remoteReadPos, sizeof(remoteReadPos), net.network.getProtectionDomain(), Perm::LocalWrite) {
     const bool powerOfTwo = (size != 0) && !(size & (size - 1));
     if (not powerOfTwo) {
         throw std::runtime_error{"size should be a power of 2"};
