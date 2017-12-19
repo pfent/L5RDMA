@@ -12,7 +12,7 @@
 using namespace std;
 
 const size_t MESSAGES = 256 * 1024; // ~ 1s
-const size_t SHAREDMEM_MESSAGES = 4 * 1024 * 128 * 16;
+const size_t SHAREDMEM_MESSAGES = 4 * 1024 * 128;
 
 int main(int argc, char **argv) {
     if (argc < 2) {
@@ -56,16 +56,16 @@ int main(int argc, char **argv) {
 //            }, 5);
 //        }
 //        sleep(1);
-        {
-            cout << "rdma, ";
-            auto client = Ping(make_transportClient<RdmaTransportClient>(), "127.0.0.1:1234");
-            bench(SHAREDMEM_MESSAGES, [&]() {
-                client.ping();
-            }, 1);
-        }
+//        {
+//            cout << "rdma, ";
+//            auto client = Ping(make_transportClient<RdmaTransportClient>(), "127.0.0.1:1234");
+//            bench(SHAREDMEM_MESSAGES, [&]() {
+//                client.ping();
+//            }, 1);
+//        }
         {
             cout << "librdmacm, ";
-            auto client = Ping(make_transportClient<LibRdmaTransportClient>(), "127.0.0.1:1234");
+            auto client = Ping(make_transportClient<LibRdmacmTransportClient>(), "127.0.0.1:1234");
             bench(SHAREDMEM_MESSAGES, [&]() {
                 client.ping();
             }, 1);
@@ -97,14 +97,14 @@ int main(int argc, char **argv) {
 //                server.pong();
 //            }, 5);
 //        }
-        {
-            cout << "rdma, ";
-            auto server = Pong(make_transportServer<RdmaTransportServer>("1234"));
-            server.start();
-            bench(SHAREDMEM_MESSAGES, [&]() {
-                server.pong();
-            }, 1);
-        }
+//        {
+//            cout << "rdma, ";
+//            auto server = Pong(make_transportServer<RdmaTransportServer>("1234"));
+//            server.start();
+//            bench(SHAREDMEM_MESSAGES, [&]() {
+//                server.pong();
+//            }, 1);
+//        }
         {
             cout << "librdmacm, ";
             auto server = Pong(make_transportServer<LibRdmacmTransportServer>("1234"));

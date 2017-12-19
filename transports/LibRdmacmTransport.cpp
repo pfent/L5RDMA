@@ -2,16 +2,16 @@
 
 #include <netdb.h>
 
-LibRdmaTransportClient::LibRdmaTransportClient() = default;
+LibRdmacmTransportClient::LibRdmacmTransportClient() = default;
 
-LibRdmaTransportClient::~LibRdmaTransportClient() {
+LibRdmacmTransportClient::~LibRdmacmTransportClient() {
     if (rdmaSocket > 0) {
         rshutdown(rdmaSocket, SHUT_RDWR);
         rclose(rdmaSocket);
     }
 }
 
-void LibRdmaTransportClient::connect_impl(std::string_view connection) {
+void LibRdmacmTransportClient::connect_impl(std::string_view connection) {
     const auto pos = connection.find(':');
     if (pos == std::string::npos) {
         throw std::runtime_error("usage: <0.0.0.0:port>");
@@ -35,27 +35,27 @@ void LibRdmaTransportClient::connect_impl(std::string_view connection) {
     }
 }
 
-void LibRdmaTransportClient::write_impl(const uint8_t *data, size_t size) {
+void LibRdmacmTransportClient::write_impl(const uint8_t *data, size_t size) {
     rwrite(rdmaSocket, data, size);
 }
 
-void LibRdmaTransportClient::read_impl(uint8_t *buffer, size_t size) {
+void LibRdmacmTransportClient::read_impl(uint8_t *buffer, size_t size) {
     rread(rdmaSocket, buffer, size);
 }
 
-Buffer LibRdmaTransportClient::getBuffer_impl(size_t) {
+Buffer LibRdmacmTransportClient::getBuffer_impl(size_t) {
     throw std::runtime_error{"not implemented!"}; // TODO
 }
 
-void LibRdmaTransportClient::write_impl(Buffer) {
+void LibRdmacmTransportClient::write_impl(Buffer) {
     throw std::runtime_error{"not implemented!"}; // TODO
 }
 
-Buffer LibRdmaTransportClient::read_impl(size_t) {
+Buffer LibRdmacmTransportClient::read_impl(size_t) {
     throw std::runtime_error{"not implemented!"}; // TODO
 }
 
-void LibRdmaTransportClient::markAsRead_impl(Buffer) {
+void LibRdmacmTransportClient::markAsRead_impl(Buffer) {
     throw std::runtime_error{"not implemented!"}; // TODO
 }
 

@@ -28,13 +28,13 @@ public:
     void markAsRead_impl(Buffer readBuffer);
 };
 
-class LibRdmaTransportClient : public TransportClient<LibRdmaTransportClient> {
+class LibRdmacmTransportClient : public TransportClient<LibRdmacmTransportClient> {
     int rdmaSocket = -1;
 
 public:
-    LibRdmaTransportClient();
+    LibRdmacmTransportClient();
 
-    ~LibRdmaTransportClient() override;
+    ~LibRdmacmTransportClient() override;
 
     void connect_impl(std::string_view file);
 
