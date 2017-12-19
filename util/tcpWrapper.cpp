@@ -72,6 +72,6 @@ void tcp_close(int sock) {
 void tcp_listen(int sock) {
     if (listen(sock, SOMAXCONN) < 0) {
         perror("listen");
-        throw std::runtime_error{"error close'ing"};
+        throw std::runtime_error{"error listen'ing"};
     }
 }

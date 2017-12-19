@@ -7,6 +7,7 @@
 #include <exchangeableTransports/util/bench.h>
 #include <exchangeableTransports/util/pinthread.h>
 #include <exchangeableTransports/transports/RdmaTransport.h>
+#include <exchangeableTransports/transports/LibRdmacmTransport.h>
 
 using namespace std;
 
@@ -62,6 +63,13 @@ int main(int argc, char **argv) {
                 client.ping();
             }, 1);
         }
+        {
+            cout << "librdmacm, ";
+            auto client = Ping(make_transportClient<LibRdmaTransportClient>(), "127.0.0.1:1234");
+            bench(SHAREDMEM_MESSAGES, [&]() {
+                client.ping();
+            }, 1);
+        }
     } else {
         pinThread(1);
         cout << "implementation, messages, time, msg/s, user, system, total\n";
@@ -92,6 +100,14 @@ int main(int argc, char **argv) {
         {
             cout << "rdma, ";
             auto server = Pong(make_transportServer<RdmaTransportServer>("1234"));
+            server.start();
+            bench(SHAREDMEM_MESSAGES, [&]() {
+                server.pong();
+            }, 1);
+        }
+        {
+            cout << "librdmacm, ";
+            auto server = Pong(make_transportServer<LibRdmacmTransportServer>("1234"));
             server.start();
             bench(SHAREDMEM_MESSAGES, [&]() {
                 server.pong();

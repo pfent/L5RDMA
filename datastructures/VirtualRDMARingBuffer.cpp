@@ -48,6 +48,7 @@ void VirtualRDMARingBuffer::send(const uint8_t *data, size_t length) {
     const auto sendSlice = localSendMr.slice(startOfWrite, sizeToWrite);
     const auto remoteSlice = remoteReceiveRmr.slice(startOfWrite);
     // occasionally clear the queue (this can probably also happen only every 16k times)
+    // aka "selective signaling"
     const auto shouldClearQueue = messageCounter % (4 * 1024) == 0;
     rdma::WriteWorkRequestBuilder(sendSlice, remoteSlice, shouldClearQueue)
             .setInline(sendSlice.size <= net.queuePair.getMaxInlineSize())

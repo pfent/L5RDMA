@@ -24,6 +24,7 @@ set(SOURCE_FILES
         transports/RdmaTransport.cpp
         transports/DomainSocketsTransport.cpp
         transports/SharedMemoryTransport.cpp
+        transports/LibRdmacmTransport.cpp
         apps/PingPong.h
         apps/KVStore.h
         util/bench.h
@@ -38,6 +39,7 @@ SET(LINK_LIBRARIES
         ibverbs
         rt
         pthread
+        rdmacm
         )
 
 include_directories(..)
