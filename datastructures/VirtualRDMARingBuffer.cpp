@@ -8,6 +8,7 @@ constexpr auto localRw = Perm::LocalWrite | Perm::RemoteWrite;
 
 VirtualRDMARingBuffer::VirtualRDMARingBuffer(size_t size, int sock) :
         size(size), bitmask(size - 1), net(sock),
+        // TODO: this breaks with multiple buffers in the same process, better use mkstemp
         sendBuf(mmapSharedRingBuffer("/rdmaLocal" + std::to_string(::getpid()), size, true)),
         // Since we mapped twice the virtual memory, we can create memory regions of twice the size of the actual buffer
         localSendMr(sendBuf.get(), size * 2, net.network.getProtectionDomain(), Perm::None),

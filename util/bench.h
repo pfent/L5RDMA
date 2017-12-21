@@ -49,9 +49,9 @@ auto bench(size_t workSize, T &&fun, size_t repetitions = 1) {
         [ownUserBefore, ownSystemBefore] = getOwnStat();
 
         const auto start = std::chrono::steady_clock::now();
-        for (size_t j = 0; j < workSize; ++j) {
-            fun();
-        }
+
+        fun();
+
         const auto end = std::chrono::steady_clock::now();
 
         const auto after = getGlobalStat();

@@ -6,6 +6,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(WARNINGS "-Wall -Wextra -Wnon-virtual-dtor -Wold-style-cast -Wno-terminate")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pedantic ${WARNINGS} -fshow-column -pipe -march=native")
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -ggdb3 -O0 -DDEBUG")
+set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=address")
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3 -flto -DNDEBUG")
 
 set(SOURCE_FILES
@@ -40,6 +41,7 @@ SET(LINK_LIBRARIES
         rt
         pthread
         rdmacm
+        tbb
         )
 
 include_directories(..)
@@ -49,6 +51,9 @@ target_link_libraries(bench ${LINK_LIBRARIES})
 
 add_executable(kv kvbench.cpp ${SOURCE_FILES})
 target_link_libraries(kv ${LINK_LIBRARIES})
+
+add_executable(parallel benchParallel.cpp ${SOURCE_FILES})
+target_link_libraries(parallel ${LINK_LIBRARIES})
 
 file(GLOB tests "test/*Test.cpp")
 foreach (test ${tests})
