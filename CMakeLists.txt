@@ -26,6 +26,7 @@ set(SOURCE_FILES
         transports/DomainSocketsTransport.cpp
         transports/SharedMemoryTransport.cpp
         transports/LibRdmacmTransport.cpp
+        transports/OptimisticRdmaTransport.cpp
         apps/PingPong.h
         apps/KVStore.h
         util/bench.h
