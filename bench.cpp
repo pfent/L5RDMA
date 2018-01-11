@@ -61,24 +61,24 @@ int main(int argc, char **argv) {
 //            }, 5);
 //        }
 //        sleep(1);
-//        {
-//            cout << "rdma, ";
-//            auto client = Ping(make_transportClient<RdmaTransportClient>(), "127.0.0.1:1234");
-//            bench(SHAREDMEM_MESSAGES, [&]() {
-//                for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
-//                    client.ping();
-//                }
-//            }, 1);
-//        }
         {
-            cout << "librdmacm, ";
-            auto client = Ping(make_transportClient<LibRdmacmTransportClient>(), "127.0.0.1:1234");
+            cout << "rdma, ";
+            auto client = Ping(make_transportClient<RdmaTransportClient>(), "127.0.0.1:1234");
             bench(SHAREDMEM_MESSAGES, [&]() {
                 for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
                     client.ping();
                 }
             }, 1);
         }
+//        {
+//            cout << "librdmacm, ";
+//            auto client = Ping(make_transportClient<LibRdmacmTransportClient>(), "127.0.0.1:1234");
+//            bench(SHAREDMEM_MESSAGES, [&]() {
+//                for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
+//                    client.ping();
+//                }
+//            }, 1);
+//        }
     } else {
         pinThread(1);
         cout << "implementation, messages, time, msg/s, user, system, total\n";
@@ -112,19 +112,9 @@ int main(int argc, char **argv) {
 //                }
 //            }, 5);
 //        }
-//        {
-//            cout << "rdma, ";
-//            auto server = Pong(make_transportServer<RdmaTransportServer>("1234"));
-//            server.start();
-//            bench(SHAREDMEM_MESSAGES, [&]() {
-//                for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
-//                    server.pong();
-//                }
-//            }, 1);
-//        }
         {
-            cout << "librdmacm, ";
-            auto server = Pong(make_transportServer<LibRdmacmTransportServer>("1234"));
+            cout << "rdma, ";
+            auto server = Pong(make_transportServer<RdmaTransportServer>("1234"));
             server.start();
             bench(SHAREDMEM_MESSAGES, [&]() {
                 for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
@@ -132,6 +122,16 @@ int main(int argc, char **argv) {
                 }
             }, 1);
         }
+//        {
+//            cout << "librdmacm, ";
+//            auto server = Pong(make_transportServer<LibRdmacmTransportServer>("1234"));
+//            server.start();
+//            bench(SHAREDMEM_MESSAGES, [&]() {
+//                for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
+//                    server.pong();
+//                }
+//            }, 1);
+//        }
     }
 
     return 0;

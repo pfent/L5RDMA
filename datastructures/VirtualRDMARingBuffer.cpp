@@ -3,17 +3,16 @@
 #include <iostream>
 
 using Perm = rdma::MemoryRegion::Permission;
-using namespace std::string_literals;
 
 constexpr auto localRw = Perm::LocalWrite | Perm::RemoteWrite;
 
 VirtualRDMARingBuffer::VirtualRDMARingBuffer(size_t size, int sock) :
         size(size), bitmask(size - 1), net(sock),
-        sendBuf(mmapSharedRingBuffer("/rdmaLocal"s + std::tmpnam(nullptr), size, true)),
+        sendBuf(mmapSharedRingBuffer(std::tmpnam(nullptr), size, true)),
         // Since we mapped twice the virtual memory, we can create memory regions of twice the size of the actual buffer
         localSendMr(sendBuf.get(), size * 2, net.network.getProtectionDomain(), Perm::None),
         localReadPosMr(&localReadPos, sizeof(localReadPos), net.network.getProtectionDomain(), Perm::RemoteRead),
-        receiveBuf(mmapSharedRingBuffer("/rdmaRemote"s + std::tmpnam(nullptr), size, true)),
+        receiveBuf(mmapSharedRingBuffer(std::tmpnam(nullptr), size, true)),
         localReceiveMr(receiveBuf.get(), size * 2, net.network.getProtectionDomain(), localRw),
         remoteReadPosMr(&remoteReadPos, sizeof(remoteReadPos), net.network.getProtectionDomain(), Perm::LocalWrite) {
     const bool powerOfTwo = (size != 0) && !(size & (size - 1));
