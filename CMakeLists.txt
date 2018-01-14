@@ -45,7 +45,7 @@ SET(LINK_LIBRARIES
         tbb
         )
 
-include_directories(..)
+include_directories(.. include)
 
 add_executable(bench bench.cpp ${SOURCE_FILES})
 target_link_libraries(bench ${LINK_LIBRARIES})
