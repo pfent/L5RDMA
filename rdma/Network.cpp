@@ -42,19 +42,19 @@ namespace rdma {
 
 /// Get the LID
     uint16_t Network::getLID() {
-        return context->queryPort(ibport).lid;
+        return context->queryPort(ibport).getLid();
     }
 
 /// Print the capabilities of the RDMA host channel adapter
     void Network::printCapabilities() {
         // Get a list of all devices
-        ibv::device::DeviceList deviceList();
+        ibv::device::DeviceList deviceList{};
 
         // Open the first device
-        ibv::context::Context *context = deviceList[0]->open();
+        auto context = deviceList[0]->open();
 
         // Query device attributes
-        auto device_attr = context->queryAttributes();
+        // auto device_attr = context->queryAttributes();
 
         // Print attributes
         std::cout << "[Device Information]" << std::endl;

@@ -52,13 +52,13 @@ RDMAMessageBuffer::RDMAMessageBuffer(size_t size, int sock) :
         net(sock),
         receiveBuffer(make_unique<volatile uint8_t[]>(size)),
         sendBuffer(make_unique<uint8_t[]>(size)),
-        localSend(sendBuffer.get(), size, net.network.getProtectionDomain(), MemoryRegion::Permission::None),
-        localReceive(const_cast<uint8_t *>(receiveBuffer.get()), size, net.network.getProtectionDomain(),
-                     MemoryRegion::Permission::LocalWrite | MemoryRegion::Permission::RemoteWrite),
-        localReadPos(&readPos, sizeof(readPos), net.network.getProtectionDomain(),
-                     MemoryRegion::Permission::RemoteRead),
-        localCurrentRemoteReceive(const_cast<size_t *>(&currentRemoteReceive), sizeof(currentRemoteReceive),
-                                  net.network.getProtectionDomain(), MemoryRegion::Permission::LocalWrite) {
+        localSend(net.network.registerMr(sendBuffer.get(), size, {})),
+        localReceive(net.network.registerMr(const_cast<uint8_t *>(receiveBuffer.get()), size,
+                                            {ibv::AccessFlag::LOCAL_WRITE, ibv::AccessFlag::REMOTE_WRITE})),
+        localReadPos(net.network.registerMr(&readPos, sizeof(readPos), {ibv::AccessFlag::REMOTE_READ})),
+        localCurrentRemoteReceive(
+                net.network.registerMr(const_cast<size_t *>(&currentRemoteReceive), sizeof(currentRemoteReceive),
+                                       {ibv::AccessFlag::LOCAL_WRITE})) {
     const bool powerOfTwo = (size != 0) && !(size & (size - 1));
     if (not powerOfTwo) {
         throw runtime_error{"size should be a power of 2"};
@@ -66,7 +66,7 @@ RDMAMessageBuffer::RDMAMessageBuffer(size_t size, int sock) :
 
     tcp_setBlocking(sock); // just set the socket to block for our setup.
 
-    sendRmrInfo(sock, localReceive, localReadPos);
+    sendRmrInfo(sock, *localReceive, *localReadPos);
     receiveAndSetupRmr(sock, remoteReceive, remoteReadPos);
 }
 
@@ -109,13 +109,24 @@ void RDMAMessageBuffer::send(const uint8_t *data, size_t length, bool inln) {
     writeToSendBuffer(reinterpret_cast<const uint8_t *>(&validity), sizeof(validity));
 
     wraparound(size, sizeToWrite, startOfWrite, [&](auto, auto beginPos, auto endPos) {
-        const auto sendSlice = localSend.slice(beginPos, endPos - beginPos);
+        const auto sendSlice = localSend->getSlice(beginPos, endPos - beginPos);
         const auto remoteSlice = remoteReceive.slice(beginPos);
         // occasionally clear the queue (this can probably also happen only every 16k times)
         const auto shouldClearQueue = messageCounter % (4 * 1024) == 0;
-        WriteWorkRequestBuilder(sendSlice, remoteSlice, shouldClearQueue)
-                .setInline(inln && sendSlice.size <= net.queuePair.getMaxInlineSize())
-                .send(net.queuePair);
+
+        ibv::workrequest::Simple<ibv::workrequest::Write> wr;
+        wr.setLocalAddress(sendSlice);
+        wr.setRemoteAddress(remoteSlice.address, remoteSlice.key);
+
+        std::initializer_list<ibv::workrequest::Flags> flags;
+        if (shouldClearQueue) {
+            wr.setFlags({ibv::workrequest::Flags::SIGNALED});
+        }
+        if (inln && sendSlice.length <= net.queuePair.getMaxInlineSize()) {
+            wr.setFlags({ibv::workrequest::Flags::INLINE}); // TODO: this destroys the SIGNALED flag
+        }
+        net.queuePair.postWorkRequest(wr);
+
         if (shouldClearQueue) {
             net.queuePair.getCompletionQueuePair().waitForCompletion();
         }
@@ -127,10 +138,14 @@ void RDMAMessageBuffer::writeToSendBuffer(const uint8_t *data, size_t sizeToWrit
     // Make sure, there is enough space
     size_t safeToWrite = size - (sendPos - currentRemoteReceive);
     while (sizeToWrite > safeToWrite) {
-        ReadWorkRequestBuilder(localCurrentRemoteReceive, remoteReadPos, true)
-                .send(net.queuePair);
-        while (net.completionQueue.pollSendCompletionQueue() !=
-               ReadWorkRequest::getId()); // Poll until read has finished
+        ibv::workrequest::Simple<ibv::workrequest::Read> wr;
+        wr.setLocalAddress(localCurrentRemoteReceive->getSlice());
+        wr.setRemoteAddress(remoteReadPos.address, remoteReadPos.key);
+        wr.setFlags({ibv::workrequest::Flags::SIGNALED});
+        wr.setId(42);
+        net.queuePair.postWorkRequest(wr);
+
+        while (net.completionQueue.pollSendCompletionQueue() != 42); // Poll until read has finished
         safeToWrite = size - (sendPos - currentRemoteReceive);
     }
 

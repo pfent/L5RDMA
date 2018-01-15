@@ -9,7 +9,7 @@
 namespace rdma {
     struct CompletionQueuePair;
 
-    using MemoryRegion = ibv::memoryregion::MemoryRegion;
+    using MemoryRegion = std::unique_ptr<ibv::memoryregion::MemoryRegion>;
 
     /// A network exception
     struct NetworkException : public std::runtime_error {

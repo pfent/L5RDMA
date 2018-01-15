@@ -20,13 +20,17 @@ namespace rdma {
     QueuePair::QueuePair(Network &network, CompletionQueuePair &completionQueuePair)
             : QueuePair(network, completionQueuePair, *network.sharedReceiveQueue) {}
 
-    QueuePair::QueuePair(Network &network, CompletionQueuePair &completionQueuePair, ibv::srq::SharedReceiveQueue &receiveQueue)
+    QueuePair::QueuePair(Network &network, CompletionQueuePair &completionQueuePair,
+                         ibv::srq::SharedReceiveQueue &receiveQueue)
             : network(network), completionQueuePair(completionQueuePair) {
         ibv::queuepair::InitAttributes queuePairAttributes{};
         queuePairAttributes.setContext(nullptr);                                        // Associated context of the QP
-        queuePairAttributes.setSendCompletionQueue(*completionQueuePair.sendQueue);     // CQ to be associated with the Send Queue (SQ)
-        queuePairAttributes.setRecvCompletionQueue(*completionQueuePair.receiveQueue);  // CQ to be associated with the Receive Queue (RQ)
-        queuePairAttributes.setSharedReceiveQueue(receiveQueue);                        // SRQ handle if QP is to be associated with an SRQ, otherwise NULL
+        queuePairAttributes.setSendCompletionQueue(
+                *completionQueuePair.sendQueue);     // CQ to be associated with the Send Queue (SQ)
+        queuePairAttributes.setRecvCompletionQueue(
+                *completionQueuePair.receiveQueue);  // CQ to be associated with the Receive Queue (RQ)
+        queuePairAttributes.setSharedReceiveQueue(
+                receiveQueue);                        // SRQ handle if QP is to be associated with an SRQ, otherwise NULL
         ibv::queuepair::Capabilities capabilities{};
         capabilities.max_send_wr = 16351;                                               // Requested max number of outstanding WRs in the SQ
         capabilities.max_recv_wr = 16351;                                               // Requested max number of outstanding WRs in the RQ
@@ -35,16 +39,17 @@ namespace rdma {
         capabilities.max_inline_data = maxInlineSize;                                   // Requested max number of bytes that can be posted inline to the SQ, otherwise 0
         queuePairAttributes.setCapabilities(capabilities);
         // TODO: benchmark and compare IBV_QPT_UC/UD
-        queuePairAttributes.setType(ibv::queuepair::Type::RC);                          // QP Transport Service Type: IBV_QPT_RC (reliable connection), IBV_QPT_UC (unreliable connection), or IBV_QPT_UD (unreliable datagram)
-        queuePairAttributes.setSignalAll(false);                                        // If set, each Work Request (WR) submitted to the SQ generates a completion entry
+        queuePairAttributes.setType(
+                ibv::queuepair::Type::RC);                          // QP Transport Service Type: IBV_QPT_RC (reliable connection), IBV_QPT_UC (unreliable connection), or IBV_QPT_UD (unreliable datagram)
+        queuePairAttributes.setSignalAll(
+                false);                                        // If set, each Work Request (WR) submitted to the SQ generates a completion entry
 
         // Create queue pair
         qp = network.protectionDomain->createQueuePair(queuePairAttributes);
     }
 
     uint32_t QueuePair::getQPN() {
-        qp->
-        return qp->qp_num;
+        return qp->getNum();
     }
 
     void QueuePair::connect(const Address &address, unsigned retryCount) {
@@ -60,7 +65,8 @@ namespace rdma {
         attributes.port_num = network.ibport;    // The local physical port
         attributes.qp_access_flags = IBV_ACCESS_REMOTE_WRITE | IBV_ACCESS_REMOTE_READ |
                                      IBV_ACCESS_REMOTE_ATOMIC;  // Allowed access flags of the remote operations for incoming packets (i.e., none, RDMA read, RDMA write, or atomics)
-        if (::ibv_modify_qp(reinterpret_cast<ibv_qp*>(qp.get()), &attributes, IBV_QP_STATE | IBV_QP_PKEY_INDEX | IBV_QP_PORT | IBV_QP_ACCESS_FLAGS)) {
+        if (::ibv_modify_qp(reinterpret_cast<ibv_qp *>(qp.get()), &attributes,
+                            IBV_QP_STATE | IBV_QP_PKEY_INDEX | IBV_QP_PORT | IBV_QP_ACCESS_FLAGS)) {
             string reason = "failed to transition QP to INIT state";
             cerr << reason << endl;
             throw NetworkException(reason);
@@ -79,7 +85,7 @@ namespace rdma {
         attributes.ah_attr.sl = 0;                      // The service level (which determines the virtual lane)
         attributes.ah_attr.src_path_bits = 0;           // Use the port base LID
         attributes.ah_attr.port_num = network.ibport;   // The local physical port
-        if (::ibv_modify_qp(qp, &attributes,
+        if (::ibv_modify_qp(reinterpret_cast<ibv_qp *>(qp.get()), &attributes,
                             IBV_QP_STATE | IBV_QP_AV | IBV_QP_PATH_MTU | IBV_QP_DEST_QPN | IBV_QP_RQ_PSN |
                             IBV_QP_MAX_DEST_RD_ATOMIC | IBV_QP_MIN_RNR_TIMER)) {
             string reason = "failed to transition QP to RTR state";
@@ -95,7 +101,7 @@ namespace rdma {
         attributes.retry_cnt = retryCount;  // How often to retry sending (7 = infinite)
         attributes.rnr_retry = retryCount;  // How often to retry sending when RNR NACK was received (7 = infinite)
         attributes.max_rd_atomic = 128;     // The number of outstanding RDMA reads & atomic operations (initiator)
-        if (::ibv_modify_qp(qp, &attributes,
+        if (::ibv_modify_qp(reinterpret_cast<ibv_qp *>(qp.get()), &attributes,
                             IBV_QP_STATE | IBV_QP_TIMEOUT | IBV_QP_RETRY_CNT | IBV_QP_RNR_RETRY | IBV_QP_SQ_PSN |
                             IBV_QP_MAX_QP_RD_ATOMIC)) {
             string reason = "failed to transition QP to RTS state";
