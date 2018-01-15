@@ -1,0 +1,3 @@
+[submodule "include/libibverbscpp"]
+	path = include/libibverbscpp
+	url = git@github.com:pfent/libibverbscpp.git

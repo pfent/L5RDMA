@@ -4,7 +4,6 @@
 #include "exchangeableTransports/rdma/Network.hpp"
 #include "exchangeableTransports/rdma/CompletionQueuePair.hpp"
 #include "exchangeableTransports/rdma/QueuePair.hpp"
-#include "exchangeableTransports/rdma/MemoryRegion.hpp"
 #include "tcpWrapper.h"
 
 struct RDMANetworking {
@@ -25,6 +24,6 @@ struct RmrInfo {
 
 void receiveAndSetupRmr(int sock, rdma::RemoteMemoryRegion &buffer, rdma::RemoteMemoryRegion &readPos);
 
-void sendRmrInfo(int sock, const rdma::MemoryRegion &buffer, const rdma::MemoryRegion &readPos);
+void sendRmrInfo(int sock, const ibv::memoryregion::MemoryRegion &buffer, const ibv::memoryregion::MemoryRegion &readPos);
 
 #endif //EXCHANGABLETRANSPORTS_RDMANETWORKING_H

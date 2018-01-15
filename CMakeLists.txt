@@ -11,11 +11,8 @@ set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3 -flto -DNDEBUG")
 
 set(SOURCE_FILES
         rdma/CompletionQueuePair.cpp
-        rdma/MemoryRegion.cpp
         rdma/Network.cpp
         rdma/QueuePair.cpp
-        rdma/ReceiveQueue.cpp
-        rdma/WorkRequest.cpp
         util/tcpWrapper.cpp
         util/domainSocketsWrapper.cpp
         datastructures/RDMAMessageBuffer.cpp
@@ -45,7 +42,7 @@ SET(LINK_LIBRARIES
         tbb
         )
 
-include_directories(..)
+include_directories(.. include)
 
 add_executable(bench bench.cpp ${SOURCE_FILES})
 target_link_libraries(bench ${LINK_LIBRARIES})
