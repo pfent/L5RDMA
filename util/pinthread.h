@@ -3,8 +3,11 @@
 
 #include <pthread.h>
 #include <stdexcept>
+#include <string>
 
 void pinThread(size_t cpu) {
+    using namespace std::string_literals;
+
     const auto thread = pthread_self();
     cpu_set_t cpuset{};
     CPU_ZERO(&cpuset);
