@@ -17,14 +17,14 @@ namespace rdma {
         CompletionQueuePair &completionQueuePair;
 
     public:
-        QueuePair(Network &network); // Uses shared completion and receive Queue
+        explicit QueuePair(Network &network); // Uses shared completion and receive Queue
         QueuePair(Network &network, ibv::srq::SharedReceiveQueue &receiveQueue); // Uses shared completion Queue
         QueuePair(Network &network, CompletionQueuePair &completionQueuePair); // Uses shared receive Queue
         QueuePair(Network &network, CompletionQueuePair &completionQueuePair, ibv::srq::SharedReceiveQueue &receiveQueue);
 
         uint32_t getQPN();
 
-        void connect(const Address &address, unsigned retryCount = 0);
+        void connect(const Address &address, uint8_t retryCount = 0);
 
         void postWorkRequest(ibv::workrequest::SendWr &workRequest);
 
