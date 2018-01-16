@@ -1,26 +1,23 @@
 #include "VirtualRDMARingBuffer.h"
-#include <exchangeableTransports/rdma/WorkRequest.hpp>
 #include <iostream>
 
-using Perm = rdma::MemoryRegion::Permission;
-
-constexpr auto localRw = Perm::LocalWrite | Perm::RemoteWrite;
+using Perm = ibv::AccessFlag;
 
 VirtualRDMARingBuffer::VirtualRDMARingBuffer(size_t size, int sock) :
         size(size), bitmask(size - 1), net(sock),
         sendBuf(mmapSharedRingBuffer(std::tmpnam(nullptr), size, true)),
         // Since we mapped twice the virtual memory, we can create memory regions of twice the size of the actual buffer
-        localSendMr(sendBuf.get(), size * 2, net.network.getProtectionDomain(), Perm::None),
-        localReadPosMr(&localReadPos, sizeof(localReadPos), net.network.getProtectionDomain(), Perm::RemoteRead),
+        localSendMr(net.network.registerMr(sendBuf.get(), size * 2, {})),
+        localReadPosMr(net.network.registerMr(&localReadPos, sizeof(localReadPos), {Perm::REMOTE_READ})),
         receiveBuf(mmapSharedRingBuffer(std::tmpnam(nullptr), size, true)),
-        localReceiveMr(receiveBuf.get(), size * 2, net.network.getProtectionDomain(), localRw),
-        remoteReadPosMr(&remoteReadPos, sizeof(remoteReadPos), net.network.getProtectionDomain(), Perm::LocalWrite) {
+        localReceiveMr(net.network.registerMr(receiveBuf.get(), size * 2, {Perm::LOCAL_WRITE, Perm::REMOTE_WRITE})),
+        remoteReadPosMr(net.network.registerMr(&remoteReadPos, sizeof(remoteReadPos), {Perm::LOCAL_WRITE})) {
     const bool powerOfTwo = (size != 0) && !(size & (size - 1));
     if (not powerOfTwo) {
         throw std::runtime_error{"size should be a power of 2"};
     }
 
-    sendRmrInfo(sock, localReceiveMr, localReadPosMr);
+    sendRmrInfo(sock, *localReceiveMr, *localReadPosMr);
     receiveAndSetupRmr(sock, remoteReceiveRmr, remoteReadPosRmr);
 }
 
@@ -45,14 +42,23 @@ void VirtualRDMARingBuffer::send(const uint8_t *data, size_t length) {
     write(&validity, sizeof(validity));
 
     // then request it to be sent via RDMA
-    const auto sendSlice = localSendMr.slice(startOfWrite, sizeToWrite);
+    const auto sendSlice = localSendMr->getSlice(startOfWrite, sizeToWrite);
     const auto remoteSlice = remoteReceiveRmr.slice(startOfWrite);
     // occasionally clear the queue (this can probably also happen only every 16k times)
     // aka "selective signaling"
     const auto shouldClearQueue = messageCounter % (4 * 1024) == 0;
-    rdma::WriteWorkRequestBuilder(sendSlice, remoteSlice, shouldClearQueue)
-            .setInline(sendSlice.size <= net.queuePair.getMaxInlineSize())
-            .send(net.queuePair);
+
+    ibv::workrequest::Simple<ibv::workrequest::Write> wr;
+    wr.setLocalAddress(sendSlice);
+    wr.setRemoteAddress(remoteSlice.address, remoteSlice.key);
+    if (shouldClearQueue) {
+        wr.setFlags({ibv::workrequest::Flags::SIGNALED});
+    }
+    if (sendSlice.length <= net.queuePair.getMaxInlineSize()) {
+        wr.setFlags({ibv::workrequest::Flags::INLINE}); // TODO: this destroys the SIGNALED flag
+    }
+    net.queuePair.postWorkRequest(wr);
+
     if (shouldClearQueue) {
         net.completionQueue.waitForCompletion();
     }
@@ -100,8 +106,14 @@ void VirtualRDMARingBuffer::waitUntilSendFree(size_t sizeToWrite) {
     // Make sure, there is enough space
     size_t safeToWrite = size - (sendPos - remoteReadPos.load());
     while (sizeToWrite > safeToWrite) {
-        rdma::ReadWorkRequestBuilder(remoteReadPosMr, remoteReadPosRmr, true).send(net.queuePair);
-        while (net.completionQueue.pollSendCompletionQueue() != rdma::ReadWorkRequest::getId());
+        ibv::workrequest::Simple<ibv::workrequest::Read> wr;
+        wr.setLocalAddress(remoteReadPosMr->getSlice());
+        wr.setRemoteAddress(remoteReadPosRmr.address, remoteReadPosRmr.key);
+        wr.setFlags({ibv::workrequest::Flags::SIGNALED});
+        wr.setId(42);
+        net.queuePair.postWorkRequest(wr);
+
+        while (net.completionQueue.pollSendCompletionQueue() != 42); // Poll until read has finished
         // Poll until read has finished
         safeToWrite = size - (sendPos - remoteReadPos.load());
     }

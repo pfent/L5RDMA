@@ -28,11 +28,11 @@ void receiveAndSetupRmr(int sock, rdma::RemoteMemoryRegion &buffer, rdma::Remote
     readPos.address = rmrInfo.readPosAddress;
 }
 
-void sendRmrInfo(int sock, const rdma::MemoryRegion &buffer, const rdma::MemoryRegion &readPos) {
+void sendRmrInfo(int sock, const ibv::memoryregion::MemoryRegion &buffer, const ibv::memoryregion::MemoryRegion &readPos) {
     RmrInfo rmrInfo{};
-    rmrInfo.bufferKey = buffer.key->rkey;
-    rmrInfo.bufferAddress = reinterpret_cast<uintptr_t>(buffer.address);
-    rmrInfo.readPosKey = readPos.key->rkey;
-    rmrInfo.readPosAddress = reinterpret_cast<uintptr_t>(readPos.address);
+    rmrInfo.bufferKey = buffer.getRkey();
+    rmrInfo.bufferAddress = reinterpret_cast<uintptr_t>(buffer.getAddr());
+    rmrInfo.readPosKey = readPos.getRkey();
+    rmrInfo.readPosAddress = reinterpret_cast<uintptr_t>(readPos.getAddr());
     tcp_write(sock, &rmrInfo, sizeof(rmrInfo));
 }

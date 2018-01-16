@@ -117,8 +117,6 @@ void RDMAMessageBuffer::send(const uint8_t *data, size_t length, bool inln) {
         ibv::workrequest::Simple<ibv::workrequest::Write> wr;
         wr.setLocalAddress(sendSlice);
         wr.setRemoteAddress(remoteSlice.address, remoteSlice.key);
-
-        std::initializer_list<ibv::workrequest::Flags> flags;
         if (shouldClearQueue) {
             wr.setFlags({ibv::workrequest::Flags::SIGNALED});
         }
@@ -128,7 +126,7 @@ void RDMAMessageBuffer::send(const uint8_t *data, size_t length, bool inln) {
         net.queuePair.postWorkRequest(wr);
 
         if (shouldClearQueue) {
-            net.queuePair.getCompletionQueuePair().waitForCompletion();
+            net.completionQueue.waitForCompletion();
         }
         ++messageCounter;
     });

@@ -3,7 +3,6 @@
 
 #include <exchangeableTransports/util/virtualMemory.h>
 #include <exchangeableTransports/util/RDMANetworking.h>
-#include <exchangeableTransports/rdma/WorkRequest.hpp>
 
 /**
   * Based on Victors idea:
@@ -48,7 +47,7 @@ class OptimisticRdmaTransportServer {
     rdma::MemoryRegion localSendBufMr;
 
     std::vector<rdma::RemoteMemoryRegion> remoteReceiveRmrs;
-    std::vector<rdma::WriteWorkRequest> answerWorkRequests;
+    std::vector<ibv::workrequest::SendWr> answerWorkRequests;
 };
 
 #endif //EXCHANGABLETRANSPORTS_OPTIMISTICRDMATRANSPORT_H
