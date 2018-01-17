@@ -15,7 +15,7 @@ namespace rdma {
         return os << "lid=" << address.lid << ", qpn=" << address.qpn;
     }
 
-    Network::Network() : devices() {
+    Network::Network() : devices(), sharedCompletionQueuePair(*this) {
         // Get the device list
         if (devices.size() == 0) {
             throw NetworkException("no Infiniband devices available");
@@ -30,168 +30,156 @@ namespace rdma {
         protectionDomain = context->allocProtectionDomain();
 
         // Create receive queue
-        ibv::srq::InitAttributes initAttributes(ibv::srq::Attributes(
-                16351, // max_wr
-                1 // max_sge
-        ));
-
+        ibv::srq::InitAttributes initAttributes(ibv::srq::Attributes(maxWr, maxSge));
         sharedReceiveQueue = protectionDomain->createSrq(initAttributes);
-
-        sharedCompletionQueuePair = make_unique<CompletionQueuePair>(*this);
     }
 
-/// Get the LID
+    /// Get the LID
     uint16_t Network::getLID() {
         return context->queryPort(ibport).getLid();
     }
 
-/// Print the capabilities of the RDMA host channel adapter
+    /// Print the capabilities of the RDMA host channel adapter
     void Network::printCapabilities() {
+        using Cap = ibv::device::CapabilityFlag;
         // Get a list of all devices
-        ibv::device::DeviceList deviceList{};
+        ibv::device::DeviceList devices{};
 
-        // Open the first device
-        auto context = deviceList[0]->open();
+        for (auto device : devices) {
+            // Open the device
+            auto context = device->open();
 
-        // Query device attributes
-        // auto device_attr = context->queryAttributes();
+            // Query device attributes
+            const auto device_attr = context->queryAttributes();
 
-        // Print attributes
-        std::cout << "[Device Information]" << std::endl;
-        std::cout << std::left << std::setw(44) << "  Device Name: " << context->getDevice()->getName() << std::endl;
-        std::cout << std::left << std::setw(44) << "  GUID: " << context->getDevice()->getGUID() << std::endl;
-        /* TODO
-        std::cout << std::left << std::setw(44) << "  Vendor ID: " << device_attr.vendor_id << std::endl;
-        std::cout << std::left << std::setw(44) << "  Vendor Part ID: " << device_attr.vendor_part_id << std::endl;
-        std::cout << std::left << std::setw(44) << "  Hardware Version: " << device_attr.hw_ver << std::endl;
-        std::cout << std::left << std::setw(44) << "  Firmware Version: " << device_attr.fw_ver << std::endl;
-        std::cout << std::left << std::setw(44) << "  Physical Ports: " << device_attr.phys_port_cnt << std::endl;
-        std::cout << std::left << std::setw(44) << "  CA ACK Delay: " << device_attr.local_ca_ack_delay << std::endl;
+            // Print attributes
+            cout << "[Device Information]" << '\n';
+            cout << left << setw(44) << "  Device Name: " << context->getDevice()->getName() << '\n';
+            cout << left << setw(44) << "  GUID: " << context->getDevice()->getGUID() << '\n';
+            cout << left << setw(44) << "  Vendor ID: " << device_attr.getVendorId() << '\n';
+            cout << left << setw(44) << "  Vendor Part ID: " << device_attr.getVendorPartId() << '\n';
+            cout << left << setw(44) << "  Hardware Version: " << device_attr.getHwVer() << '\n';
+            cout << left << setw(44) << "  Firmware Version: " << device_attr.getFwVer() << '\n';
+            cout << left << setw(44) << "  Physical Ports: " << device_attr.getPhysPortCnt() << '\n';
+            cout << left << setw(44) << "  CA ACK Delay: " << device_attr.getLocalCaAckDelay() << '\n';
 
-        std::cout << "[Memory]" << std::endl;
-        std::cout << std::left << std::setw(44) << "  Max MR size: " << device_attr.max_mr_size << std::endl;
-        std::cout << std::left << std::setw(44) << "  Max page size: " << device_attr.page_size_cap << std::endl;
+            cout << "[Memory]" << '\n';
+            cout << left << setw(44) << "  Max MR size: " << device_attr.getMaxMrSize() << '\n';
+            cout << left << setw(44) << "  Max page size: " << device_attr.getPageSizeCap() << '\n';
 
-        std::cout << "[Capabilities]" << std::endl;
-        if (device_attr.device_cap_flags & IBV_DEVICE_RESIZE_MAX_WR) {
-            std::cout << "  The device supports modifying the maximum number of outstanding Work Requests of a QP"
-                      << std::endl;
-        }
-        if (device_attr.device_cap_flags & IBV_DEVICE_BAD_PKEY_CNTR) {
-            std::cout << "  The device supports bad P_Key counting for each port" << std::endl;
-        }
-        if (device_attr.device_cap_flags & IBV_DEVICE_BAD_QKEY_CNTR) {
-            std::cout << "  The device supports P_Key violations counting for each port" << std::endl;
-        }
-        if (device_attr.device_cap_flags & IBV_DEVICE_RAW_MULTI) {
-            std::cout << "  The device supports raw packet multicast" << std::endl;
-        }
-        if (device_attr.device_cap_flags & IBV_DEVICE_AUTO_PATH_MIG) {
-            std::cout << "  The device supports automatic path migration" << std::endl;
-        }
-        if (device_attr.device_cap_flags & IBV_DEVICE_CHANGE_PHY_PORT) {
-            std::cout
-                    << "  The device supports changing the primary port number of a QP when transitioning from SQD to SQD state"
-                    << std::endl;
-        }
-        if (device_attr.device_cap_flags & IBV_DEVICE_UD_AV_PORT_ENFORCE) {
-            std::cout << "  The device supports AH port number enforcement" << std::endl;
-        }
-        if (device_attr.device_cap_flags & IBV_DEVICE_CURR_QP_STATE_MOD) {
-            std::cout << "  The device supports the Current QP state modifier when calling ibv_modify_qp()"
-                      << std::endl;
-        }
-        if (device_attr.device_cap_flags & IBV_DEVICE_SHUTDOWN_PORT) {
-            std::cout << "  The device supports shutdown port" << std::endl;
-        }
-        if (device_attr.device_cap_flags & IBV_DEVICE_INIT_TYPE) {
-            std::cout << "  The device supports setting InitType and InitTypeReply" << std::endl;
-        }
-        if (device_attr.device_cap_flags & IBV_DEVICE_PORT_ACTIVE_EVENT) {
-            std::cout << "  The device supports the IBV_EVENT_PORT_ACTIVE event generation" << std::endl;
-        }
-        if (device_attr.device_cap_flags & IBV_DEVICE_SYS_IMAGE_GUID) {
-            std::cout << "  The device supports System Image GUID" << std::endl;
-        }
-        if (device_attr.device_cap_flags & IBV_DEVICE_RC_RNR_NAK_GEN) {
-            std::cout << "  The device supports RNR-NAK generation for RC QPs" << std::endl;
-        }
-        if (device_attr.device_cap_flags & IBV_DEVICE_SRQ_RESIZE) {
-            std::cout << "  The device supports modifying the maximum number of outstanding Work Requests in an SRQ"
-                      << std::endl;
-        }
-        if (device_attr.device_cap_flags & IBV_DEVICE_N_NOTIFY_CQ) {
-            std::cout
-                    << "  The device supports Requesting Completion notification when N completions were added (and not only one) to a CQ"
-                    << std::endl;
-        }
+            cout << "[Capabilities]" << '\n';
+            if (device_attr.hasCapability(Cap::RESIZE_MAX_WR)) {
+                cout << "  The device supports modifying the maximum number of outstanding Work Requests of a QP"
+                     << '\n';
+            }
+            if (device_attr.hasCapability(Cap::BAD_PKEY_CNTR)) {
+                cout << "  The device supports bad P_Key counting for each port" << '\n';
+            }
+            if (device_attr.hasCapability(Cap::BAD_QKEY_CNTR)) {
+                cout << "  The device supports P_Key violations counting for each port" << '\n';
+            }
+            if (device_attr.hasCapability(Cap::RAW_MULTI)) {
+                cout << "  The device supports raw packet multicast" << '\n';
+            }
+            if (device_attr.hasCapability(Cap::AUTO_PATH_MIG)) {
+                cout << "  The device supports automatic path migration" << '\n';
+            }
+            if (device_attr.hasCapability(Cap::CHANGE_PHY_PORT)) {
+                cout << "  The device supports changing the primary port number of a QP when transitioning from SQD to "
+                        "SQD state" << '\n';
+            }
+            if (device_attr.hasCapability(Cap::UD_AV_PORT_ENFORCE)) {
+                cout << "  The device supports AH port number enforcement" << '\n';
+            }
+            if (device_attr.hasCapability(Cap::CURR_QP_STATE_MOD)) {
+                cout << "  The device supports the Current QP state modifier when calling ibv_modify_qp()" << '\n';
+            }
+            if (device_attr.hasCapability(Cap::SHUTDOWN_PORT)) {
+                cout << "  The device supports shutdown port" << '\n';
+            }
+            if (device_attr.hasCapability(Cap::INIT_TYPE)) {
+                cout << "  The device supports setting InitType and InitTypeReply" << '\n';
+            }
+            if (device_attr.hasCapability(Cap::PORT_ACTIVE_EVENT)) {
+                cout << "  The device supports the IBV_EVENT_PORT_ACTIVE event generation" << '\n';
+            }
+            if (device_attr.hasCapability(Cap::SYS_IMAGE_GUID)) {
+                cout << "  The device supports System Image GUID" << '\n';
+            }
+            if (device_attr.hasCapability(Cap::RC_RNR_NAK_GEN)) {
+                cout << "  The device supports RNR-NAK generation for RC QPs" << '\n';
+            }
+            if (device_attr.hasCapability(Cap::SRQ_RESIZE)) {
+                cout << "  The device supports modifying the maximum number of outstanding Work Requests in an SRQ"
+                     << '\n';
+            }
+            if (device_attr.hasCapability(Cap::N_NOTIFY_CQ)) {
+                cout << "  The device supports Requesting Completion notification when N completions were added (and "
+                        "not only one) to a CQ" << '\n';
+            }
 
-        std::cout << "[Resources]" << std::endl;
-        std::cout << std::setw(44) << "  Max number of QPs: " << device_attr.max_qp << std::endl;
-        std::cout << std::setw(44) << "  Max number of WRs per Queue: " << device_attr.max_qp_wr << std::endl;
-        std::cout << std::setw(44) << "  Max number of SGE per WR: " << device_attr.max_sge << std::endl;
-        std::cout << std::setw(44) << "  Max number of CQs: " << device_attr.max_cq << std::endl;
-        std::cout << std::setw(44) << "  Max number of CQEs per CQ: " << device_attr.max_cqe << std::endl;
-        std::cout << std::setw(44) << "  Max number of PDs: " << device_attr.max_pd << std::endl;
-        std::cout << std::setw(44) << "  Max number of MRs: " << device_attr.max_mr << std::endl;
-        std::cout << std::setw(44) << "  Max number of AHs: " << device_attr.max_ah << std::endl;
-        std::cout << std::setw(44) << "  Max number of partitions: " << device_attr.max_pkeys << std::endl;
+            cout << "[Resources]" << '\n';
+            cout << setw(44) << "  Max number of QPs: " << device_attr.getMaxQp() << '\n';
+            cout << setw(44) << "  Max number of WRs per Queue: " << device_attr.getMaxQpWr() << '\n';
+            cout << setw(44) << "  Max number of SGE per WR: " << device_attr.getMaxSge() << '\n';
+            cout << setw(44) << "  Max number of CQs: " << device_attr.getMaxCq() << '\n';
+            cout << setw(44) << "  Max number of CQEs per CQ: " << device_attr.getMaxCqe() << '\n';
+            cout << setw(44) << "  Max number of PDs: " << device_attr.getMaxPd() << '\n';
+            cout << setw(44) << "  Max number of MRs: " << device_attr.getMaxMr() << '\n';
+            cout << setw(44) << "  Max number of AHs: " << device_attr.getMaxAh() << '\n';
+            cout << setw(44) << "  Max number of partitions: " << device_attr.getMaxPkeys() << '\n';
 
-        std::cout << "[Multicast]" << std::endl;
-        std::cout << std::setw(44) << "  Max multicast groups: " << device_attr.max_mcast_grp << std::endl;
-        std::cout << std::setw(44) << "  Max QPs per multicast group: " << device_attr.max_mcast_qp_attach << std::endl;
-        std::cout << std::setw(44) << "  Max total multicast QPs: " << device_attr.max_total_mcast_qp_attach
-                  << std::endl;
+            cout << "[Multicast]" << '\n';
+            cout << setw(44) << "  Max multicast groups: " << device_attr.getMaxMcastGrp() << '\n';
+            cout << setw(44) << "  Max QPs per multicast group: " << device_attr.getMaxMcastQpAttach() << '\n';
+            cout << setw(44) << "  Max total multicast QPs: " << device_attr.getMaxTotalMcastQpAttach() << '\n';
 
-        std::cout << "[Atomics]" << std::endl;
-        switch (device_attr.atomic_cap) {
-            case (IBV_ATOMIC_NONE):
-                std::cout << "  Atomic operations aren’t supported at all" << std::endl;
-                break;
-            case (IBV_ATOMIC_HCA):
-                std::cout << "  Atomicity is guaranteed between QPs on this device only" << std::endl;
-                break;
-            case (IBV_ATOMIC_GLOB):
-                std::cout
-                        << "  Atomicity is guaranteed between this device and any other component, such as CPUs and other devices"
-                        << std::endl;
-                break;
+            cout << "[Atomics]" << '\n';
+            switch (device_attr.getAtomicCap()) {
+                case (ibv::device::AtomicCapabilities::NONE):
+                    cout << "  Atomic operations aren’t supported at all" << '\n';
+                    break;
+                case (ibv::device::AtomicCapabilities::HCA):
+                    cout << "  Atomicity is guaranteed between QPs on this device only" << '\n';
+                    break;
+                case (ibv::device::AtomicCapabilities::GLOB):
+                    cout << "  Atomicity is guaranteed between this device and any other component, such as CPUs and "
+                            "other devices" << '\n';
+                    break;
+            }
+            cout << setw(44) << "  Max outstanding reads/atomics per QP: " << device_attr.getMaxQpRdAtom() << '\n';
+            cout << setw(44) << "  Resources for reads/atomics: " << device_attr.getMaxResRdAtom() << '\n';
+            cout << setw(44) << "  Max depth per QP read/atomic initiation: " << device_attr.getMaxQpInitRdAtom()
+                 << '\n';
+
+            cout << "[Reliable Datagram]" << '\n';
+            cout << setw(44) << "  Max number of SGEs per QP: " << device_attr.getMaxSgeRd() << '\n';
+            cout << setw(44) << "  Max number of EECs: " << device_attr.getMaxEe() << '\n';
+            cout << setw(44) << "  Max number of RDDs: " << device_attr.getMaxRdd() << '\n';
+            cout << setw(44) << "  Max outstanding reads/atomics per EEC: " << device_attr.getMaxEeRdAtom() << '\n';
+            cout << setw(44) << "  Max depth per EEC read/atomic initiation: "
+                 << device_attr.getMaxEeInitRdAtom() << '\n';
+
+            cout << "[Memory Windows]" << '\n';
+            cout << setw(44) << "  Max number of MWs: " << device_attr.getMaxMw() << '\n';
+
+            cout << "[Fast Memory Registration]" << '\n';
+            cout << setw(44) << "  Max number of FMRs: " << device_attr.getMaxFmr() << '\n';
+            cout << setw(44) << "  Max number of maps per FMR: " << device_attr.getMaxMapPerFmr() << '\n';
+
+            cout << "[Shared Receive Queues]" << '\n';
+            cout << setw(44) << "  Max number of SRQs: " << device_attr.getMaxSrq() << '\n';
+            cout << setw(44) << "  Max number of WR per SRQ: " << device_attr.getMaxSrqWr() << '\n';
+            cout << setw(44) << "  Max number of SGEs per WR: " << device_attr.getMaxSrqSge() << '\n';
+
+            cout << "[Raw]" << '\n';
+            cout << setw(44) << "  Max number of IPv6 QPs: " << device_attr.getMaxRawIpv6Qp() << '\n';
+            cout << setw(44) << "  Max number of Ethertype QPs: " << device_attr.getMaxRawEthyQp() << endl;
         }
-        std::cout << std::setw(44) << "  Max outstanding reads/atomics per QP: " << device_attr.max_qp_rd_atom
-                  << std::endl;
-        std::cout << std::setw(44) << "  Resources for reads/atomics: " << device_attr.max_res_rd_atom << std::endl;
-        std::cout << std::setw(44) << "  Max depth per QP read/atomic initiation: " << device_attr.max_qp_init_rd_atom
-                  << std::endl;
-
-        std::cout << "[Reliable Datagram]" << std::endl;
-        std::cout << std::setw(44) << "  Max number of SGEs per QP: " << device_attr.max_sge_rd << std::endl;
-        std::cout << std::setw(44) << "  Max number of EECs: " << device_attr.max_ee << std::endl;
-        std::cout << std::setw(44) << "  Max number of RDDs: " << device_attr.max_rdd << std::endl;
-        std::cout << std::setw(44) << "  Max outstanding reads/atomics per EEC: " << device_attr.max_ee_rd_atom
-                  << std::endl;
-        std::cout << std::setw(44) << "  Max depth per EEC read/atomic initiation: " << device_attr.max_ee_init_rd_atom
-                  << std::endl;
-
-        std::cout << "[Memory Windows]" << std::endl;
-        std::cout << std::setw(44) << "  Max number of MWs: " << device_attr.max_mw << std::endl;
-
-        std::cout << "[Fast Memory Registration]" << std::endl;
-        std::cout << std::setw(44) << "  Max number of FMRs: " << device_attr.max_fmr << std::endl;
-        std::cout << std::setw(44) << "  Max number of maps per FMR: " << device_attr.max_map_per_fmr << std::endl;
-
-        std::cout << "[Shared Receive Queues]" << std::endl;
-        std::cout << std::setw(44) << "  Max number of SRQs: " << device_attr.max_srq << std::endl;
-        std::cout << std::setw(44) << "  Max number of WR per SRQ: " << device_attr.max_srq_wr << std::endl;
-        std::cout << std::setw(44) << "  Max number of SGEs per WR: " << device_attr.max_srq_sge << std::endl;
-
-        std::cout << "[Raw]" << std::endl;
-        std::cout << std::setw(44) << "  Max number of IPv6 QPs: " << device_attr.max_raw_ipv6_qp << std::endl;
-        std::cout << std::setw(44) << "  Max number of Ethertype QPs: " << device_attr.max_raw_ethy_qp << std::endl;
-        */
     }
 
-    std::unique_ptr<ibv::memoryregion::MemoryRegion>
-    Network::registerMr(void *addr, size_t length, std::initializer_list<ibv::AccessFlag> flags) {
+    unique_ptr<ibv::memoryregion::MemoryRegion>
+    Network::registerMr(void *addr, size_t length, initializer_list<ibv::AccessFlag> flags) {
         return protectionDomain->registerMemoryRegion(addr, length, flags);
     }
 

@@ -5,16 +5,14 @@
 #include <vector>
 #include <memory>
 #include <libibverbscpp/libibverbscpp.h>
+#include "CompletionQueuePair.hpp"
 
 namespace rdma {
-    struct CompletionQueuePair;
-
     using MemoryRegion = std::unique_ptr<ibv::memoryregion::MemoryRegion>;
 
     /// A network exception
     struct NetworkException : public std::runtime_error {
-        explicit NetworkException(const std::string &reason)
-                : std::runtime_error(reason) {}
+        using std::runtime_error::runtime_error;
     };
 
     struct RemoteMemoryRegion {
@@ -41,7 +39,9 @@ namespace rdma {
         friend class QueuePair;
 
         /// The minimal number of entries for the completion queue
-        static const int CQ_SIZE = 100;
+        static constexpr int CQ_SIZE = 100;
+        static constexpr uint32_t maxWr = 16351;
+        static constexpr uint32_t maxSge = 1;
 
         /// The port of the Infiniband device
         uint8_t ibport = 1;
@@ -54,7 +54,7 @@ namespace rdma {
         std::unique_ptr<ibv::protectiondomain::ProtectionDomain> protectionDomain;
 
         /// Shared Queues
-        std::unique_ptr<CompletionQueuePair> sharedCompletionQueuePair;
+        CompletionQueuePair sharedCompletionQueuePair;
 
         std::unique_ptr<ibv::srq::SharedReceiveQueue> sharedReceiveQueue;
 

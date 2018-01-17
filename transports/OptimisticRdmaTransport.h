@@ -48,6 +48,8 @@ class OptimisticRdmaTransportServer {
 
     std::vector<rdma::RemoteMemoryRegion> remoteReceiveRmrs;
     std::vector<ibv::workrequest::SendWr> answerWorkRequests;
+
+    OptimisticRdmaTransportServer();
 };
 
 #endif //EXCHANGABLETRANSPORTS_OPTIMISTICRDMATRANSPORT_H

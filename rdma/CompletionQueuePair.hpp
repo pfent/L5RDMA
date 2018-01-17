@@ -11,6 +11,9 @@ namespace rdma {
     class CompletionQueuePair {
         friend class QueuePair;
 
+        static constexpr void *context = nullptr;
+        static constexpr int completionVector = 0;
+
         /// The completion channel
         std::unique_ptr<ibv::completions::CompletionEventChannel> channel;
         /// The send completion queue
@@ -23,7 +26,8 @@ namespace rdma {
         /// Protect wait for events method from concurrent access
         std::mutex guard;
 
-        uint64_t pollCompletionQueue(ibv::completions::CompletionQueue& completionQueue, ibv::workcompletion::Opcode type);
+        uint64_t
+        pollCompletionQueue(ibv::completions::CompletionQueue &completionQueue, ibv::workcompletion::Opcode type);
 
         std::pair<bool, uint64_t> waitForCompletion(bool restrict, bool onlySend);
 
@@ -45,7 +49,8 @@ namespace rdma {
         uint64_t pollRecvCompletionQueue();
 
         // Poll a completion queue blocking
-        uint64_t pollCompletionQueueBlocking(ibv::completions::CompletionQueue& completionQueue, ibv::workcompletion::Opcode type);
+        uint64_t pollCompletionQueueBlocking(ibv::completions::CompletionQueue &completionQueue,
+                                             ibv::workcompletion::Opcode type);
 
         /// Poll the send completion queue blocking
         uint64_t pollSendCompletionQueueBlocking();

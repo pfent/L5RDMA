@@ -1,21 +1,15 @@
 #include "QueuePair.hpp"
 #include "Network.hpp"
 #include "CompletionQueuePair.hpp"
-#include <infiniband/verbs.h>
-#include <cstring>
-#include <iostream>
 #include <iomanip>
 
 using namespace std;
 namespace rdma {
-
-    static const uint32_t maxInlineSize = 512;
-
     QueuePair::QueuePair(Network &network)
-            : QueuePair(network, *network.sharedCompletionQueuePair, *network.sharedReceiveQueue) {}
+            : QueuePair(network, network.sharedCompletionQueuePair, *network.sharedReceiveQueue) {}
 
     QueuePair::QueuePair(Network &network, ibv::srq::SharedReceiveQueue &receiveQueue)
-            : QueuePair(network, *network.sharedCompletionQueuePair, receiveQueue) {}
+            : QueuePair(network, network.sharedCompletionQueuePair, receiveQueue) {}
 
     QueuePair::QueuePair(Network &network, CompletionQueuePair &completionQueuePair)
             : QueuePair(network, completionQueuePair, *network.sharedReceiveQueue) {}
@@ -24,8 +18,7 @@ namespace rdma {
                          ibv::srq::SharedReceiveQueue &receiveQueue)
             : network(network), completionQueuePair(completionQueuePair) {
         ibv::queuepair::InitAttributes queuePairAttributes{};
-        // Associated context of the QP
-        queuePairAttributes.setContext(nullptr);
+        queuePairAttributes.setContext(context);
         // CQ to be associated with the Send Queue (SQ)
         queuePairAttributes.setSendCompletionQueue(*completionQueuePair.sendQueue);
         // CQ to be associated with the Receive Queue (RQ)
@@ -33,17 +26,14 @@ namespace rdma {
         // SRQ handle if QP is to be associated with an SRQ, otherwise NULL
         queuePairAttributes.setSharedReceiveQueue(receiveQueue);
         ibv::queuepair::Capabilities capabilities{};
-        capabilities.max_send_wr = 16351;                                               // Requested max number of outstanding WRs in the SQ
-        capabilities.max_recv_wr = 16351;                                               // Requested max number of outstanding WRs in the RQ
-        capabilities.max_send_sge = 1;                                                  // Requested max number of scatter/gather elements in a WR in the SQ
-        capabilities.max_recv_sge = 1;                                                  // Requested max number of scatter/gather elements in a WR in the RQ
-        capabilities.max_inline_data = maxInlineSize;                                   // Requested max number of bytes that can be posted inline to the SQ, otherwise 0
+        capabilities.max_send_wr = maxOutstandingSendWrs;
+        capabilities.max_recv_wr = maxOutstandingRecvWrs;
+        capabilities.max_send_sge = maxSlicesPerSendWr;
+        capabilities.max_recv_sge = maxSlicesPerRecvWr;
+        capabilities.max_inline_data = maxInlineSize;
         queuePairAttributes.setCapabilities(capabilities);
-        // TODO: benchmark and compare IBV_QPT_UC/UD
-        // QP Transport Service Type: IBV_QPT_RC (reliable connection), IBV_QPT_UC (unreliable connection), or IBV_QPT_UD (unreliable datagram)
-        queuePairAttributes.setType(ibv::queuepair::Type::RC);
-        // If set, each Work Request (WR) submitted to the SQ generates a completion entry
-        queuePairAttributes.setSignalAll(false);
+        queuePairAttributes.setType(type);
+        queuePairAttributes.setSignalAll(signalAll);
 
         // Create queue pair
         qp = network.protectionDomain->createQueuePair(queuePairAttributes);
@@ -56,8 +46,6 @@ namespace rdma {
     void QueuePair::connect(const Address &address, uint8_t retryCount) {
         using Access = ibv::AccessFlag;
         using Mod = ibv::queuepair::AttrMask;
-        uint32_t remotePSN = 0;
-        uint32_t localPSN = 0;
 
         {   // First initialize the the QP
             ibv::queuepair::Attributes attributes{};
@@ -75,9 +63,8 @@ namespace rdma {
             attributes.setQpState(ibv::queuepair::State::RTR);
             attributes.setPathMtu(ibv::Mtu::_4096);             // Maximum payload size
             attributes.setDestQpNum(address.qpn);               // The remote QP number
-            attributes.setRqPsn(remotePSN);                     // The packet sequence number of received packets
-            // The number of outstanding RDMA reads & atomic operations (destination)
-            attributes.setMaxDestRdAtomic(16);
+            attributes.setRqPsn(0);                             // The packet sequence number of received packets
+            attributes.setMaxDestRdAtomic(16); // The number of outstanding RDMA reads & atomic operations (destination)
             attributes.setMinRnrTimer(12);                      // The time before a RNR NACK is sent
             ibv::ah::Attributes ahAttributes{};
             ahAttributes.setIsGlobal(false);                    // Whether there is a global routing header
@@ -94,7 +81,7 @@ namespace rdma {
         {   // RTS (ready to send)
             ibv::queuepair::Attributes attributes{};
             attributes.setQpState(ibv::queuepair::State::RTS);
-            attributes.setSqPsn(localPSN);      // The packet sequence number of sent packets
+            attributes.setSqPsn(0);             // The packet sequence number of sent packets
             attributes.setTimeout(0);           // The minimum timeout before retransmitting the packet (0 = infinite)
             attributes.setRetryCnt(retryCount); // How often to retry sending (7 = infinite)
             attributes.setRnrRetry(retryCount); // How often to retry sending when RNR NACK was received (7 = infinite)

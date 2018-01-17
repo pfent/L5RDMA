@@ -9,8 +9,9 @@ namespace rdma {
     CompletionQueuePair::CompletionQueuePair(Network &network) :
             channel(network.context->createCompletionEventChannel()), // Create event channel
             // Create completion queues
-            sendQueue(network.context->createCompletionQueue(Network::CQ_SIZE, nullptr, *channel, 0)),
-            receiveQueue(network.context->createCompletionQueue(Network::CQ_SIZE, nullptr, *channel, 0)) {
+            sendQueue(network.context->createCompletionQueue(Network::CQ_SIZE, context, *channel, completionVector)),
+            receiveQueue(
+                    network.context->createCompletionQueue(Network::CQ_SIZE, context, *channel, completionVector)) {
 
         // Request notifications
         sendQueue->requestNotify(false);
@@ -33,15 +34,13 @@ namespace rdma {
         }
 
         // Check status and opcode
-        if (completion) {
-            if (completion.getOpcode() == type) {
-                return completion.getId();
-            } else {
-                throw NetworkException("unexpected completion opcode: " + to_string(completion.getOpcode()));
-            }
-        } else {
+        if (not completion) {
             throw NetworkException("unexpected completion status: " + to_string(completion.getStatus()));
         }
+        if (completion.getOpcode() != type) {
+            throw NetworkException("unexpected completion opcode: " + to_string(completion.getOpcode()));
+        }
+        return completion.getId();
     }
 
     /// Wait for a work completion
@@ -93,7 +92,7 @@ namespace rdma {
                     workCompletion = make_pair(isSendCompletion, completion.getId());
                     found = true;
                 } else {
-                    cachedCompletions.push_back(make_pair(isSendCompletion, completion.getId()));
+                    cachedCompletions.emplace_back(isSendCompletion, completion.getId());
                 }
             } while (numPolled);
         }
@@ -111,11 +110,10 @@ namespace rdma {
         }
 
         // Check status and opcode
-        if (completion) {
-            return completion.getId();
-        } else {
+        if (not completion) {
             throw NetworkException("unexpected completion status: " + to_string(completion.getStatus()));
         }
+        return completion.getId();
     }
 
     uint64_t CompletionQueuePair::pollSendCompletionQueue(ibv::workcompletion::Opcode type) {
@@ -136,15 +134,13 @@ namespace rdma {
         while (completionQueue.poll(1, &completion) == 0); // busy poll
 
         // Check status and opcode
-        if (completion) {
-            if (completion.getOpcode() == type) {
-                return completion.getId();
-            } else {
-                throw NetworkException("unexpected completion opcode: " + to_string(completion.getOpcode()));
-            }
-        } else {
+        if (not completion) {
             throw NetworkException("unexpected completion status: " + to_string(completion.getStatus()));
         }
+        if (completion.getOpcode() != type) {
+            throw NetworkException("unexpected completion opcode: " + to_string(completion.getOpcode()));
+        }
+        return completion.getId();
     }
 
     /// Poll the send completion queue blocking
@@ -181,7 +177,6 @@ namespace rdma {
                 throw NetworkException("unexpected completion status: " + to_string(completion.getStatus()));
             }
         };
-
     }
 
     /// Wait for a work completion
