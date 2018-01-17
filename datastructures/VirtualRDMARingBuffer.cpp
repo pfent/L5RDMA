@@ -52,10 +52,10 @@ void VirtualRDMARingBuffer::send(const uint8_t *data, size_t length) {
     wr.setLocalAddress(sendSlice);
     wr.setRemoteAddress(remoteSlice.address, remoteSlice.key);
     if (shouldClearQueue) {
-        wr.setFlags({ibv::workrequest::Flags::SIGNALED});
+        wr.setSignaled();
     }
     if (sendSlice.length <= net.queuePair.getMaxInlineSize()) {
-        wr.setFlags({ibv::workrequest::Flags::INLINE}); // TODO: this destroys the SIGNALED flag
+        wr.setInline();
     }
     net.queuePair.postWorkRequest(wr);
 
