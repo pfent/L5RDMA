@@ -24,6 +24,7 @@ struct RmrInfo {
 
 void receiveAndSetupRmr(int sock, rdma::RemoteMemoryRegion &buffer, rdma::RemoteMemoryRegion &readPos);
 
-void sendRmrInfo(int sock, const ibv::memoryregion::MemoryRegion &buffer, const ibv::memoryregion::MemoryRegion &readPos);
+void
+sendRmrInfo(int sock, const ibv::memoryregion::MemoryRegion &buffer, const ibv::memoryregion::MemoryRegion &readPos);
 
 #endif //EXCHANGABLETRANSPORTS_RDMANETWORKING_H

@@ -5,18 +5,19 @@
 
 using namespace std;
 namespace rdma {
-    QueuePair::QueuePair(Network &network)
-            : QueuePair(network, network.sharedCompletionQueuePair, *network.sharedReceiveQueue) {}
+    QueuePair::QueuePair(Network &network, ibv::queuepair::Type type)
+            : QueuePair(network, type, network.sharedCompletionQueuePair, *network.sharedReceiveQueue) {}
 
-    QueuePair::QueuePair(Network &network, ibv::srq::SharedReceiveQueue &receiveQueue)
-            : QueuePair(network, network.sharedCompletionQueuePair, receiveQueue) {}
+    QueuePair::QueuePair(Network &network, ibv::queuepair::Type type, ibv::srq::SharedReceiveQueue &receiveQueue)
+            : QueuePair(network, type, network.sharedCompletionQueuePair, receiveQueue) {}
 
-    QueuePair::QueuePair(Network &network, CompletionQueuePair &completionQueuePair)
-            : QueuePair(network, completionQueuePair, *network.sharedReceiveQueue) {}
+    QueuePair::QueuePair(Network &network, ibv::queuepair::Type type, CompletionQueuePair &completionQueuePair)
+            : QueuePair(network, type, completionQueuePair, *network.sharedReceiveQueue) {}
 
-    QueuePair::QueuePair(Network &network, CompletionQueuePair &completionQueuePair,
+    QueuePair::QueuePair(Network &network, ibv::queuepair::Type type, CompletionQueuePair &completionQueuePair,
                          ibv::srq::SharedReceiveQueue &receiveQueue)
-            : network(network), completionQueuePair(completionQueuePair) {
+            : network(network), completionQueuePair(completionQueuePair),
+              type(type) {
         ibv::queuepair::InitAttributes queuePairAttributes{};
         queuePairAttributes.setContext(context);
         // CQ to be associated with the Send Queue (SQ)
@@ -43,7 +44,7 @@ namespace rdma {
         return qp->getNum();
     }
 
-    void QueuePair::connect(const Address &address, uint8_t retryCount) {
+    void QueuePair::connectRC(const Address &address, uint8_t port, uint8_t retryCount) {
         using Access = ibv::AccessFlag;
         using Mod = ibv::queuepair::AttrMask;
 
@@ -51,7 +52,7 @@ namespace rdma {
             ibv::queuepair::Attributes attributes{};
             attributes.setQpState(ibv::queuepair::State::INIT);
             attributes.setPkeyIndex(0); // Partition the queue pair belongs to
-            attributes.setPortNum(network.ibport); // The local physical port
+            attributes.setPortNum(port); // The local physical port
             // Allowed access flags of the remote operations for incoming packets (i.e., none, RDMA read, RDMA write, or atomics)
             attributes.setQpAccessFlags({Access::REMOTE_WRITE, Access::REMOTE_READ, Access::REMOTE_ATOMIC});
 
@@ -71,7 +72,7 @@ namespace rdma {
             ahAttributes.setDlid(address.lid);                  // The LID of the remote host
             ahAttributes.setSl(0);                              // The service level (which determines the virtual lane)
             ahAttributes.setSrcPathBits(0);                     // Use the port base LID
-            ahAttributes.setPortNum(network.ibport);            // The local physical port
+            ahAttributes.setPortNum(port);                      // The local physical port
             attributes.setAhAttr(ahAttributes);
 
             qp->modify(attributes, {Mod::STATE, Mod::AV, Mod::PATH_MTU, Mod::DEST_QPN, Mod::RQ_PSN,
@@ -88,6 +89,35 @@ namespace rdma {
             attributes.setMaxRdAtomic(128);     // The number of outstanding RDMA reads & atomic operations (initiator)
             qp->modify(attributes, {Mod::STATE, Mod::TIMEOUT, Mod::RETRY_CNT, Mod::RNR_RETRY, Mod::SQ_PSN,
                                     Mod::MAX_QP_RD_ATOMIC});
+        }
+    }
+
+    void QueuePair::connectUD(const Address &, uint8_t port, uint32_t packetSequenceNumber) {
+        using Mod = ibv::queuepair::AttrMask;
+
+        {
+            ibv::queuepair::Attributes attr{};
+            attr.setQpState(ibv::queuepair::State::INIT);
+            attr.setPkeyIndex(0);
+            attr.setPortNum(port);
+            attr.setQkey(0x22222222);
+
+            qp->modify(attr, {Mod::STATE, Mod::PKEY_INDEX, Mod::PORT, Mod::QKEY});
+        }
+
+        {   // RTR
+            ibv::queuepair::Attributes attr{};
+            attr.setQpState(ibv::queuepair::State::RTR);
+
+            qp->modify(attr, {Mod::STATE});
+        }
+
+        {   // RTS
+            ibv::queuepair::Attributes attr{};
+            attr.setQpState(ibv::queuepair::State::RTS);
+            attr.setSqPsn(packetSequenceNumber);
+
+            qp->modify(attr, {Mod::STATE, Mod::SQ_PSN});
         }
     }
 
@@ -149,5 +179,16 @@ namespace rdma {
 
     uint32_t QueuePair::getMaxInlineSize() const {
         return maxInlineSize;
+    }
+
+    void QueuePair::connect(const Address &address) {
+        switch (type) {
+            case ibv::queuepair::Type::RC:
+                return connectRC(address, network.ibport);
+            case ibv::queuepair::Type::UD:
+                return connectUD(address, network.ibport);
+            default:
+                throw;
+        }
     }
 } // End of namespace rdma

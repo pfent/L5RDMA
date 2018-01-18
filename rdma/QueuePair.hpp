@@ -2,6 +2,7 @@
 
 #include <memory>
 #include <libibverbscpp/libibverbscpp.h>
+#include "Network.hpp"
 
 namespace rdma {
     struct Address;
@@ -17,8 +18,6 @@ namespace rdma {
         static constexpr uint32_t maxSlicesPerSendWr = 1; // max number of scatter/gather elements in a WR in the SQ
         static constexpr uint32_t maxSlicesPerRecvWr = 1; // max number of scatter/gather elements in a WR in the RQ
         static constexpr uint32_t maxInlineSize = 512; // max number of bytes that can be posted inline to the SQ
-        // TODO: benchmark and compare IBV_QPT_UC/UD
-        static constexpr auto type = ibv::queuepair::Type::RC; // QP Transport Service Type
         static constexpr auto signalAll = false; // If each Work Request (WR) submitted to the SQ generates a completion entry
 
         std::unique_ptr<ibv::queuepair::QueuePair> qp;
@@ -27,16 +26,28 @@ namespace rdma {
 
         CompletionQueuePair &completionQueuePair;
 
+        const ibv::queuepair::Type type;
+
+        void connectRC(const Address &address, uint8_t port, uint8_t retryCount = 0);
+
+        void connectUD(const Address &address, uint8_t port, uint32_t packetSequenceNumber = 0);
+
     public:
-        explicit QueuePair(Network &network); // Uses shared completion and receive Queue
-        QueuePair(Network &network, ibv::srq::SharedReceiveQueue &receiveQueue); // Uses shared completion Queue
-        QueuePair(Network &network, CompletionQueuePair &completionQueuePair); // Uses shared receive Queue
-        QueuePair(Network &network, CompletionQueuePair &completionQueuePair,
+        // Uses shared completion and receive Queue
+        QueuePair(Network &network, ibv::queuepair::Type type);
+
+        // Uses shared completion Queue
+        QueuePair(Network &network, ibv::queuepair::Type type, ibv::srq::SharedReceiveQueue &receiveQueue);
+
+        // Uses shared receive Queue
+        QueuePair(Network &network, ibv::queuepair::Type type, CompletionQueuePair &completionQueuePair);
+
+        QueuePair(Network &network, ibv::queuepair::Type type, CompletionQueuePair &completionQueuePair,
                   ibv::srq::SharedReceiveQueue &receiveQueue);
 
         uint32_t getQPN();
 
-        void connect(const Address &address, uint8_t retryCount = 0);
+        void connect(const Address &address);
 
         void postWorkRequest(ibv::workrequest::SendWr &workRequest);
 
@@ -47,6 +58,4 @@ namespace rdma {
 
         CompletionQueuePair &getCompletionQueuePair() { return completionQueuePair; }
     };
-//---------------------------------------------------------------------------
 } // End of namespace rdma
-//---------------------------------------------------------------------------
