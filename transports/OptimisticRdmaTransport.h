@@ -3,6 +3,7 @@
 
 #include <exchangeableTransports/util/virtualMemory.h>
 #include <exchangeableTransports/util/RDMANetworking.h>
+#include "Transport.h"
 
 /**
   * Based on Victors idea:
@@ -35,10 +36,14 @@
   * Server has a small-ish answer buffer, with already prepared WriteWorkRequests. Always sending from offset 0,
   * only the length needs to be set each time and the buffer doesn't need to be cleared.
   */
-class OptimisticRdmaTransportServer {
-    const size_t size;
-    const size_t bitmask;
-    RDMANetworking net;
+class OptimisticRdmaTransportServer : public TransportServer<OptimisticRdmaTransportServer> {
+    const size_t size = 16 * 1024 * 1024;
+    const size_t bitmask = size - 1;
+    const int sock;
+    rdma::Network net;
+
+    /// A separate QueuePair per potential remote writer, as RC queues can't be shared TODO: [citation needed]
+    std::vector<rdma::QueuePair> qp;
 
     WraparoundBuffer receiveBuf;
     rdma::MemoryRegion localReceiveMr;
@@ -49,7 +54,37 @@ class OptimisticRdmaTransportServer {
     std::vector<rdma::RemoteMemoryRegion> remoteReceiveRmrs;
     std::vector<ibv::workrequest::SendWr> answerWorkRequests;
 
-    OptimisticRdmaTransportServer();
+    void listen(uint16_t port);
+
+public:
+    OptimisticRdmaTransportServer(std::string_view port);
+
+    ~OptimisticRdmaTransportServer() override;
+
+    void accept_impl();
+
+    void write_impl(const uint8_t *data, size_t size);
+
+    void read_impl(uint8_t *buffer, size_t size);
+
+    Buffer getBuffer_impl(size_t size);
+
+    void write_impl(Buffer buffer);
+
+    Buffer read_impl(size_t size);
+
+    void markAsRead_impl(Buffer readBuffer);
+};
+
+class OptimisticRdmaTransportClient : public TransportClient<OptimisticRdmaTransportClient> {
+    const size_t size;
+    const size_t bitmask;
+    RDMANetworking net;
+
+    WraparoundBuffer receiveBuf;
+    rdma::MemoryRegion localReceiveMr;
+
+    // TODO
 };
 
 #endif //EXCHANGABLETRANSPORTS_OPTIMISTICRDMATRANSPORT_H

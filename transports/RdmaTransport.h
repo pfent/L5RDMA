@@ -16,12 +16,13 @@ class RdmaTransportServer : public TransportServer<RdmaTransportServer> {
     const int sock;
     std::unique_ptr<RdmaMemoryDatastructure> rdma = nullptr;
 
+    void listen(uint16_t port);
+
 public:
+
     explicit RdmaTransportServer(std::string_view port);
 
     ~RdmaTransportServer() override;
-
-    void listen(uint16_t port);
 
     void accept_impl();
 

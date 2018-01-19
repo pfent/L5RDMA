@@ -165,7 +165,6 @@ namespace rdma {
         // Poll all work completions
         ibv::workcompletion::WorkCompletion completion;
         for (;;) {
-            event->poll(1, &completion);
             auto numPolled = event->poll(1, &completion);
 
             if (numPolled == 0) {
