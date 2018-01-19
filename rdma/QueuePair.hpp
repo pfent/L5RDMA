@@ -51,6 +51,8 @@ namespace rdma {
 
         void postWorkRequest(ibv::workrequest::SendWr &workRequest);
 
+        void postRecvRequest(ibv::workrequest::Recv &recvRequest);
+
         uint32_t getMaxInlineSize() const;
 
         /// Print detailed information about this queue pair

@@ -126,6 +126,11 @@ namespace rdma {
         qp->postSend(workRequest, badWorkRequest);
     }
 
+    void QueuePair::postRecvRequest(ibv::workrequest::Recv &recvRequest) {
+        ibv::workrequest::Recv *badWorkRequest = nullptr;
+        qp->postRecv(recvRequest, badWorkRequest);
+    }
+
     namespace { // Anonymous helper namespace
         string queuePairAccessFlagsToString(ibv::queuepair::Attributes attr) {
             string result;
