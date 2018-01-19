@@ -1,17 +1,15 @@
 #include "CompletionQueuePair.hpp"
-#include "Network.hpp"
 #include <cstring>
-#include <iostream>
 #include <iomanip>
+#include "NetworkException.h"
 
 using namespace std;
 namespace rdma {
-    CompletionQueuePair::CompletionQueuePair(Network &network) :
-            channel(network.context->createCompletionEventChannel()), // Create event channel
+    CompletionQueuePair::CompletionQueuePair(ibv::context::Context &ctx) :
+            channel(ctx.createCompletionEventChannel()), // Create event channel
             // Create completion queues
-            sendQueue(network.context->createCompletionQueue(Network::CQ_SIZE, context, *channel, completionVector)),
-            receiveQueue(
-                    network.context->createCompletionQueue(Network::CQ_SIZE, context, *channel, completionVector)) {
+            sendQueue(ctx.createCompletionQueue(CQ_SIZE, contextPtr, *channel, completionVector)),
+            receiveQueue(ctx.createCompletionQueue(CQ_SIZE, contextPtr, *channel, completionVector)) {
 
         // Request notifications
         sendQueue->requestNotify(false);
@@ -187,5 +185,13 @@ namespace rdma {
     /// Wait for a work completion
     uint64_t CompletionQueuePair::waitForCompletionReceive() {
         return waitForCompletion(true, false).second;
+    }
+
+    ibv::completions::CompletionQueue &CompletionQueuePair::getSendQueue() {
+        return *sendQueue;
+    }
+
+    ibv::completions::CompletionQueue &CompletionQueuePair::getReceiveQueue() {
+        return *receiveQueue;
     }
 } // End of namespace rdma

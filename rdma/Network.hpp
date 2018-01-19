@@ -1,19 +1,11 @@
 #pragma once
 
-#include <mutex>
-#include <stdexcept>
-#include <vector>
 #include <memory>
 #include <libibverbscpp/libibverbscpp.h>
 #include "CompletionQueuePair.hpp"
 
 namespace rdma {
     using MemoryRegion = std::unique_ptr<ibv::memoryregion::MemoryRegion>;
-
-    /// A network exception
-    struct NetworkException : public std::runtime_error {
-        using std::runtime_error::runtime_error;
-    };
 
     struct RemoteMemoryRegion {
         uintptr_t address;
@@ -34,12 +26,8 @@ namespace rdma {
 
     /// Abstracts a global rdma context
     class Network {
-        friend class CompletionQueuePair;
-
         friend class QueuePair;
 
-        /// The minimal number of entries for the completion queue
-        static constexpr int CQ_SIZE = 100;
         static constexpr uint32_t maxWr = 16351;
         static constexpr uint32_t maxSge = 1;
 
@@ -59,7 +47,6 @@ namespace rdma {
         std::unique_ptr<ibv::srq::SharedReceiveQueue> sharedReceiveQueue;
 
     public:
-        /// Constructor
         Network();
 
         /// Get the LID
@@ -67,6 +54,8 @@ namespace rdma {
 
         /// Print the capabilities of the RDMA host channel adapter
         void printCapabilities();
+
+        CompletionQueuePair newCompletionQueuePair();
 
         /// Register a new MemoryRegion
         std::unique_ptr<ibv::memoryregion::MemoryRegion>

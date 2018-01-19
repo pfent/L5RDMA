@@ -26,7 +26,7 @@ int main(int argc, char **argv) {
 
     static constexpr std::string_view data = "123456789012345678901234567890123456789012345678901234567890123\0"sv;
     auto net = rdma::Network();
-    auto cq = rdma::CompletionQueuePair(net);
+    auto cq = net.newCompletionQueuePair();
     auto qp = rdma::QueuePair(net, ibv::queuepair::Type::UD);
 
     std::array<char, 64> buf{};

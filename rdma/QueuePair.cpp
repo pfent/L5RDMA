@@ -16,14 +16,13 @@ namespace rdma {
 
     QueuePair::QueuePair(Network &network, ibv::queuepair::Type type, CompletionQueuePair &completionQueuePair,
                          ibv::srq::SharedReceiveQueue &receiveQueue)
-            : network(network), completionQueuePair(completionQueuePair),
-              type(type) {
+            : network(network), type(type) {
         ibv::queuepair::InitAttributes queuePairAttributes{};
         queuePairAttributes.setContext(context);
         // CQ to be associated with the Send Queue (SQ)
-        queuePairAttributes.setSendCompletionQueue(*completionQueuePair.sendQueue);
+        queuePairAttributes.setSendCompletionQueue(completionQueuePair.getSendQueue());
         // CQ to be associated with the Receive Queue (RQ)
-        queuePairAttributes.setRecvCompletionQueue(*completionQueuePair.receiveQueue);
+        queuePairAttributes.setRecvCompletionQueue(completionQueuePair.getReceiveQueue());
         // SRQ handle if QP is to be associated with an SRQ, otherwise NULL
         queuePairAttributes.setSharedReceiveQueue(receiveQueue);
         ibv::queuepair::Capabilities capabilities{};

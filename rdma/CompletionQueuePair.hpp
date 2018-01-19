@@ -6,13 +6,11 @@
 #include <libibverbscpp/libibverbscpp.h>
 
 namespace rdma {
-    class Network;
-
     class CompletionQueuePair {
-        friend class QueuePair;
-
-        static constexpr void *context = nullptr;
+        static constexpr void *contextPtr = nullptr;
         static constexpr int completionVector = 0;
+        /// The minimal number of entries for the completion queue
+        static constexpr int CQ_SIZE = 100;
 
         /// The completion channel
         std::unique_ptr<ibv::completions::CompletionEventChannel> channel;
@@ -34,10 +32,13 @@ namespace rdma {
         std::vector<ibv::completions::CompletionQueue *> eventsToAck;
 
     public:
-        /// Ctor
-        explicit CompletionQueuePair(Network &network);
+        explicit CompletionQueuePair(ibv::context::Context &ctx);
 
         ~CompletionQueuePair();
+
+        ibv::completions::CompletionQueue &getSendQueue();
+
+        ibv::completions::CompletionQueue &getReceiveQueue();
 
         /// Poll the send completion queue
         uint64_t pollSendCompletionQueue();

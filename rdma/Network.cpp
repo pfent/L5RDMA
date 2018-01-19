@@ -1,10 +1,20 @@
 #include "Network.hpp"
 #include "CompletionQueuePair.hpp"
-#include <cstring>
 #include <iostream>
 #include <iomanip>
+#include "NetworkException.h"
 
 using namespace std;
+
+static std::unique_ptr<ibv::context::Context> openUnambigousDevice(ibv::device::DeviceList &devices) {
+    if (devices.size() == 0) {
+        throw rdma::NetworkException("no Infiniband devices available");
+    } else if (devices.size() > 1) {
+        throw rdma::NetworkException("more than 1 Infiniband devices available .. not handled right now");
+    }
+    return devices[0]->open();
+}
+
 namespace rdma {
     ostream &operator<<(ostream &os, const RemoteMemoryRegion &remoteMemoryRegion) {
         return os << "address=" << reinterpret_cast<void *>(remoteMemoryRegion.address) << " key="
@@ -15,17 +25,7 @@ namespace rdma {
         return os << "lid=" << address.lid << ", qpn=" << address.qpn;
     }
 
-    Network::Network() : devices(), sharedCompletionQueuePair(*this) {
-        // Get the device list
-        if (devices.size() == 0) {
-            throw NetworkException("no Infiniband devices available");
-        } else if (devices.size() > 1) {
-            throw NetworkException("more than 1 Infiniband devices available .. not handled right now");
-        }
-
-        // Get the verbs context
-        context = devices[0]->open();
-
+    Network::Network() : devices(), context(openUnambigousDevice(devices)), sharedCompletionQueuePair(*context) {
         // Create the protection domain
         protectionDomain = context->allocProtectionDomain();
 
@@ -181,6 +181,10 @@ namespace rdma {
     unique_ptr<ibv::memoryregion::MemoryRegion>
     Network::registerMr(void *addr, size_t length, initializer_list<ibv::AccessFlag> flags) {
         return protectionDomain->registerMemoryRegion(addr, length, flags);
+    }
+
+    CompletionQueuePair Network::newCompletionQueuePair() {
+        return CompletionQueuePair(*context);
     }
 
     RemoteMemoryRegion RemoteMemoryRegion::slice(size_t offset) {

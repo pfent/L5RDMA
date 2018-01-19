@@ -22,9 +22,7 @@ namespace rdma {
 
         std::unique_ptr<ibv::queuepair::QueuePair> qp;
 
-        Network &network;
-
-        CompletionQueuePair &completionQueuePair;
+        Network &network; // TODO: decouple
 
         const ibv::queuepair::Type type;
 
@@ -57,7 +55,5 @@ namespace rdma {
 
         /// Print detailed information about this queue pair
         void printQueuePairDetails() const;
-
-        CompletionQueuePair &getCompletionQueuePair() { return completionQueuePair; }
     };
 } // End of namespace rdma
