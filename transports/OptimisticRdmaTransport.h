@@ -59,7 +59,7 @@ class OptimisticRdmaTransportServer : public TransportServer<OptimisticRdmaTrans
 public:
     OptimisticRdmaTransportServer(std::string_view port);
 
-    ~OptimisticRdmaTransportServer() override;
+    ~OptimisticRdmaTransportServer() override = default;
 
     void accept_impl();
 
@@ -85,6 +85,8 @@ class OptimisticRdmaTransportClient : public TransportClient<OptimisticRdmaTrans
     rdma::MemoryRegion localReceiveMr;
 
     // TODO
+public:
+    ~OptimisticRdmaTransportClient() override = default;
 };
 
 #endif //EXCHANGABLETRANSPORTS_OPTIMISTICRDMATRANSPORT_H
