@@ -29,8 +29,10 @@ int main(int argc, char **argv) {
     auto cq = net.newCompletionQueuePair();
     auto qp = rdma::QueuePair(net, ibv::queuepair::Type::UD, cq);
 
-    std::array<char, 64> buf{};
-    auto mr = net.registerMr(buf.data(), 64, {});
+    // from `man ibv_post_recv`:
+    // in all cases, the actual data of the incoming message will start at an offset of 40 bytes into the buffer
+    std::array<char, 40 + 64> buf{};
+    auto mr = net.registerMr(buf.data(), buf.size(), {});
     std::unique_ptr<ibv::ah::AddressHandle> ah;
 
     auto socket = tcp_socket();
@@ -59,11 +61,11 @@ int main(int argc, char **argv) {
             ah = net.getProtectionDomain().createAddressHandle(ahAttributes);
         }
 
-        std::copy(data.begin(), data.end(), buf.begin());
+        std::copy(data.begin(), data.end(), buf.begin() + 40);
 
         {   // send the data
             auto send = ibv::workrequest::Simple<ibv::workrequest::Send>{};
-            send.setLocalAddress(mr->getSlice());
+            send.setLocalAddress(mr->getSlice(40, 64));
             send.setUDAddressHandle(*ah);
             send.setUDRemoteQueue(remoteAddr.qpn, 0x22222222);
             send.setInline();
@@ -85,7 +87,7 @@ int main(int argc, char **argv) {
         cout << "received: " << std::string(buf.begin(), buf.size()) << endl;
 
         // check if the data is still the same
-        if (not std::equal(buf.begin(), buf.end(), data.begin(), data.end())) {
+        if (not std::equal(buf.begin() + 40, buf.end(), data.begin(), data.end())) {
             throw;
         }
 
@@ -134,7 +136,7 @@ int main(int argc, char **argv) {
 
         {   // echo back the received data
             auto send = ibv::workrequest::Simple<ibv::workrequest::Send>{};
-            send.setLocalAddress(mr->getSlice());
+            send.setLocalAddress(mr->getSlice(40, 64));
             send.setUDAddressHandle(*ah);
             send.setUDRemoteQueue(remoteAddr.qpn, 0x22222222);
             send.setInline();
