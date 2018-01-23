@@ -32,7 +32,7 @@ int main(int argc, char **argv) {
     // from `man ibv_post_recv`:
     // in all cases, the actual data of the incoming message will start at an offset of 40 bytes into the buffer
     std::array<char, 40 + 64> buf{};
-    auto mr = net.registerMr(buf.data(), buf.size(), {});
+    auto mr = net.registerMr(buf.data(), buf.size(), {ibv::AccessFlag::LOCAL_WRITE});
     std::unique_ptr<ibv::ah::AddressHandle> ah;
 
     auto socket = tcp_socket();
