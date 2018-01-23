@@ -86,6 +86,8 @@ class OptimisticRdmaTransportClient : public TransportClient<OptimisticRdmaTrans
 
     // TODO
 public:
+    OptimisticRdmaTransportClient();
+
     ~OptimisticRdmaTransportClient() override = default;
 };
 

@@ -187,6 +187,10 @@ namespace rdma {
         return CompletionQueuePair(*context);
     }
 
+    ibv::protectiondomain::ProtectionDomain &Network::getProtectionDomain() {
+        return *protectionDomain;
+    }
+
     RemoteMemoryRegion RemoteMemoryRegion::slice(size_t offset) {
         return RemoteMemoryRegion{this->address + offset, this->key};
     }

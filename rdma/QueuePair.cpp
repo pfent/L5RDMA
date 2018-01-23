@@ -99,7 +99,7 @@ namespace rdma {
             attr.setQpState(ibv::queuepair::State::INIT);
             attr.setPkeyIndex(0);
             attr.setPortNum(port);
-            attr.setQkey(0x22222222);
+            attr.setQkey(0x22222222); // todo: bad magic constant
 
             qp->modify(attr, {Mod::STATE, Mod::PKEY_INDEX, Mod::PORT, Mod::QKEY});
         }

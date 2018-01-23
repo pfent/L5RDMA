@@ -32,7 +32,7 @@ namespace rdma {
         static constexpr uint32_t maxSge = 1;
 
         /// The port of the Infiniband device
-        uint8_t ibport = 1;
+        static constexpr uint8_t ibport = 1;
 
         /// The Infiniband devices
         ibv::device::DeviceList devices;
@@ -60,5 +60,7 @@ namespace rdma {
         /// Register a new MemoryRegion
         std::unique_ptr<ibv::memoryregion::MemoryRegion>
         registerMr(void *addr, size_t length, std::initializer_list<ibv::AccessFlag> flags);
+
+        ibv::protectiondomain::ProtectionDomain& getProtectionDomain();
     };
 }
