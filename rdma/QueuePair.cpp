@@ -127,7 +127,9 @@ namespace rdma {
 
     void QueuePair::postRecvRequest(ibv::workrequest::Recv &recvRequest) {
         ibv::workrequest::Recv *badWorkRequest = nullptr;
-        qp->postRecv(recvRequest, badWorkRequest);
+        // TODO: handle logic of is this queue shared or not
+        //qp->postRecv(recvRequest, badWorkRequest);
+        network.sharedReceiveQueue->postRecv(recvRequest, badWorkRequest);
     }
 
     namespace { // Anonymous helper namespace
