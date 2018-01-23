@@ -93,8 +93,8 @@ int main(int argc, char **argv) {
 
         {   // connect Qps
             auto remoteAddr = rdma::Address{qp.getQPN(), net.getLID()};
-            tcp_write(socket, &remoteAddr, sizeof(remoteAddr));
-            tcp_read(socket, &remoteAddr, sizeof(remoteAddr));
+            tcp_write(acced, &remoteAddr, sizeof(remoteAddr));
+            tcp_read(acced, &remoteAddr, sizeof(remoteAddr));
             qp.connect(remoteAddr);
         }
 
