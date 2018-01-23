@@ -27,7 +27,7 @@ int main(int argc, char **argv) {
     static constexpr std::string_view data = "123456789012345678901234567890123456789012345678901234567890123\0"sv;
     auto net = rdma::Network();
     auto cq = net.newCompletionQueuePair();
-    auto qp = rdma::QueuePair(net, ibv::queuepair::Type::UD);
+    auto qp = rdma::QueuePair(net, ibv::queuepair::Type::UD, cq);
 
     std::array<char, 64> buf{};
     auto mr = net.registerMr(buf.data(), 64, {});
@@ -79,7 +79,7 @@ int main(int argc, char **argv) {
             auto receiveInfo = mr->getSlice();
             recv.setSge(&receiveInfo, 1);
             qp.postRecvRequest(recv);
-            while (cq.pollSendCompletionQueue() != 42); // poll until recv has finished
+            while (cq.pollRecvCompletionQueue() != 42); // poll until recv has finished
         }
 
         cout << "received: " << std::string(buf.begin(), buf.size()) << endl;
@@ -127,7 +127,7 @@ int main(int argc, char **argv) {
             auto receiveInfo = mr->getSlice();
             recv.setSge(&receiveInfo, 1);
             qp.postRecvRequest(recv);
-            while (cq.pollSendCompletionQueue() != 42); // poll until recv has finished
+            while (cq.pollRecvCompletionQueue() != 42); // poll until recv has finished
         }
 
         cout << "received: " << std::string(buf.begin(), buf.size()) << endl;

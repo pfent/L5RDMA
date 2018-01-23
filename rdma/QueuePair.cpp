@@ -91,7 +91,7 @@ namespace rdma {
         }
     }
 
-    void QueuePair::connectUD(const Address &, uint8_t port, uint32_t packetSequenceNumber) {
+    void QueuePair::connectUD(uint8_t port, uint32_t packetSequenceNumber) {
         using Mod = ibv::queuepair::AttrMask;
 
         {
@@ -192,7 +192,7 @@ namespace rdma {
             case ibv::queuepair::Type::RC:
                 return connectRC(address, network.ibport);
             case ibv::queuepair::Type::UD:
-                return connectUD(address, network.ibport);
+                return connectUD(network.ibport);
             default:
                 throw;
         }

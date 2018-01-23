@@ -28,7 +28,7 @@ namespace rdma {
 
         void connectRC(const Address &address, uint8_t port, uint8_t retryCount = 0);
 
-        void connectUD(const Address &address, uint8_t port, uint32_t packetSequenceNumber = 0);
+        void connectUD(uint8_t port, uint32_t packetSequenceNumber = 0);
 
     public:
         // Uses shared completion and receive Queue
