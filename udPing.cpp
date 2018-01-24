@@ -11,7 +11,7 @@ using namespace std;
 
 constexpr uint16_t port = 1234;
 constexpr auto ip = "127.0.0.1";
-const size_t SHAREDMEM_MESSAGES = 1024;
+const size_t SHAREDMEM_MESSAGES = 1024 * 8;
 
 int main(int argc, char **argv) {
     if (argc < 2) {
@@ -19,12 +19,6 @@ int main(int argc, char **argv) {
         return -1;
     }
     const auto isClient = argv[1][0] == 'c';
-
-    ibv::device::DeviceList devices{};
-    if (devices.size() != 1) {
-        cout << "unexpected number of infiniband devices: " << devices.size() << endl;
-        return -1;
-    }
 
     static constexpr std::string_view data = "123456789012345678901234567890123456789012345678901234567890123\0"sv;
     auto net = rdma::Network();
@@ -86,7 +80,9 @@ int main(int argc, char **argv) {
 
                 // receive the data back again
                 qp.postRecvRequest(recv);
-                while (cq.pollRecvCompletionQueue() != 42); // poll until recv has finished
+                if (cq.pollRecvCompletionQueueBlocking() != 42) {
+                    throw;
+                }
 
                 // check if the data is still the same
                 if (not std::equal(buf.begin() + 40, buf.end(), data.begin(), data.end())) {
@@ -142,8 +138,9 @@ int main(int argc, char **argv) {
             for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
                 // receive into buf
                 qp.postRecvRequest(recv);
-                while (cq.pollRecvCompletionQueue() != 42); // poll until recv has finished
-
+                if (cq.pollRecvCompletionQueueBlocking() != 42) {
+                    throw;
+                }
                 // echo back the received data
                 qp.postWorkRequest(send);
             }
