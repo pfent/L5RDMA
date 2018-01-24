@@ -23,13 +23,10 @@ int main(int argc, char **argv) {
     static constexpr std::string_view data = "123456789012345678901234567890123456789012345678901234567890123\0"sv;
     auto net = rdma::Network();
     auto cq = net.newCompletionQueuePair();
-    auto qp = rdma::QueuePair(net, ibv::queuepair::Type::UD, cq);
+    auto qp = rdma::QueuePair(net, ibv::queuepair::Type::RC, cq);
 
-    // from `man ibv_post_recv`:
-    // [for UD:] in all cases, the actual data of the incoming message will start at an offset of 40 bytes into the buffer
-    std::array<char, 40 + 64> buf{};
+    std::array<char, data.size()> buf{};
     auto mr = net.registerMr(buf.data(), buf.size(), {ibv::AccessFlag::LOCAL_WRITE});
-    std::unique_ptr<ibv::ah::AddressHandle> ah;
 
     auto socket = tcp_socket();
     if (isClient) {
@@ -46,27 +43,14 @@ int main(int argc, char **argv) {
         tcp_read(socket, &remoteAddr, sizeof(remoteAddr));
         qp.connect(remoteAddr);
 
-        {
-            ibv::ah::Attributes ahAttributes{};
-            ahAttributes.setIsGlobal(false);
-            ahAttributes.setDlid(remoteAddr.lid);
-            ahAttributes.setSl(0);
-            ahAttributes.setSrcPathBits(0);
-            ahAttributes.setPortNum(1); // local port
 
-            ah = net.getProtectionDomain().createAddressHandle(ahAttributes);
-        }
-
-        std::copy(data.begin(), data.end(), buf.begin() + 40);
+        std::copy(data.begin(), data.end(), buf.begin());
 
         auto send = ibv::workrequest::Simple<ibv::workrequest::Send>{};
-        send.setLocalAddress(mr->getSlice(40, 64));
-        send.setUDAddressHandle(*ah);
-        send.setUDRemoteQueue(remoteAddr.qpn, 0x22222222);
+        send.setLocalAddress(mr->getSlice());
         send.setInline();
 
         auto recv = ibv::workrequest::Recv{};
-        recv.setId(42);
         auto receiveInfo = mr->getSlice();
         recv.setSge(&receiveInfo, 1);
 
@@ -79,13 +63,14 @@ int main(int argc, char **argv) {
                 std::fill(buf.begin(), buf.end(), 0);
 
                 // receive the data back again
+                recv.setId(i);
                 qp.postRecvRequest(recv);
-                if (cq.pollRecvCompletionQueueBlocking() != 42) {
+                if (cq.pollRecvCompletionQueueBlocking() != i) {
                     throw;
                 }
 
                 // check if the data is still the same
-                if (not std::equal(buf.begin() + 40, buf.end(), data.begin(), data.end())) {
+                if (not std::equal(buf.begin(), buf.end(), data.begin(), data.end())) {
                     throw;
                 }
             }
@@ -112,33 +97,21 @@ int main(int argc, char **argv) {
         tcp_read(acced, &remoteAddr, sizeof(remoteAddr));
         qp.connect(remoteAddr);
 
-        {
-            ibv::ah::Attributes ahAttributes{};
-            ahAttributes.setIsGlobal(false);
-            ahAttributes.setDlid(remoteAddr.lid);
-            ahAttributes.setSl(0);
-            ahAttributes.setSrcPathBits(0);
-            ahAttributes.setPortNum(1); // local port
-
-            ah = net.getProtectionDomain().createAddressHandle(ahAttributes);
-        }
 
         auto send = ibv::workrequest::Simple<ibv::workrequest::Send>{};
-        send.setLocalAddress(mr->getSlice(40, 64));
-        send.setUDAddressHandle(*ah);
-        send.setUDRemoteQueue(remoteAddr.qpn, 0x22222222);
+        send.setLocalAddress(mr->getSlice());
         send.setInline();
 
         auto recv = ibv::workrequest::Recv{};
-        recv.setId(42);
         auto receiveInfo = mr->getSlice();
         recv.setSge(&receiveInfo, 1);
 
         bench(SHAREDMEM_MESSAGES, [&]() {
             for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
                 // receive into buf
+                recv.setId(i);
                 qp.postRecvRequest(recv);
-                if (cq.pollRecvCompletionQueueBlocking() != 42) {
+                if (cq.pollRecvCompletionQueueBlocking() != i) {
                     throw;
                 }
                 // echo back the received data

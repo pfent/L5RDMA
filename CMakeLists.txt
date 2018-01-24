@@ -56,6 +56,9 @@ target_link_libraries(parallel ${LINK_LIBRARIES})
 add_executable(udPing udPing.cpp ${SOURCE_FILES})
 target_link_libraries(udPing ${LINK_LIBRARIES})
 
+add_executable(rcPing rcPing.cpp ${SOURCE_FILES})
+target_link_libraries(rcPing ${LINK_LIBRARIES})
+
 file(GLOB tests "test/*Test.cpp")
 foreach (test ${tests})
     get_filename_component(testName ${test} NAME_WE)
