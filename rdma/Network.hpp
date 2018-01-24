@@ -57,6 +57,8 @@ namespace rdma {
 
         CompletionQueuePair newCompletionQueuePair();
 
+        CompletionQueuePair &getSharedCompletionQueue();
+
         /// Register a new MemoryRegion
         std::unique_ptr<ibv::memoryregion::MemoryRegion>
         registerMr(void *addr, size_t length, std::initializer_list<ibv::AccessFlag> flags);

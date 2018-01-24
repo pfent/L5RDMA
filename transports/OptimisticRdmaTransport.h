@@ -37,13 +37,15 @@
   * only the length needs to be set each time and the buffer doesn't need to be cleared.
   */
 class OptimisticRdmaTransportServer : public TransportServer<OptimisticRdmaTransportServer> {
-    const size_t size = 16 * 1024 * 1024;
-    const size_t bitmask = size - 1;
+    const size_t receiveBufferSize = 16 * 1024 * 1024;
+    const size_t bitmask = receiveBufferSize - 1;
     const int sock;
     rdma::Network net;
 
+    std::vector<int> acceptedSockets;
     /// A separate QueuePair per potential remote writer, as RC queues can't be shared TODO: [citation needed]
-    std::vector<rdma::QueuePair> qp;
+    std::vector<rdma::QueuePair> qps;
+    std::vector<ibv::workrequest::Recv> recvRequests;
 
     WraparoundBuffer receiveBuf;
     rdma::MemoryRegion localReceiveMr;
@@ -52,28 +54,22 @@ class OptimisticRdmaTransportServer : public TransportServer<OptimisticRdmaTrans
     rdma::MemoryRegion localSendBufMr;
 
     std::vector<rdma::RemoteMemoryRegion> remoteReceiveRmrs;
-    std::vector<ibv::workrequest::SendWr> answerWorkRequests;
+    std::vector<ibv::workrequest::Simple<ibv::workrequest::SendWr>> answerWorkRequests;
 
     void listen(uint16_t port);
 
 public:
-    OptimisticRdmaTransportServer(std::string_view port);
+    explicit OptimisticRdmaTransportServer(std::string_view port);
 
-    ~OptimisticRdmaTransportServer() override = default;
+    ~OptimisticRdmaTransportServer() override;
 
     void accept_impl();
 
-    void write_impl(const uint8_t *data, size_t size);
+    /// receive data from a sender. @return the id of the sender
+    size_t receive(void *whereTo, size_t maxSize);
 
-    void read_impl(uint8_t *buffer, size_t size);
-
-    Buffer getBuffer_impl(size_t size);
-
-    void write_impl(Buffer buffer);
-
-    Buffer read_impl(size_t size);
-
-    void markAsRead_impl(Buffer readBuffer);
+    /// send data to the specified receiver.
+    void send(size_t receiverId, const uint8_t *data, size_t size);
 };
 
 class OptimisticRdmaTransportClient : public TransportClient<OptimisticRdmaTransportClient> {

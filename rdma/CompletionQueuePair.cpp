@@ -193,4 +193,21 @@ namespace rdma {
     ibv::completions::CompletionQueue &CompletionQueuePair::getReceiveQueue() {
         return *receiveQueue;
     }
+
+    static ibv::workcompletion::WorkCompletion pollQueueBlocking(ibv::completions::CompletionQueue &queue) {
+        ibv::workcompletion::WorkCompletion completion;
+        while (queue.poll(1, &completion) == 0); // busy poll
+        if (not completion) {
+            throw NetworkException("unexpected completion status: " + to_string(completion.getStatus()));
+        }
+        return completion;
+    }
+
+    ibv::workcompletion::WorkCompletion CompletionQueuePair::pollSendWorkCompletionBlocking() {
+        return pollQueueBlocking(*sendQueue);
+    }
+
+    ibv::workcompletion::WorkCompletion CompletionQueuePair::pollRecvWorkCompletionBlocking() {
+        return pollQueueBlocking(*receiveQueue);
+    }
 } // End of namespace rdma

@@ -59,6 +59,10 @@ namespace rdma {
         /// Poll the receive completion queue blocking
         uint64_t pollRecvCompletionQueueBlocking();
 
+        ibv::workcompletion::WorkCompletion pollSendWorkCompletionBlocking();
+
+        ibv::workcompletion::WorkCompletion pollRecvWorkCompletionBlocking();
+
         /// Wait for a work request completion
         void waitForCompletion();
 

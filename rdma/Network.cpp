@@ -191,6 +191,10 @@ namespace rdma {
         return *protectionDomain;
     }
 
+    CompletionQueuePair &Network::getSharedCompletionQueue() {
+        return sharedCompletionQueuePair;
+    }
+
     RemoteMemoryRegion RemoteMemoryRegion::slice(size_t offset) {
         return RemoteMemoryRegion{this->address + offset, this->key};
     }
