@@ -22,7 +22,7 @@ int main(int argc, char **argv) {
 
     static constexpr std::string_view data = "123456789012345678901234567890123456789012345678901234567890123\0"sv;
     auto net = rdma::Network();
-    auto cq = net.newCompletionQueuePair();
+    auto cq = net.newCompletionQueuePair(); // TODO: use the scq from network
     auto qp = rdma::QueuePair(net, ibv::queuepair::Type::UD, cq);
 
     // from `man ibv_post_recv`:
