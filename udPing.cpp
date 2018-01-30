@@ -27,8 +27,10 @@ int main(int argc, char **argv) {
 
     // from `man ibv_post_recv`:
     // [for UD:] in all cases, the actual data of the incoming message will start at an offset of 40 bytes into the buffer
-    std::array<char, 40 + 64> buf{};
-    auto mr = net.registerMr(buf.data(), buf.size(), {ibv::AccessFlag::LOCAL_WRITE});
+    std::array<char, 40 + 64> recvbuf{};
+    auto recvmr = net.registerMr(recvbuf.data(), recvbuf.size(), {ibv::AccessFlag::LOCAL_WRITE});
+    std::array<char, 64> sendbuf{};
+    auto sendmr = net.registerMr(sendbuf.data(), sendbuf.size(), {});
     std::unique_ptr<ibv::ah::AddressHandle> ah;
 
     auto socket = tcp_socket();
@@ -57,35 +59,33 @@ int main(int argc, char **argv) {
             ah = net.getProtectionDomain().createAddressHandle(ahAttributes);
         }
 
-        std::copy(data.begin(), data.end(), buf.begin() + 40);
+        std::copy(data.begin(), data.end(), sendbuf.begin());
 
         auto send = ibv::workrequest::Simple<ibv::workrequest::Send>{};
-        send.setLocalAddress(mr->getSlice(40, 64));
+        send.setLocalAddress(sendmr->getSlice());
         send.setUDAddressHandle(*ah);
         send.setUDRemoteQueue(remoteAddr.qpn, 0x22222222);
         send.setInline();
 
         auto recv = ibv::workrequest::Recv{};
         recv.setId(42);
-        auto receiveInfo = mr->getSlice();
+        auto receiveInfo = recvmr->getSlice();
         recv.setSge(&receiveInfo, 1);
 
         bench(SHAREDMEM_MESSAGES, [&]() {
             for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
-                // send the data
+                std::fill(recvbuf.begin(), recvbuf.end(), 0);
+
+                // *first* post recv to always have a recv pending, so incoming send don't get swallowed
+                qp.postRecvRequest(recv);
                 qp.postWorkRequest(send);
 
-                // since it was sent inline, we can safely reuse the buffer
-                std::fill(buf.begin(), buf.end(), 0);
-
-                // receive the data back again
-                qp.postRecvRequest(recv);
                 if (cq.pollRecvCompletionQueueBlocking() != 42) {
                     throw;
                 }
 
                 // check if the data is still the same
-                if (not std::equal(buf.begin() + 40, buf.end(), data.begin(), data.end())) {
+                if (not std::equal(recvbuf.begin() + 40, recvbuf.end(), data.begin(), data.end())) {
                     throw;
                 }
             }
@@ -124,14 +124,14 @@ int main(int argc, char **argv) {
         }
 
         auto send = ibv::workrequest::Simple<ibv::workrequest::Send>{};
-        send.setLocalAddress(mr->getSlice(40, 64));
+        send.setLocalAddress(sendmr->getSlice());
         send.setUDAddressHandle(*ah);
         send.setUDRemoteQueue(remoteAddr.qpn, 0x22222222);
         send.setInline();
 
         auto recv = ibv::workrequest::Recv{};
         recv.setId(42);
-        auto receiveInfo = mr->getSlice();
+        auto receiveInfo = sendmr->getSlice();
         recv.setSge(&receiveInfo, 1);
 
         bench(SHAREDMEM_MESSAGES, [&]() {
@@ -141,6 +141,7 @@ int main(int argc, char **argv) {
                 if (cq.pollRecvCompletionQueueBlocking() != 42) {
                     throw;
                 }
+                std::copy(recvbuf.begin() + 40, recvbuf.end(), sendbuf.begin());
                 // echo back the received data
                 qp.postWorkRequest(send);
             }

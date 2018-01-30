@@ -25,8 +25,10 @@ int main(int argc, char **argv) {
     auto cq = net.newCompletionQueuePair();
     auto qp = rdma::QueuePair(net, ibv::queuepair::Type::RC, cq);
 
-    std::array<char, data.size()> buf{};
-    auto mr = net.registerMr(buf.data(), buf.size(), {ibv::AccessFlag::LOCAL_WRITE});
+    std::array<char, data.size()> recvbuf{};
+    auto recvmr = net.registerMr(recvbuf.data(), recvbuf.size(), {ibv::AccessFlag::LOCAL_WRITE});
+    std::array<char, data.size()> sendbuf{};
+    auto sendmr = net.registerMr(sendbuf.data(), sendbuf.size(), {});
 
     auto socket = tcp_socket();
     if (isClient) {
@@ -44,33 +46,31 @@ int main(int argc, char **argv) {
         qp.connect(remoteAddr);
 
 
-        std::copy(data.begin(), data.end(), buf.begin());
+        std::copy(data.begin(), data.end(), sendbuf.begin());
 
         auto send = ibv::workrequest::Simple<ibv::workrequest::Send>{};
-        send.setLocalAddress(mr->getSlice());
+        send.setLocalAddress(sendmr->getSlice());
         send.setInline();
 
         auto recv = ibv::workrequest::Recv{};
-        auto receiveInfo = mr->getSlice();
+        recv.setId(42);
+        auto receiveInfo = recvmr->getSlice();
         recv.setSge(&receiveInfo, 1);
 
         bench(SHAREDMEM_MESSAGES, [&]() {
             for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
-                // send the data
+                std::fill(recvbuf.begin(), recvbuf.end(), 0);
+
+                // *first* post recv to always have a recv pending, so incoming send don't get swallowed
+                qp.postRecvRequest(recv);
                 qp.postWorkRequest(send);
 
-                // since it was sent inline, we can safely reuse the buffer
-                std::fill(buf.begin(), buf.end(), 0);
-
-                // receive the data back again
-                recv.setId(i);
-                qp.postRecvRequest(recv);
-                if (cq.pollRecvCompletionQueueBlocking() != i) {
+                if (cq.pollRecvCompletionQueueBlocking() != 42) {
                     throw;
                 }
 
                 // check if the data is still the same
-                if (not std::equal(buf.begin(), buf.end(), data.begin(), data.end())) {
+                if (not std::equal(recvbuf.begin(), recvbuf.end(), data.begin(), data.end())) {
                     throw;
                 }
             }
@@ -99,21 +99,22 @@ int main(int argc, char **argv) {
 
 
         auto send = ibv::workrequest::Simple<ibv::workrequest::Send>{};
-        send.setLocalAddress(mr->getSlice());
+        send.setLocalAddress(sendmr->getSlice());
         send.setInline();
 
         auto recv = ibv::workrequest::Recv{};
-        auto receiveInfo = mr->getSlice();
+        recv.setId(42);
+        auto receiveInfo = recvmr->getSlice();
         recv.setSge(&receiveInfo, 1);
 
         bench(SHAREDMEM_MESSAGES, [&]() {
             for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
                 // receive into buf
-                recv.setId(i);
                 qp.postRecvRequest(recv);
-                if (cq.pollRecvCompletionQueueBlocking() != i) {
+                if (cq.pollRecvCompletionQueueBlocking() != 42) {
                     throw;
                 }
+                std::copy(recvbuf.begin(), recvbuf.end(), sendbuf.begin());
                 // echo back the received data
                 qp.postWorkRequest(send);
             }
