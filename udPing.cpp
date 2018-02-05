@@ -13,6 +13,17 @@ constexpr uint16_t port = 1234;
 constexpr auto ip = "127.0.0.1";
 const size_t SHAREDMEM_MESSAGES = 1024 * 8;
 
+const auto selectiveSignaledPostWr = [](size_t i, auto &send, auto &qp, auto &cq) {
+    if (i % (8 * 1024) == 0) {
+        send.setFlags({ibv::workrequest::Flags::INLINE, ibv::workrequest::Flags::SIGNALED});
+        qp.postWorkRequest(send);
+        send.setFlags({ibv::workrequest::Flags::INLINE});
+        cq.waitForCompletionSend();
+    } else {
+        qp.postWorkRequest(send);
+    }
+};
+
 int main(int argc, char **argv) {
     if (argc < 2) {
         cout << "Usage: " << argv[0] << " <client / server>" << endl;
@@ -27,9 +38,9 @@ int main(int argc, char **argv) {
 
     // from `man ibv_post_recv`:
     // [for UD:] in all cases, the actual data of the incoming message will start at an offset of 40 bytes into the buffer
-    std::array<char, 40 + 64> recvbuf{};
+    std::array<char, 40 + data.size()> recvbuf{};
     auto recvmr = net.registerMr(recvbuf.data(), recvbuf.size(), {ibv::AccessFlag::LOCAL_WRITE});
-    std::array<char, 64> sendbuf{};
+    std::array<char, data.size()> sendbuf{};
     auto sendmr = net.registerMr(sendbuf.data(), sendbuf.size(), {});
     std::unique_ptr<ibv::ah::AddressHandle> ah;
 
@@ -73,12 +84,12 @@ int main(int argc, char **argv) {
         recv.setSge(&receiveInfo, 1);
 
         bench(SHAREDMEM_MESSAGES, [&]() {
-            for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
+            for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) { // TODO: selective signaling
                 std::fill(recvbuf.begin(), recvbuf.end(), 0);
 
                 // *first* post recv to always have a recv pending, so incoming send don't get swallowed
                 qp.postRecvRequest(recv);
-                qp.postWorkRequest(send);
+                selectiveSignaledPostWr(i, send, qp, cq);
 
                 if (cq.pollRecvCompletionQueueBlocking() != 42) {
                     throw;
@@ -143,7 +154,7 @@ int main(int argc, char **argv) {
                 }
                 std::copy(recvbuf.begin() + 40, recvbuf.end(), sendbuf.begin());
                 // echo back the received data
-                qp.postWorkRequest(send);
+                selectiveSignaledPostWr(i, send, qp, cq);
             }
         }, 1);
 
