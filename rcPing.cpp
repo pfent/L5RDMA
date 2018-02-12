@@ -40,12 +40,6 @@ int main(int argc, char **argv) {
             tcp_connect(socket, addr);
         }
 
-        auto remoteAddr = rdma::Address{qp.getQPN(), net.getLID()};
-        tcp_write(socket, &remoteAddr, sizeof(remoteAddr));
-        tcp_read(socket, &remoteAddr, sizeof(remoteAddr));
-        qp.connect(remoteAddr);
-
-
         std::copy(data.begin(), data.end(), sendbuf.begin());
 
         auto send = ibv::workrequest::Simple<ibv::workrequest::Send>{};
@@ -58,12 +52,17 @@ int main(int argc, char **argv) {
         auto receiveInfo = recvmr->getSlice();
         recv.setSge(&receiveInfo, 1);
 
+        // *first* post recv to always have a recv pending, so incoming send don't get swallowed
+        qp.postRecvRequest(recv);
+
+        auto remoteAddr = rdma::Address{qp.getQPN(), net.getLID()};
+        tcp_write(socket, &remoteAddr, sizeof(remoteAddr));
+        tcp_read(socket, &remoteAddr, sizeof(remoteAddr));
+        qp.connect(remoteAddr);
+
         bench(SHAREDMEM_MESSAGES, [&]() {
             for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
                 std::fill(recvbuf.begin(), recvbuf.end(), 0);
-
-                // *first* post recv to always have a recv pending, so incoming send don't get swallowed
-                qp.postRecvRequest(recv);
 
                 qp.postWorkRequest(send);
                 cq.pollSendCompletionQueueBlocking(ibv::workcompletion::Opcode::SEND);
@@ -71,6 +70,7 @@ int main(int argc, char **argv) {
                 if (cq.pollRecvCompletionQueueBlocking() != 42) {
                     throw;
                 }
+                qp.postRecvRequest(recv);
 
                 // check if the data is still the same
                 if (not std::equal(recvbuf.begin(), recvbuf.end(), data.begin(), data.end())) {
@@ -95,12 +95,6 @@ int main(int argc, char **argv) {
             return tcp_accept(socket, ignored);
         }();
 
-        auto remoteAddr = rdma::Address{qp.getQPN(), net.getLID()};
-        tcp_write(acced, &remoteAddr, sizeof(remoteAddr));
-        tcp_read(acced, &remoteAddr, sizeof(remoteAddr));
-        qp.connect(remoteAddr);
-
-
         auto send = ibv::workrequest::Simple<ibv::workrequest::Send>{};
         send.setLocalAddress(sendmr->getSlice());
         send.setInline();
@@ -111,13 +105,21 @@ int main(int argc, char **argv) {
         auto receiveInfo = recvmr->getSlice();
         recv.setSge(&receiveInfo, 1);
 
+        // *first* post recv to always have a recv pending, so incoming send don't get swallowed
+        qp.postRecvRequest(recv);
+
+        auto remoteAddr = rdma::Address{qp.getQPN(), net.getLID()};
+        tcp_write(acced, &remoteAddr, sizeof(remoteAddr));
+        tcp_read(acced, &remoteAddr, sizeof(remoteAddr));
+        qp.connect(remoteAddr);
+
         bench(SHAREDMEM_MESSAGES, [&]() {
             for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
                 // receive into buf
-                qp.postRecvRequest(recv);
                 if (cq.pollRecvCompletionQueueBlocking() != 42) {
                     throw;
                 }
+                qp.postRecvRequest(recv);
                 std::copy(recvbuf.begin(), recvbuf.end(), sendbuf.begin());
                 // echo back the received data
                 qp.postWorkRequest(send);
