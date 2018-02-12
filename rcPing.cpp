@@ -13,17 +13,6 @@ constexpr uint16_t port = 1234;
 constexpr auto ip = "127.0.0.1";
 const size_t SHAREDMEM_MESSAGES = 1024 * 8;
 
-const auto selectiveSignaledPostWr = [](size_t i, auto &send, auto &qp, auto &cq) {
-    if (i % (8 * 1024) == 0) {
-        send.setFlags({ibv::workrequest::Flags::INLINE, ibv::workrequest::Flags::SIGNALED});
-        qp.postWorkRequest(send);
-        send.setFlags({ibv::workrequest::Flags::INLINE});
-        cq.waitForCompletionSend();
-    } else {
-        qp.postWorkRequest(send);
-    }
-};
-
 int main(int argc, char **argv) {
     if (argc < 2) {
         cout << "Usage: " << argv[0] << " <client / server>" << endl;
@@ -62,6 +51,7 @@ int main(int argc, char **argv) {
         auto send = ibv::workrequest::Simple<ibv::workrequest::Send>{};
         send.setLocalAddress(sendmr->getSlice());
         send.setInline();
+        send.setSignaled();
 
         auto recv = ibv::workrequest::Recv{};
         recv.setId(42);
@@ -74,7 +64,9 @@ int main(int argc, char **argv) {
 
                 // *first* post recv to always have a recv pending, so incoming send don't get swallowed
                 qp.postRecvRequest(recv);
-                selectiveSignaledPostWr(i, send, qp, cq);
+
+                qp.postWorkRequest(send);
+                cq.pollSendCompletionQueueBlocking(ibv::workcompletion::Opcode::SEND);
 
                 if (cq.pollRecvCompletionQueueBlocking() != 42) {
                     throw;
@@ -112,6 +104,7 @@ int main(int argc, char **argv) {
         auto send = ibv::workrequest::Simple<ibv::workrequest::Send>{};
         send.setLocalAddress(sendmr->getSlice());
         send.setInline();
+        send.setSignaled();
 
         auto recv = ibv::workrequest::Recv{};
         recv.setId(42);
@@ -127,7 +120,8 @@ int main(int argc, char **argv) {
                 }
                 std::copy(recvbuf.begin(), recvbuf.end(), sendbuf.begin());
                 // echo back the received data
-                selectiveSignaledPostWr(i, send, qp, cq);
+                qp.postWorkRequest(send);
+                cq.pollSendCompletionQueueBlocking(ibv::workcompletion::Opcode::SEND);
             }
         }, 1);
 

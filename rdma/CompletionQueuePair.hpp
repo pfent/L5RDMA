@@ -27,8 +27,6 @@ namespace rdma {
         uint64_t
         pollCompletionQueue(ibv::completions::CompletionQueue &completionQueue, ibv::workcompletion::Opcode type);
 
-        std::pair<bool, uint64_t> waitForCompletion(bool restrict, bool onlySend);
-
         std::vector<ibv::completions::CompletionQueue *> eventsToAck;
 
     public:
@@ -54,7 +52,8 @@ namespace rdma {
                                              ibv::workcompletion::Opcode type);
 
         /// Poll the send completion queue blocking
-        uint64_t pollSendCompletionQueueBlocking();
+        uint64_t
+        pollSendCompletionQueueBlocking(ibv::workcompletion::Opcode opcode = ibv::workcompletion::Opcode::RDMA_READ);
 
         /// Poll the receive completion queue blocking
         uint64_t pollRecvCompletionQueueBlocking();
@@ -65,9 +64,5 @@ namespace rdma {
 
         /// Wait for a work request completion
         void waitForCompletion();
-
-        uint64_t waitForCompletionSend();
-
-        uint64_t waitForCompletionReceive();
     };
 } // End of namespace rdma
