@@ -142,7 +142,7 @@ int main(int argc, char **argv) {
 
         auto recv = ibv::workrequest::Recv{};
         recv.setId(42);
-        auto receiveInfo = sendmr->getSlice();
+        auto receiveInfo = recvmr->getSlice();
         recv.setSge(&receiveInfo, 1);
 
         bench(SHAREDMEM_MESSAGES, [&]() {
