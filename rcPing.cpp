@@ -16,7 +16,7 @@ const size_t SHAREDMEM_MESSAGES = 1024 * 256;
 void run(bool isClient, size_t dataSize) {
     std::string data(dataSize, 'A');
     auto net = rdma::Network();
-    auto cq = net.newCompletionQueuePair();
+    auto cq = net.newCompletionQueuePair(); // TODO
     auto qp = rdma::QueuePair(net, ibv::queuepair::Type::RC, cq);
 
     auto recvbuf = std::vector<char>(data.size());
