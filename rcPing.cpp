@@ -13,6 +13,14 @@ constexpr uint16_t port = 1234;
 constexpr auto ip = "127.0.0.1";
 const size_t SHAREDMEM_MESSAGES = 1024 * 256;
 
+auto createSendWr(const ibv::memoryregion::Slice &slice) {
+    auto send = ibv::workrequest::Simple<ibv::workrequest::Send>{};
+    send.setLocalAddress(slice);
+    send.setInline();
+    send.setSignaled();
+    return send;
+}
+
 void run(bool isClient, size_t dataSize) {
     std::string data(dataSize, 'A');
     auto net = rdma::Network();
@@ -43,10 +51,7 @@ void run(bool isClient, size_t dataSize) {
 
         std::copy(data.begin(), data.end(), sendbuf.begin());
 
-        auto send = ibv::workrequest::Simple<ibv::workrequest::Send>{};
-        send.setLocalAddress(sendmr->getSlice());
-        send.setInline();
-        send.setSignaled();
+        auto send = createSendWr(sendmr->getSlice());
 
         auto recv = ibv::workrequest::Recv{};
         recv.setId(42);
@@ -96,10 +101,7 @@ void run(bool isClient, size_t dataSize) {
             return tcp_accept(socket, ignored);
         }();
 
-        auto send = ibv::workrequest::Simple<ibv::workrequest::Send>{};
-        send.setLocalAddress(sendmr->getSlice());
-        send.setInline();
-        send.setSignaled();
+        auto send = createSendWr(sendmr->getSlice());
 
         auto recv = ibv::workrequest::Recv{};
         recv.setId(42);

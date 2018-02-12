@@ -11,7 +11,28 @@ using namespace std;
 
 constexpr uint16_t port = 1234;
 constexpr auto ip = "127.0.0.1";
-const size_t SHAREDMEM_MESSAGES = 1024 * 8;
+const size_t SHAREDMEM_MESSAGES = 1024 * 256;
+
+auto createAddressHandle(rdma::Network &net, uint16_t lid) {
+    ibv::ah::Attributes ahAttributes{};
+    ahAttributes.setIsGlobal(false);
+    ahAttributes.setDlid(lid);
+    ahAttributes.setSl(0);
+    ahAttributes.setSrcPathBits(0);
+    ahAttributes.setPortNum(1); // local port
+
+    return net.getProtectionDomain().createAddressHandle(ahAttributes);
+}
+
+auto createSendWr(const ibv::memoryregion::Slice &slice, ibv::ah::AddressHandle &ah, uint32_t qpn) {
+    auto send = ibv::workrequest::Simple<ibv::workrequest::Send>{};
+    send.setLocalAddress(slice);
+    send.setUDAddressHandle(ah);
+    send.setUDRemoteQueue(qpn, 0x22222222);
+    send.setInline();
+    send.setSignaled();
+    return send;
+}
 
 void run(bool isClient, size_t dataSize) {
     std::string data(dataSize, 'A');
@@ -27,9 +48,6 @@ void run(bool isClient, size_t dataSize) {
     auto sendmr = net.registerMr(sendbuf.data(), sendbuf.size(), {});
 
     auto socket = tcp_socket();
-    auto remoteAddr = rdma::Address{};
-    auto ah = std::unique_ptr<ibv::ah::AddressHandle>();
-
     if (isClient) {
         {
             sockaddr_in addr = {};
@@ -54,30 +72,16 @@ void run(bool isClient, size_t dataSize) {
         // *first* post recv to always have a recv pending, so incoming send don't get swallowed
         qp.postRecvRequest(recv);
 
-        remoteAddr = rdma::Address{qp.getQPN(), net.getLID()};
+        auto remoteAddr = rdma::Address{qp.getQPN(), net.getLID()};
         tcp_write(socket, &remoteAddr, sizeof(remoteAddr));
         tcp_read(socket, &remoteAddr, sizeof(remoteAddr));
         qp.connect(remoteAddr);
 
-        {
-            ibv::ah::Attributes ahAttributes{};
-            ahAttributes.setIsGlobal(false);
-            ahAttributes.setDlid(remoteAddr.lid);
-            ahAttributes.setSl(0);
-            ahAttributes.setSrcPathBits(0);
-            ahAttributes.setPortNum(1); // local port
-
-            ah = net.getProtectionDomain().createAddressHandle(ahAttributes);
-        }
+        auto ah = createAddressHandle(net, remoteAddr.lid);
 
         std::copy(data.begin(), data.end(), sendbuf.begin());
 
-        auto send = ibv::workrequest::Simple<ibv::workrequest::Send>{};
-        send.setLocalAddress(sendmr->getSlice());
-        send.setUDAddressHandle(*ah);
-        send.setUDRemoteQueue(remoteAddr.qpn, 0x22222222);
-        send.setInline();
-        send.setSignaled();
+        auto send = createSendWr(sendmr->getSlice(), *ah, remoteAddr.qpn);
 
         bench(SHAREDMEM_MESSAGES, [&]() {
             for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
@@ -121,28 +125,14 @@ void run(bool isClient, size_t dataSize) {
         // *first* post recv to always have a recv pending, so incoming send don't get swallowed
         qp.postRecvRequest(recv);
 
-        remoteAddr = rdma::Address{qp.getQPN(), net.getLID()};
+        auto remoteAddr = rdma::Address{qp.getQPN(), net.getLID()};
         tcp_write(acced, &remoteAddr, sizeof(remoteAddr));
         tcp_read(acced, &remoteAddr, sizeof(remoteAddr));
         qp.connect(remoteAddr);
 
-        {
-            ibv::ah::Attributes ahAttributes{};
-            ahAttributes.setIsGlobal(false);
-            ahAttributes.setDlid(remoteAddr.lid);
-            ahAttributes.setSl(0);
-            ahAttributes.setSrcPathBits(0);
-            ahAttributes.setPortNum(1); // local port
+        auto ah = createAddressHandle(net, remoteAddr.lid);
 
-            ah = net.getProtectionDomain().createAddressHandle(ahAttributes);
-        }
-
-        auto send = ibv::workrequest::Simple<ibv::workrequest::Send>{};
-        send.setLocalAddress(sendmr->getSlice());
-        send.setUDAddressHandle(*ah);
-        send.setUDRemoteQueue(remoteAddr.qpn, 0x22222222);
-        send.setInline();
-        send.setSignaled();
+        auto send = createSendWr(sendmr->getSlice(), *ah, remoteAddr.qpn);
 
         bench(SHAREDMEM_MESSAGES, [&]() {
             for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
