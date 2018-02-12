@@ -11,23 +11,17 @@ using namespace std;
 
 constexpr uint16_t port = 1234;
 constexpr auto ip = "127.0.0.1";
-const size_t SHAREDMEM_MESSAGES = 1024 * 8;
+const size_t SHAREDMEM_MESSAGES = 1024 * 256;
 
-int main(int argc, char **argv) {
-    if (argc < 2) {
-        cout << "Usage: " << argv[0] << " <client / server>" << endl;
-        return -1;
-    }
-    const auto isClient = argv[1][0] == 'c';
-
-    static constexpr std::string_view data = "123456789012345678901234567890123456789012345678901234567890123\0"sv;
+void run(bool isClient, size_t dataSize) {
+    std::string data(dataSize, 'A');
     auto net = rdma::Network();
     auto cq = net.newCompletionQueuePair();
     auto qp = rdma::QueuePair(net, ibv::queuepair::Type::RC, cq);
 
-    std::array<char, data.size()> recvbuf{};
+    auto recvbuf = std::vector<char>(data.size());
     auto recvmr = net.registerMr(recvbuf.data(), recvbuf.size(), {ibv::AccessFlag::LOCAL_WRITE});
-    std::array<char, data.size()> sendbuf{};
+    auto sendbuf = std::vector<char>(data.size());
     auto sendmr = net.registerMr(sendbuf.data(), sendbuf.size(), {});
 
     auto socket = tcp_socket();
@@ -37,7 +31,14 @@ int main(int argc, char **argv) {
             addr.sin_family = AF_INET;
             addr.sin_port = htons(port);
             inet_pton(AF_INET, ip, &addr.sin_addr);
-            tcp_connect(socket, addr);
+            for (int i = 0;; ++i) {
+                try {
+                    tcp_connect(socket, addr);
+                    break;
+                } catch (...) {
+                    if (i > 10) throw;
+                }
+            }
         }
 
         std::copy(data.begin(), data.end(), sendbuf.begin());
@@ -131,4 +132,17 @@ int main(int argc, char **argv) {
     }
 
     tcp_close(socket);
+}
+
+int main(int argc, char **argv) {
+    if (argc < 2) {
+        cout << "Usage: " << argv[0] << " <client / server>" << endl;
+        return -1;
+    }
+    const auto isClient = argv[1][0] == 'c';
+    cout << "size, messages, seconds, msg/s, user, kernel, total" << '\n';
+    for (const size_t length : {1, 2, 4, 8, 16, 32, 64, 128, 256, 512}) {
+        cout << length << ", ";
+        run(isClient, length);
+    }
 }
