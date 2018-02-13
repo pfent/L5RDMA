@@ -29,7 +29,7 @@ void OptimisticRdmaTransportServer::accept_impl() {
     acceptedSockets.push_back(tcp_accept(sock, ignored));
 
     // for each freshly connected remote side, we need a new queue pair
-    qps.emplace_back(net, ibv::queuepair::Type::RC);
+    qps.emplace_back(net);
     auto address = rdma::Address{qps.back().getQPN(), net.getLID()};
     tcp_write(acceptedSockets.back(), &address, sizeof(address));
     tcp_read(acceptedSockets.back(), &address, sizeof(address));

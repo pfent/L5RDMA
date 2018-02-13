@@ -12,6 +12,7 @@ namespace rdma {
     class CompletionQueuePair;
 
     class QueuePair {
+    protected:
         static constexpr void *context = nullptr; // Associated context of the QP (returned in completion events)
         static constexpr uint32_t maxOutstandingSendWrs = 16351; // max number of outstanding WRs in the SQ
         static constexpr uint32_t maxOutstandingRecvWrs = 16351; // max number of outstanding WRs in the RQ
@@ -20,17 +21,12 @@ namespace rdma {
         static constexpr uint32_t maxInlineSize = 512; // max number of bytes that can be posted inline to the SQ
         static constexpr auto signalAll = false; // If each Work Request (WR) submitted to the SQ generates a completion entry
 
+        const uint8_t defaultPort;
+
         std::unique_ptr<ibv::queuepair::QueuePair> qp;
 
-        Network &network; // TODO: decouple
+        ibv::srq::SharedReceiveQueue &receiveQueue;
 
-        const ibv::queuepair::Type type;
-
-        void connectRC(const Address &address, uint8_t port, uint8_t retryCount = 0);
-
-        void connectUD(uint8_t port, uint32_t packetSequenceNumber = 0);
-
-    public:
         // Uses shared completion and receive Queue
         QueuePair(Network &network, ibv::queuepair::Type type);
 
@@ -43,9 +39,14 @@ namespace rdma {
         QueuePair(Network &network, ibv::queuepair::Type type, CompletionQueuePair &completionQueuePair,
                   ibv::srq::SharedReceiveQueue &receiveQueue);
 
+    public:
+        virtual ~QueuePair() = default;
+
+        QueuePair(QueuePair&&) = default;
+
         uint32_t getQPN();
 
-        void connect(const Address &address);
+        virtual void connect(const Address &address) = 0;
 
         void postWorkRequest(ibv::workrequest::SendWr &workRequest);
 

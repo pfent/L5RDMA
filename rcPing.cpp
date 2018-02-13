@@ -6,6 +6,8 @@
 #include <exchangeableTransports/rdma/Network.hpp>
 #include <exchangeableTransports/rdma/QueuePair.hpp>
 #include <exchangeableTransports/util/bench.h>
+#include <exchangeableTransports/rdma/RcQueuePair.h>
+#include <thread>
 
 using namespace std;
 
@@ -25,7 +27,7 @@ void run(bool isClient, size_t dataSize) {
     std::string data(dataSize, 'A');
     auto net = rdma::Network();
     auto &cq = net.getSharedCompletionQueue();
-    auto qp = rdma::QueuePair(net, ibv::queuepair::Type::RC, cq);
+    auto qp = rdma::RcQueuePair(net);
 
     auto recvbuf = std::vector<char>(data.size());
     auto recvmr = net.registerMr(recvbuf.data(), recvbuf.size(), {ibv::AccessFlag::LOCAL_WRITE});
@@ -44,6 +46,7 @@ void run(bool isClient, size_t dataSize) {
                     tcp_connect(socket, addr);
                     break;
                 } catch (...) {
+                    std::this_thread::sleep_for(20ms);
                     if (i > 10) throw;
                 }
             }

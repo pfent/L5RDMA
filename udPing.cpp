@@ -6,6 +6,8 @@
 #include <exchangeableTransports/rdma/Network.hpp>
 #include <exchangeableTransports/rdma/QueuePair.hpp>
 #include <exchangeableTransports/util/bench.h>
+#include <exchangeableTransports/rdma/UdQueuePair.h>
+#include <thread>
 
 using namespace std;
 
@@ -38,7 +40,7 @@ void run(bool isClient, size_t dataSize) {
     std::string data(dataSize, 'A');
     auto net = rdma::Network();
     auto &cq = net.getSharedCompletionQueue();
-    auto qp = rdma::QueuePair(net, ibv::queuepair::Type::UD, cq);
+    auto qp = rdma::UdQueuePair(net);
 
     // from `man ibv_post_recv`:
     // [for UD:] in all cases, the actual data of the incoming message will start at an offset of 40 bytes into the buffer
@@ -59,6 +61,7 @@ void run(bool isClient, size_t dataSize) {
                     tcp_connect(socket, addr);
                     break;
                 } catch (...) {
+                    std::this_thread::sleep_for(20ms);
                     if (i > 10) throw;
                 }
             }

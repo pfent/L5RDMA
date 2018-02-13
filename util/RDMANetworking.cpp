@@ -13,7 +13,7 @@ static void exchangeQPNAndConnect(int sock, rdma::Network &network, rdma::QueueP
 
 RDMANetworking::RDMANetworking(int sock) :
         completionQueue(network.newCompletionQueuePair()),
-        queuePair(network, ibv::queuepair::Type::RC, completionQueue) {
+        queuePair(network, completionQueue) {
     tcp_setBlocking(sock); // just set the socket to block for our setup.
     exchangeQPNAndConnect(sock, network, queuePair);
 }

@@ -44,7 +44,7 @@ class OptimisticRdmaTransportServer : public TransportServer<OptimisticRdmaTrans
 
     std::vector<int> acceptedSockets;
     /// A separate QueuePair per potential remote writer, as RC queues can't be shared TODO: [citation needed]
-    std::vector<rdma::QueuePair> qps;
+    std::vector<rdma::RcQueuePair> qps;
     std::vector<ibv::workrequest::Recv> recvRequests;
 
     WraparoundBuffer receiveBuf;

@@ -13,6 +13,8 @@ set(SOURCE_FILES
         rdma/CompletionQueuePair.cpp
         rdma/Network.cpp
         rdma/QueuePair.cpp
+        rdma/RcQueuePair.cpp
+        rdma/UdQueuePair.cpp
         util/tcpWrapper.cpp
         util/domainSocketsWrapper.cpp
         datastructures/RDMAMessageBuffer.cpp

@@ -1,15 +1,15 @@
 #ifndef EXCHANGABLETRANSPORTS_RDMANETWORKING_H
 #define EXCHANGABLETRANSPORTS_RDMANETWORKING_H
 
+#include <exchangeableTransports/rdma/RcQueuePair.h>
 #include "exchangeableTransports/rdma/Network.hpp"
 #include "exchangeableTransports/rdma/CompletionQueuePair.hpp"
-#include "exchangeableTransports/rdma/QueuePair.hpp"
 #include "tcpWrapper.h"
 
 struct RDMANetworking {
     rdma::Network network;
     rdma::CompletionQueuePair completionQueue;
-    rdma::QueuePair queuePair;
+    rdma::RcQueuePair queuePair;
 
     /// Exchange the basic RDMA connection info for the network and queues
     explicit RDMANetworking(int sock);
