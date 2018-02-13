@@ -24,7 +24,7 @@ auto createSendWr(const ibv::memoryregion::Slice &slice) {
     return send;
 }
 
-template <class QueuePair>
+template<class QueuePair>
 void run(bool isClient, size_t dataSize) {
     std::string data(dataSize, 'A');
     auto net = rdma::Network();
@@ -146,10 +146,24 @@ int main(int argc, char **argv) {
         cout << "Usage: " << argv[0] << " <client / server>" << endl;
         return -1;
     }
+    const auto isRc = string(argv[0]).find("rcPing") != string::npos;
     const auto isClient = argv[1][0] == 'c';
-    cout << "size, messages, seconds, msg/s, user, kernel, total" << '\n';
+    void (*runCommand)(bool, size_t);
+    if (isRc) {
+        runCommand = [](auto isClient, auto length) {
+            cout << "RC, ";
+            run<rdma::RcQueuePair>(isClient, length);
+        };
+    } else {
+        runCommand = [](auto isClient, auto length) {
+            cout << "UC, ";
+            run<rdma::UcQueuePair>(isClient, length);
+        };
+    }
+
+    cout << "size, connection, messages, seconds, msg/s, user, kernel, total" << '\n';
     for (const size_t length : {1, 2, 4, 8, 16, 32, 64, 128, 256, 512}) {
         cout << length << ", ";
-        run<rdma::UcQueuePair>(isClient, length);
+        runCommand(isClient, length);
     }
 }

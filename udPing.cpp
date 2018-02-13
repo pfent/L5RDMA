@@ -163,9 +163,9 @@ int main(int argc, char **argv) {
         return -1;
     }
     const auto isClient = argv[1][0] == 'c';
-    cout << "size, messages, seconds, msg/s, user, kernel, total" << '\n';
+    cout << "size, connection, messages, seconds, msg/s, user, kernel, total" << '\n';
     for (const size_t length : {1, 2, 4, 8, 16, 32, 64, 128, 256, 512}) {
-        cout << length << ", ";
+        cout << length << ", UD, ";
         run(isClient, length);
     }
 }

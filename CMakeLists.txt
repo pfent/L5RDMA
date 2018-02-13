@@ -45,11 +45,14 @@ target_link_libraries(kv ${LINK_LIBRARIES})
 add_executable(parallel benchParallel.cpp $<TARGET_OBJECTS:common>)
 target_link_libraries(parallel ${LINK_LIBRARIES})
 
-add_executable(udPing udPing.cpp $<TARGET_OBJECTS:common>)
-target_link_libraries(udPing ${LINK_LIBRARIES})
-
 add_executable(rcPing rcPing.cpp $<TARGET_OBJECTS:common>)
 target_link_libraries(rcPing ${LINK_LIBRARIES})
+
+add_executable(ucPing rcPing.cpp $<TARGET_OBJECTS:common>)
+target_link_libraries(ucPing ${LINK_LIBRARIES})
+
+add_executable(udPing udPing.cpp $<TARGET_OBJECTS:common>)
+target_link_libraries(udPing ${LINK_LIBRARIES})
 
 file(GLOB tests "test/*Test.cpp")
 foreach (test ${tests})
