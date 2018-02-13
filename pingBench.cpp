@@ -389,6 +389,7 @@ void runWriteMemPolling(bool isClient, size_t dataSize) {
                 while (*static_cast<volatile char *>(recvbuf.data() + recvbuf.size() - 1) == '\0');
 
                 std::copy(recvbuf.begin(), recvbuf.end(), sendbuf.begin());
+                std::fill(recvbuf.begin(), recvbuf.end(), 0);
                 // echo back the received data
                 qp.postWorkRequest(write);
                 cq.pollSendCompletionQueueBlocking(ibv::workcompletion::Opcode::RDMA_WRITE);
@@ -420,7 +421,7 @@ int main(int argc, char **argv) {
          */
         cout << length << ", WriteRC, "; // TODO: still needs debugging
         runWriteMemPolling<rdma::RcQueuePair>(isClient, length);
-        cout << length << ", WriteUc, ";
-        runWriteMemPolling<rdma::UcQueuePair>(isClient, length);
+        //cout << length << ", WriteUc, ";
+        //runWriteMemPolling<rdma::UcQueuePair>(isClient, length);
     }
 }
