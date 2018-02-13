@@ -9,32 +9,22 @@ set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -ggdb3 -O0 -DDEBUG")
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=address")
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3 -flto -DNDEBUG")
 
-set(SOURCE_FILES
-        rdma/CompletionQueuePair.cpp
-        rdma/Network.cpp
-        rdma/QueuePair.cpp
-        rdma/RcQueuePair.cpp
-        rdma/UdQueuePair.cpp
-        util/tcpWrapper.cpp
-        util/domainSocketsWrapper.cpp
-        datastructures/RDMAMessageBuffer.cpp
-        transports/Transport.h
-        transports/Buffer.h
-        transports/TcpTransport.cpp
-        transports/RdmaTransport.cpp
-        transports/DomainSocketsTransport.cpp
-        transports/SharedMemoryTransport.cpp
-        transports/LibRdmacmTransport.cpp
-        transports/OptimisticRdmaTransport.cpp
-        apps/PingPong.h
-        apps/KVStore.h
-        util/bench.h
-        util/pinthread.h
-        util/virtualMemory.cpp
-        datastructures/VirtualRingBuffer.cpp
-        datastructures/VirtualRDMARingBuffer.cpp
-        util/RDMANetworking.cpp
+file(GLOB COMMON_SOURCES
+        apps/*.cpp
+        datastructures/*.cpp
+        rdma/*.cpp
+        transports/*.cpp
+        util/*.cpp
         )
+file(GLOB COMMON_HEADERS
+        apps/*.h
+        datastructures/*.h
+        rdma/*.h
+        transports/*.h
+        util/*.h
+        )
+
+add_library(common OBJECT ${COMMON_SOURCES} ${COMMON_HEADERS})
 
 SET(LINK_LIBRARIES
         ibverbs
@@ -46,25 +36,25 @@ SET(LINK_LIBRARIES
 
 include_directories(.. include)
 
-add_executable(bench bench.cpp ${SOURCE_FILES})
+add_executable(bench bench.cpp $<TARGET_OBJECTS:common>)
 target_link_libraries(bench ${LINK_LIBRARIES})
 
-add_executable(kv kvbench.cpp ${SOURCE_FILES})
+add_executable(kv kvbench.cpp $<TARGET_OBJECTS:common>)
 target_link_libraries(kv ${LINK_LIBRARIES})
 
-add_executable(parallel benchParallel.cpp ${SOURCE_FILES})
+add_executable(parallel benchParallel.cpp $<TARGET_OBJECTS:common>)
 target_link_libraries(parallel ${LINK_LIBRARIES})
 
-add_executable(udPing udPing.cpp ${SOURCE_FILES})
+add_executable(udPing udPing.cpp $<TARGET_OBJECTS:common>)
 target_link_libraries(udPing ${LINK_LIBRARIES})
 
-add_executable(rcPing rcPing.cpp ${SOURCE_FILES})
+add_executable(rcPing rcPing.cpp $<TARGET_OBJECTS:common>)
 target_link_libraries(rcPing ${LINK_LIBRARIES})
 
 file(GLOB tests "test/*Test.cpp")
 foreach (test ${tests})
     get_filename_component(testName ${test} NAME_WE)
-    add_executable(${testName} ${test} ${SOURCE_FILES})
+    add_executable(${testName} ${test} $<TARGET_OBJECTS:common>)
     target_link_libraries(${testName} ${LINK_LIBRARIES})
     add_test(${testName} ${testName})
 endforeach ()

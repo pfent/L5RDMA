@@ -1,6 +1,6 @@
 #include "RcQueuePair.h"
 
-void rdma::RcQueuePair::connect(const rdma::Address &address) {
+void rdma::RcQueuePair::connect(const Address &address) {
     connect(address, defaultPort);
 }
 

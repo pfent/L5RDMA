@@ -8,6 +8,7 @@
 #include <exchangeableTransports/util/bench.h>
 #include <exchangeableTransports/rdma/RcQueuePair.h>
 #include <thread>
+#include <exchangeableTransports/rdma/UcQueuePair.h>
 
 using namespace std;
 
@@ -23,11 +24,12 @@ auto createSendWr(const ibv::memoryregion::Slice &slice) {
     return send;
 }
 
+template <class QueuePair>
 void run(bool isClient, size_t dataSize) {
     std::string data(dataSize, 'A');
     auto net = rdma::Network();
     auto &cq = net.getSharedCompletionQueue();
-    auto qp = rdma::RcQueuePair(net);
+    auto qp = QueuePair(net);
 
     auto recvbuf = std::vector<char>(data.size());
     auto recvmr = net.registerMr(recvbuf.data(), recvbuf.size(), {ibv::AccessFlag::LOCAL_WRITE});
@@ -148,6 +150,6 @@ int main(int argc, char **argv) {
     cout << "size, messages, seconds, msg/s, user, kernel, total" << '\n';
     for (const size_t length : {1, 2, 4, 8, 16, 32, 64, 128, 256, 512}) {
         cout << length << ", ";
-        run(isClient, length);
+        run<rdma::UcQueuePair>(isClient, length);
     }
 }
