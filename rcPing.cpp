@@ -24,7 +24,7 @@ auto createSendWr(const ibv::memoryregion::Slice &slice) {
 void run(bool isClient, size_t dataSize) {
     std::string data(dataSize, 'A');
     auto net = rdma::Network();
-    auto cq = net.newCompletionQueuePair(); // TODO
+    auto &cq = net.getSharedCompletionQueue();
     auto qp = rdma::QueuePair(net, ibv::queuepair::Type::RC, cq);
 
     auto recvbuf = std::vector<char>(data.size());
