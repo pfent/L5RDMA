@@ -541,23 +541,21 @@ int main(int argc, char **argv) {
     }
     const auto isClient = argv[1][0] == 'c';
 
-    cout << "size, connection, messages, seconds, msg/s, user, kernel, total" << '\n';
+    cout << "size, connection, messages, seconds, msgps, user, kernel, total" << '\n';
     for (const size_t length : {1, 2, 4, 8, 16, 32, 64, 128, 256, 512}) {
-        /*
-        cout << length << ", RC, ";
+        cout << length << ", SendRC, ";
         runConnected<rdma::RcQueuePair>(isClient, length);
-        cout << length << ", UC, ";
+        cout << length << ", SendUC, ";
         runConnected<rdma::UcQueuePair>(isClient, length);
-        cout << length << ", UD, ";
+        cout << length << ", SendUD, ";
         runUnconnected(isClient, length);
-         */
         cout << length << ", WriteRC, ";
         runWriteMemPolling<rdma::RcQueuePair>(isClient, length);
-        cout << length << ", WriteUc, ";
+        cout << length << ", WriteUC, ";
         runWriteMemPolling<rdma::UcQueuePair>(isClient, length);
-        //cout << length << ", WriteImmRC, ";
-        //runWriteWithImm<rdma::RcQueuePair>(isClient, length);
-        //cout << length << ", WriteImmUC, ";
-        //runWriteWithImm<rdma::UcQueuePair>(isClient, length);
+        cout << length << ", WriteImmRC, ";
+        runWriteWithImm<rdma::RcQueuePair>(isClient, length);
+        cout << length << ", WriteImmUC, ";
+        runWriteWithImm<rdma::UcQueuePair>(isClient, length);
     }
 }
