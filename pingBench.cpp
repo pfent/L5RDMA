@@ -17,6 +17,32 @@ constexpr uint16_t port = 1234;
 constexpr auto ip = "127.0.0.1";
 const size_t SHAREDMEM_MESSAGES = 1024 * 256;
 
+void connectSocket(int socket) {
+    sockaddr_in addr = {};
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(port);
+    inet_pton(AF_INET, ip, &addr.sin_addr);
+    for (int i = 0;; ++i) {
+        try {
+            tcp_connect(socket, addr);
+            break;
+        } catch (...) {
+            std::this_thread::sleep_for(20ms);
+            if (i > 10) throw;
+        }
+    }
+}
+
+void setUpListenSocket(int socket) {
+    sockaddr_in addr{};
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(port);
+    addr.sin_addr.s_addr = INADDR_ANY;
+
+    tcp_bind(socket, addr);
+    tcp_listen(socket);
+}
+
 auto createSendWrConnected(const ibv::memoryregion::Slice &slice) {
     auto send = ibv::workrequest::Simple<ibv::workrequest::Send>{};
     send.setLocalAddress(slice);
@@ -39,21 +65,7 @@ void runConnected(bool isClient, size_t dataSize) {
 
     auto socket = tcp_socket();
     if (isClient) {
-        {
-            sockaddr_in addr = {};
-            addr.sin_family = AF_INET;
-            addr.sin_port = htons(port);
-            inet_pton(AF_INET, ip, &addr.sin_addr);
-            for (int i = 0;; ++i) {
-                try {
-                    tcp_connect(socket, addr);
-                    break;
-                } catch (...) {
-                    std::this_thread::sleep_for(20ms);
-                    if (i > 10) throw;
-                }
-            }
-        }
+        connectSocket(socket);
 
         std::copy(data.begin(), data.end(), sendbuf.begin());
 
@@ -92,15 +104,7 @@ void runConnected(bool isClient, size_t dataSize) {
         }, 1);
 
     } else {
-        {   // setup tcp socket
-            sockaddr_in addr{};
-            addr.sin_family = AF_INET;
-            addr.sin_port = htons(port);
-            addr.sin_addr.s_addr = INADDR_ANY;
-
-            tcp_bind(socket, addr);
-            tcp_listen(socket);
-        }
+        setUpListenSocket(socket);
 
         const auto acced = [&] {
             sockaddr_in ignored{};
@@ -178,21 +182,7 @@ void runUnconnected(bool isClient, size_t dataSize) {
 
     auto socket = tcp_socket();
     if (isClient) {
-        {
-            sockaddr_in addr = {};
-            addr.sin_family = AF_INET;
-            addr.sin_port = htons(port);
-            inet_pton(AF_INET, ip, &addr.sin_addr);
-            for (int i = 0;; ++i) {
-                try {
-                    tcp_connect(socket, addr);
-                    break;
-                } catch (...) {
-                    std::this_thread::sleep_for(20ms);
-                    if (i > 10) throw;
-                }
-            }
-        }
+        connectSocket(socket);
 
         auto recv = ibv::workrequest::Recv{};
         recv.setId(42);
@@ -232,15 +222,7 @@ void runUnconnected(bool isClient, size_t dataSize) {
             }
         }, 1);
     } else {
-        {   // setup tcp socket
-            sockaddr_in addr{};
-            addr.sin_family = AF_INET;
-            addr.sin_port = htons(port);
-            addr.sin_addr.s_addr = INADDR_ANY;
-
-            tcp_bind(socket, addr);
-            tcp_listen(socket);
-        }
+        setUpListenSocket(socket);
 
         const auto acced = [&] {
             sockaddr_in ignored{};
@@ -308,21 +290,7 @@ void runWriteMemPolling(bool isClient, size_t dataSize) {
 
     auto socket = tcp_socket();
     if (isClient) {
-        {
-            sockaddr_in addr = {};
-            addr.sin_family = AF_INET;
-            addr.sin_port = htons(port);
-            inet_pton(AF_INET, ip, &addr.sin_addr);
-            for (int i = 0;; ++i) {
-                try {
-                    tcp_connect(socket, addr);
-                    break;
-                } catch (...) {
-                    std::this_thread::sleep_for(20ms);
-                    if (i > 10) throw;
-                }
-            }
-        }
+        connectSocket(socket);
 
         std::copy(data.begin(), data.end(), sendbuf.begin());
 
@@ -356,15 +324,7 @@ void runWriteMemPolling(bool isClient, size_t dataSize) {
         }, 1);
 
     } else {
-        {   // setup tcp socket
-            sockaddr_in addr{};
-            addr.sin_family = AF_INET;
-            addr.sin_port = htons(port);
-            addr.sin_addr.s_addr = INADDR_ANY;
-
-            tcp_bind(socket, addr);
-            tcp_listen(socket);
-        }
+        setUpListenSocket(socket);
 
         const auto acced = [&] {
             sockaddr_in ignored{};

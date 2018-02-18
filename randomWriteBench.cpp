@@ -19,6 +19,32 @@ constexpr auto ip = "127.0.0.1";
 constexpr size_t SHAREDMEM_MESSAGES = 1024 * 256;
 constexpr size_t BIGBADBUFFER_SIZE = 1024 * 1024 * 8; // 8MB
 
+void connectSocket(int socket) {
+    sockaddr_in addr = {};
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(port);
+    inet_pton(AF_INET, ip, &addr.sin_addr);
+    for (int i = 0;; ++i) {
+        try {
+            tcp_connect(socket, addr);
+            break;
+        } catch (...) {
+            std::this_thread::sleep_for(20ms);
+            if (i > 10) throw;
+        }
+    }
+}
+
+void setUpListenSocket(int socket) {
+    sockaddr_in addr{};
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(port);
+    addr.sin_addr.s_addr = INADDR_ANY;
+
+    tcp_bind(socket, addr);
+    tcp_listen(socket);
+}
+
 auto createWriteWrWithImm(const ibv::memoryregion::Slice &slice) {
     auto write = ibv::workrequest::Simple<ibv::workrequest::WriteWithImm>{};
     write.setLocalAddress(slice);
@@ -45,21 +71,7 @@ void runImmData(bool isClient, uint32_t dataSize) {
 
     auto socket = tcp_socket();
     if (isClient) {
-        {
-            sockaddr_in addr = {};
-            addr.sin_family = AF_INET;
-            addr.sin_port = htons(port);
-            inet_pton(AF_INET, ip, &addr.sin_addr);
-            for (int i = 0;; ++i) {
-                try {
-                    tcp_connect(socket, addr);
-                    break;
-                } catch (...) {
-                    std::this_thread::sleep_for(20ms);
-                    if (i > 10) throw;
-                }
-            }
-        }
+        connectSocket(socket);
 
         std::copy(data.begin(), data.end(), sendbuf.begin());
 
@@ -102,15 +114,7 @@ void runImmData(bool isClient, uint32_t dataSize) {
         }, 1);
 
     } else {
-        {   // setup tcp socket
-            sockaddr_in addr{};
-            addr.sin_family = AF_INET;
-            addr.sin_port = htons(port);
-            addr.sin_addr.s_addr = INADDR_ANY;
-
-            tcp_bind(socket, addr);
-            tcp_listen(socket);
-        }
+        setUpListenSocket(socket);
 
         const auto acced = [&] {
             sockaddr_in ignored{};
