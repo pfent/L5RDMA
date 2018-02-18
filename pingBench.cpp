@@ -445,7 +445,7 @@ void runWriteWithImm(bool isClient, size_t dataSize) {
         std::copy(data.begin(), data.end(), sendbuf.begin());
 
         auto recv = ibv::workrequest::Recv{};
-        recv.setId(42); // TODO: do we need more here?
+        recv.setId(42);
         // *first* post recv to always have a recv pending, so incoming send don't get swallowed
         qp.postRecvRequest(recv);
 
