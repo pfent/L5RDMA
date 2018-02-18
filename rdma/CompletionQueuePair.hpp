@@ -56,7 +56,7 @@ namespace rdma {
         pollSendCompletionQueueBlocking(ibv::workcompletion::Opcode opcode = ibv::workcompletion::Opcode::RDMA_READ);
 
         /// Poll the receive completion queue blocking
-        uint64_t pollRecvCompletionQueueBlocking();
+        uint64_t pollRecvCompletionQueueBlocking(ibv::workcompletion::Opcode opcode = ibv::workcompletion::Opcode::RECV);
 
         ibv::workcompletion::WorkCompletion pollSendWorkCompletionBlocking();
 

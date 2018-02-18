@@ -89,8 +89,8 @@ namespace rdma {
     }
 
     /// Poll the receive completion queue blocking
-    uint64_t CompletionQueuePair::pollRecvCompletionQueueBlocking() {
-        return pollCompletionQueueBlocking(*receiveQueue, ibv::workcompletion::Opcode::RECV);
+    uint64_t CompletionQueuePair::pollRecvCompletionQueueBlocking(ibv::workcompletion::Opcode opcode) {
+        return pollCompletionQueueBlocking(*receiveQueue, opcode);
     }
 
     /// Wait for a work completion
