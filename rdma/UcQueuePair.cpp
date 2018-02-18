@@ -5,6 +5,7 @@ void rdma::UcQueuePair::connect(const Address &address) {
 }
 
 void rdma::UcQueuePair::connect(const Address &address, uint8_t port) {
+    using Access = ibv::AccessFlag;
     using Mod = ibv::queuepair::AttrMask;
 
     {   // INIT
@@ -12,6 +13,7 @@ void rdma::UcQueuePair::connect(const Address &address, uint8_t port) {
         attributes.setQpState(ibv::queuepair::State::INIT);
         attributes.setPkeyIndex(0);
         attributes.setPortNum(port);
+        attributes.setQpAccessFlags({Access::REMOTE_WRITE});
 
         qp->modify(attributes, {Mod::STATE, Mod::PKEY_INDEX, Mod::PORT, Mod::ACCESS_FLAGS});
     }

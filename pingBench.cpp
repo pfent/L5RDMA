@@ -551,11 +551,13 @@ int main(int argc, char **argv) {
         cout << length << ", UD, ";
         runUnconnected(isClient, length);
          */
-        //cout << length << ", WriteRC, ";
-        //runWriteMemPolling<rdma::RcQueuePair>(isClient, length);
-        //cout << length << ", WriteUc, "; // TODO: still needs debugging
-        //runWriteMemPolling<rdma::UcQueuePair>(isClient, length);
-        cout << length << ", WriteImmRC, ";
-        runWriteWithImm<rdma::RcQueuePair>(isClient, length);
+        cout << length << ", WriteRC, ";
+        runWriteMemPolling<rdma::RcQueuePair>(isClient, length);
+        cout << length << ", WriteUc, ";
+        runWriteMemPolling<rdma::UcQueuePair>(isClient, length);
+        //cout << length << ", WriteImmRC, ";
+        //runWriteWithImm<rdma::RcQueuePair>(isClient, length);
+        //cout << length << ", WriteImmUC, ";
+        //runWriteWithImm<rdma::UcQueuePair>(isClient, length);
     }
 }
