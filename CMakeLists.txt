@@ -59,6 +59,9 @@ target_link_libraries(pingBench ${LINK_LIBRARIES})
 add_executable(randomWriteBench randomWriteBench.cpp $<TARGET_OBJECTS:common>)
 target_link_libraries(randomWriteBench ${LINK_LIBRARIES})
 
+add_executable(randomWriteClients randomWriteClients.cpp $<TARGET_OBJECTS:common>)
+target_link_libraries(randomWriteClients ${LINK_LIBRARIES})
+
 file(GLOB tests "test/*Test.cpp")
 foreach (test ${tests})
     get_filename_component(testName ${test} NAME_WE)
