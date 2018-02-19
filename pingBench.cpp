@@ -15,7 +15,7 @@ using namespace std;
 
 constexpr uint16_t port = 1234;
 constexpr auto ip = "127.0.0.1";
-const size_t SHAREDMEM_MESSAGES = 1024 * 256;
+const size_t SHAREDMEM_MESSAGES = 1024 * 1024;
 
 void connectSocket(int socket) {
     sockaddr_in addr = {};
