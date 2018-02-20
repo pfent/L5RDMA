@@ -54,7 +54,7 @@ auto createWriteWr(const ibv::memoryregion::Slice &slice) {
 }
 
 template<class QueuePair>
-void runPostedWrs(bool isClient, size_t dataSize, uint8_t pollPositions = 1) {
+void runPostedWrs(bool isClient, size_t dataSize, uint8_t pollPositions) {
     std::string data(dataSize, 'A');
     auto net = rdma::Network();
     auto &cq = net.getSharedCompletionQueue();
@@ -116,9 +116,16 @@ void runPostedWrs(bool isClient, size_t dataSize, uint8_t pollPositions = 1) {
                 cq.pollSendCompletionQueueBlocking(ibv::workcompletion::Opcode::RDMA_WRITE);
 
                 // wait for incoming message
-                while(*static_cast<volatile int32_t *>(&recvPosBuf[0]) == -1);
-                auto recvPos = recvPosBuf[0];
-                recvPosBuf[0] = -1;
+                int32_t sender;
+                for (;;)
+                    for (sender = 0; sender < pollPositions; ++sender) {
+                        if (*static_cast<volatile int32_t *>(&recvPosBuf[sender]) != -1) {
+                            goto found;
+                        }
+                    }
+                found:
+                auto recvPos = recvPosBuf[sender];
+                recvPosBuf[sender] = -1;
 
                 auto begin = recvbuf.begin() + recvPos;
                 auto end = begin + dataSize;
@@ -138,7 +145,7 @@ void runPostedWrs(bool isClient, size_t dataSize, uint8_t pollPositions = 1) {
         }();
 
         // invalidate recv address
-        recvPosBuf[0] = -1;
+        std::fill(recvPosBuf.begin(), recvPosBuf.end(), -1);
 
         auto remoteAddr = rdma::Address{qp.getQPN(), net.getLID()};
         tcp_write(acced, &remoteAddr, sizeof(remoteAddr));
@@ -161,9 +168,16 @@ void runPostedWrs(bool isClient, size_t dataSize, uint8_t pollPositions = 1) {
         bench(SHAREDMEM_MESSAGES, [&]() {
             for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
                 // wait for incoming message
-                while(*static_cast<volatile int32_t *>(&recvPosBuf[0]) == -1);
-                auto recvPos = recvPosBuf[0];
-                recvPosBuf[0] = -1;
+                int32_t sender;
+                for (;;)
+                    for (sender = 0; sender < pollPositions; ++sender) {
+                        if (*static_cast<volatile int32_t *>(&recvPosBuf[sender]) != -1) {
+                            goto found2;
+                        }
+                    }
+                found2:
+                auto recvPos = recvPosBuf[sender];
+                recvPosBuf[sender] = -1;
 
                 auto begin = recvbuf.begin() + recvPos;
                 auto end = begin + dataSize;
@@ -192,9 +206,10 @@ int main(int argc, char **argv) {
     }
     const auto isClient = argv[1][0] == 'c';
 
-    cout << "size, connection, messages, seconds, msgps, user, kernel, total" << '\n';
-    for (const uint32_t length : {1, 2, 4, 8, 16, 32, 64, 128, 256, 512}) {
-        cout << length << ", 2WrSeparateRC, ";
-        runPostedWrs<rdma::RcQueuePair>(isClient, length);
+    cout << "size, clients, messages, seconds, msgps, user, kernel, total" << '\n';
+    const auto length = 64;
+    for (const int clients : {1, 2, 3, 4, 5, 6, 7, 8, 9}) {
+        cout << length << ", " << clients << ", ";
+        runPostedWrs<rdma::RcQueuePair>(isClient, length, clients);
     }
 }
