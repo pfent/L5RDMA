@@ -3,7 +3,6 @@
 
 #include <string_view>
 #include <memory>
-#include "Buffer.h"
 
 /**
  * CRTP class used to specify the Transport interface via static polymorphism
@@ -18,40 +17,17 @@ public:
      * Accept a new connection from the remote end.
      * Right now, this only allows exactly one connection. This might change in the future, returning an identifier
      */
-    void accept() { static_cast<T *>(this)->accept_impl(); };
-
-    /**
-     * Get a new Buffer, where data can be written to. This is useful to provide zero copy mechanisms, reducing latency
-     * @see write(Buffer&)
-     * @param size the size for the new buffer
-     */
-    Buffer getBuffer(size_t size) { return static_cast<T *>(this)->getBuffer_impl(size); };
-
-    /**
-     * Send data from a buffer previously acquired with getBuffer(size_t)
-     * @param buffer the buffer
-     */
-    void write(Buffer buffer) { static_cast<T *>(this)->write_impl(std::move(buffer)); };
-
-    /**
-     * Get the buffer, where the latest message has been written to. This is useful from zero copy mechanisms
-     */
-    Buffer read(size_t size) { return static_cast<T *>(this)->read_impl(size); };
-
-    /**
-     * Mark a buffer from read() as finished.
-     */
-    void markAsRead(Buffer readBuffer) { static_cast<T *>(this)->markAsRead_impl(std::move(readBuffer)); };
+    void accept() { static_cast<T *>(this)->accept_impl(); }
 
     /**
      * Send data from an arbitrary memory location
      */
-    void write(uint8_t *buffer, size_t size) { static_cast<T *>(this)->write_impl(buffer, size); };
+    void write(uint8_t *buffer, size_t size) { static_cast<T *>(this)->write_impl(buffer, size); }
 
     /**
      * Receive data to an arbitrary memory location
      */
-    void read(uint8_t *whereTo, size_t size) { static_cast<T *>(this)->read_impl(whereTo, size); };
+    void read(uint8_t *whereTo, size_t size) { static_cast<T *>(this)->read_impl(whereTo, size); }
 
     virtual ~TransportServer() = default;
 };
@@ -63,23 +39,14 @@ public:
     /**
      * Connect to a remote TransportServer, as specified in whereTo
      */
-    void connect(std::string_view whereTo) { static_cast<T *>(this)->connect_impl(whereTo); };
+    void connect(std::string_view whereTo) { static_cast<T *>(this)->connect_impl(whereTo); }
 
     /**
      * Similar interface to TransportServer
      */
+    void write(const uint8_t *buffer, size_t size) { static_cast<T *>(this)->write_impl(buffer, size); }
 
-    Buffer getBuffer(size_t size) { return static_cast<T *>(this)->getBuffer_impl(size); };
-
-    virtual void write(Buffer buffer) { static_cast<T *>(this)->write_impl(std::move(buffer)); };
-
-    virtual Buffer read(size_t size) { return static_cast<T *>(this)->read_impl(size); };
-
-    virtual void markAsRead(Buffer readBuffer) { static_cast<T *>(this)->markAsRead_impl(std::move(readBuffer)); };
-
-    void write(const uint8_t *buffer, size_t size) { static_cast<T *>(this)->write_impl(buffer, size); };
-
-    void read(uint8_t *whereTo, size_t size) { static_cast<T *>(this)->read_impl(whereTo, size); };
+    void read(uint8_t *whereTo, size_t size) { static_cast<T *>(this)->read_impl(whereTo, size); }
 
     virtual ~TransportClient() = default;
 };

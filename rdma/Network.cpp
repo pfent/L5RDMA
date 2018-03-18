@@ -43,8 +43,6 @@ namespace rdma {
     void Network::printCapabilities() {
         using Cap = ibv::device::CapabilityFlag;
         // Get a list of all devices
-        ibv::device::DeviceList devices{};
-
         for (auto device : devices) {
             // Open the device
             auto context = device->open();

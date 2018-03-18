@@ -107,4 +107,6 @@ namespace rdma {
     uint32_t QueuePair::getMaxInlineSize() const {
         return maxInlineSize;
     }
+
+    QueuePair::~QueuePair() = default;
 } // End of namespace rdma

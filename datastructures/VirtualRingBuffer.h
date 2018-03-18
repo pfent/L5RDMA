@@ -6,7 +6,6 @@
 #include <atomic>
 #include <memory>
 #include <unistd.h>
-#include "transports/Buffer.h"
 #include "util/virtualMemory.h"
 
 struct RingBufferInfo {
@@ -34,14 +33,6 @@ struct VirtualRingBuffer {
     void send(const uint8_t *data, size_t length);
 
     size_t receive(void *whereTo, size_t maxSize);
-
-    Buffer reserveBufferForSending(size_t length);
-
-    void send(Buffer buffer);
-
-    Buffer receiveIntoBuffer(size_t length);
-
-    void markAsRead(Buffer buffer);
 
 private:
     void waitUntilSendFree(size_t localWritten, size_t length) const;

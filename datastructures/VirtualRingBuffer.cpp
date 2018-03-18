@@ -59,34 +59,3 @@ void VirtualRingBuffer::waitUntilReceiveAvailable(size_t maxSize, size_t localRe
         remoteWritten = remoteRw->written; // probably buffer this in class, so we don't have as much remote reads
     }, [&]() { return (remoteWritten - localRead) < maxSize; }); // block until maxSize is available
 }
-
-Buffer VirtualRingBuffer::reserveBufferForSending(size_t length) {
-    const auto localWritten = localRw->written.load();
-    const auto pos = localWritten & bitmask;
-
-    waitUntilSendFree(localWritten, length);
-
-    return Buffer(length, &local.get()[pos]);
-}
-
-void VirtualRingBuffer::send(Buffer buffer) {
-    localRw->written.store(localRw->written + buffer.size, std::memory_order_release);
-    buffer.markAsDone();
-}
-
-Buffer VirtualRingBuffer::receiveIntoBuffer(size_t length) {
-    const auto localRead = localRw->read.load();
-    const auto pos = localRead & bitmask;
-
-    waitUntilReceiveAvailable(length, localRead);
-
-    return Buffer(length, &remote.get()[pos]);
-}
-
-void VirtualRingBuffer::markAsRead(Buffer buffer) {
-    localRw->read.store(localRw->read + buffer.size,
-                        std::memory_order_release); // Probably can shave off this atomic read
-    buffer.markAsDone();
-}
-
-

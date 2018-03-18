@@ -30,22 +30,6 @@ void DomainSocketsTransportServer::read_impl(uint8_t *buffer, size_t size) {
     domain_read(communicationSocket, buffer, size);
 }
 
-Buffer DomainSocketsTransportServer::getBuffer_impl(size_t) {
-    throw std::runtime_error{"not implemented!"}; // TODO
-}
-
-void DomainSocketsTransportServer::write_impl(Buffer) {
-    throw std::runtime_error{"not implemented!"}; // TODO
-}
-
-Buffer DomainSocketsTransportServer::read_impl(size_t) {
-    throw std::runtime_error{"not implemented!"}; // TODO
-}
-
-void DomainSocketsTransportServer::markAsRead_impl(Buffer) {
-    throw std::runtime_error{"not implemented!"}; // TODO
-}
-
 DomainSocketsTransportClient::DomainSocketsTransportClient() : socket(domain_socket()) {}
 
 DomainSocketsTransportClient::~DomainSocketsTransportClient() {
@@ -63,20 +47,4 @@ void DomainSocketsTransportClient::write_impl(const uint8_t *data, size_t size) 
 
 void DomainSocketsTransportClient::read_impl(uint8_t *buffer, size_t size) {
     domain_read(socket, buffer, size);
-}
-
-Buffer DomainSocketsTransportClient::getBuffer_impl(size_t) {
-    throw std::runtime_error{"not implemented!"}; // TODO
-}
-
-void DomainSocketsTransportClient::write_impl(Buffer) {
-    throw std::runtime_error{"not implemented!"}; // TODO
-}
-
-Buffer DomainSocketsTransportClient::read_impl(size_t) {
-    throw std::runtime_error{"not implemented!"}; // TODO
-}
-
-void DomainSocketsTransportClient::markAsRead_impl(Buffer) {
-    throw std::runtime_error{"not implemented!"}; // TODO
 }

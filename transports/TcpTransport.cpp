@@ -40,22 +40,6 @@ void TcpTransportServer::accept_impl() {
     communicationSocket = tcp_accept(initialSocket, ignored);
 }
 
-Buffer TcpTransportServer::getBuffer_impl(size_t) {
-    throw std::runtime_error{"not implemented!"}; // TODO
-}
-
-void TcpTransportServer::write_impl(Buffer) {
-    throw std::runtime_error{"not implemented!"}; // TODO
-}
-
-Buffer TcpTransportServer::read_impl(size_t) {
-    throw std::runtime_error{"not implemented!"}; // TODO
-}
-
-void TcpTransportServer::markAsRead_impl(Buffer) {
-    throw std::runtime_error{"not implemented!"}; // TODO
-}
-
 TcpTransportClient::TcpTransportClient() : socket(tcp_socket()) {}
 
 TcpTransportClient::~TcpTransportClient() {
@@ -83,20 +67,4 @@ void TcpTransportClient::write_impl(const uint8_t *data, size_t size) {
 
 void TcpTransportClient::read_impl(uint8_t *buffer, size_t size) {
     tcp_read(socket, buffer, size);
-}
-
-Buffer TcpTransportClient::getBuffer_impl(size_t) {
-    throw std::runtime_error{"not implemented!"}; // TODO
-}
-
-void TcpTransportClient::write_impl(Buffer) {
-    throw std::runtime_error{"not implemented!"}; // TODO
-}
-
-Buffer TcpTransportClient::read_impl(size_t) {
-    throw std::runtime_error{"not implemented!"}; // TODO
-}
-
-void TcpTransportClient::markAsRead_impl(Buffer) {
-    throw std::runtime_error{"not implemented!"}; // TODO
 }

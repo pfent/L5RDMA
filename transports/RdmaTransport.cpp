@@ -36,22 +36,6 @@ void RdmaTransportServer::read_impl(uint8_t *buffer, size_t size) {
     rdma->receive(buffer, size);
 }
 
-Buffer RdmaTransportServer::getBuffer_impl(size_t) {
-    throw std::runtime_error{"not implemented!"}; // TODO
-}
-
-void RdmaTransportServer::write_impl(Buffer) {
-    throw std::runtime_error{"not implemented!"}; // TODO
-}
-
-Buffer RdmaTransportServer::read_impl(size_t) {
-    throw std::runtime_error{"not implemented!"}; // TODO
-}
-
-void RdmaTransportServer::markAsRead_impl(Buffer) {
-    throw std::runtime_error{"not implemented!"}; // TODO
-}
-
 void RdmaTransportClient::connect_impl(std::string_view connection) {
     const auto pos = connection.find(':');
     if (pos == std::string::npos) {
@@ -81,21 +65,3 @@ void RdmaTransportClient::write_impl(const uint8_t *data, size_t size) {
 void RdmaTransportClient::read_impl(uint8_t *buffer, size_t size) {
     rdma->receive(buffer, size);
 }
-
-Buffer RdmaTransportClient::getBuffer_impl(size_t) {
-    throw std::runtime_error{"not implemented!"}; // TODO
-}
-
-void RdmaTransportClient::write_impl(Buffer) {
-    throw std::runtime_error{"not implemented!"}; // TODO
-}
-
-Buffer RdmaTransportClient::read_impl(size_t) {
-    throw std::runtime_error{"not implemented!"}; // TODO
-}
-
-void RdmaTransportClient::markAsRead_impl(Buffer) {
-    throw std::runtime_error{"not implemented!"}; // TODO
-}
-
-

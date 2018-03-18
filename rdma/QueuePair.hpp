@@ -40,7 +40,7 @@ namespace rdma {
                   ibv::srq::SharedReceiveQueue &receiveQueue);
 
     public:
-        virtual ~QueuePair() = default;
+        virtual ~QueuePair();
 
         QueuePair(QueuePair&&) = default;
 

@@ -43,22 +43,6 @@ void LibRdmacmTransportClient::read_impl(uint8_t *buffer, size_t size) {
     rread(rdmaSocket, buffer, size);
 }
 
-Buffer LibRdmacmTransportClient::getBuffer_impl(size_t) {
-    throw std::runtime_error{"not implemented!"}; // TODO
-}
-
-void LibRdmacmTransportClient::write_impl(Buffer) {
-    throw std::runtime_error{"not implemented!"}; // TODO
-}
-
-Buffer LibRdmacmTransportClient::read_impl(size_t) {
-    throw std::runtime_error{"not implemented!"}; // TODO
-}
-
-void LibRdmacmTransportClient::markAsRead_impl(Buffer) {
-    throw std::runtime_error{"not implemented!"}; // TODO
-}
-
 LibRdmacmTransportServer::LibRdmacmTransportServer(std::string_view port) {
     addrinfo hints{};
     hints.ai_socktype = SOCK_DGRAM;
@@ -109,20 +93,4 @@ void LibRdmacmTransportServer::write_impl(const uint8_t *data, size_t size) {
 
 void LibRdmacmTransportServer::read_impl(uint8_t *buffer, size_t size) {
     rread(commSocket, buffer, size);
-}
-
-Buffer LibRdmacmTransportServer::getBuffer_impl(size_t) {
-    throw std::runtime_error{"not implemented!"}; // TODO
-}
-
-void LibRdmacmTransportServer::write_impl(Buffer) {
-    throw std::runtime_error{"not implemented!"}; // TODO
-}
-
-Buffer LibRdmacmTransportServer::read_impl(size_t) {
-    throw std::runtime_error{"not implemented!"}; // TODO
-}
-
-void LibRdmacmTransportServer::markAsRead_impl(Buffer) {
-    throw std::runtime_error{"not implemented!"}; // TODO
 }
