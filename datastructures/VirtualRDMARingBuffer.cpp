@@ -1,15 +1,19 @@
 #include "VirtualRDMARingBuffer.h"
-#include <iostream>
+#include <boost/uuid/uuid.hpp>
+#include <boost/uuid/uuid_generators.hpp>
+#include <boost/uuid/uuid_io.hpp>
 
 using Perm = ibv::AccessFlag;
 
+static auto uuidGenerator = boost::uuids::random_generator{};
+
 VirtualRDMARingBuffer::VirtualRDMARingBuffer(size_t size, int sock) :
         size(size), bitmask(size - 1), net(sock),
-        sendBuf(mmapSharedRingBuffer(std::tmpnam(nullptr), size, true)),
+        sendBuf(mmapSharedRingBuffer(to_string(uuidGenerator()), size, true)),
         // Since we mapped twice the virtual memory, we can create memory regions of twice the size of the actual buffer
         localSendMr(net.network.registerMr(sendBuf.get(), size * 2, {})),
         localReadPosMr(net.network.registerMr(&localReadPos, sizeof(localReadPos), {Perm::REMOTE_READ})),
-        receiveBuf(mmapSharedRingBuffer(std::tmpnam(nullptr), size, true)),
+        receiveBuf(mmapSharedRingBuffer(to_string(uuidGenerator()), size, true)),
         localReceiveMr(net.network.registerMr(receiveBuf.get(), size * 2, {Perm::LOCAL_WRITE, Perm::REMOTE_WRITE})),
         remoteReadPosMr(net.network.registerMr(&remoteReadPos, sizeof(remoteReadPos), {Perm::LOCAL_WRITE})) {
     const bool powerOfTwo = (size != 0) && !(size & (size - 1));
