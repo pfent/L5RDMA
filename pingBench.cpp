@@ -14,7 +14,7 @@
 using namespace std;
 
 constexpr uint16_t port = 1234;
-constexpr auto ip = "127.0.0.1";
+const char *ip = "127.0.0.1";
 const size_t SHAREDMEM_MESSAGES = 1024 * 1024;
 
 void connectSocket(int socket) {
@@ -588,10 +588,13 @@ void runRead(bool isClient, size_t dataSize) {
 
 int main(int argc, char **argv) {
     if (argc < 2) {
-        cout << "Usage: " << argv[0] << " <client / server>" << endl;
+        cout << "Usage: " << argv[0] << " <client / server> <(optional) 127.0.0.1>" << endl;
         return -1;
     }
     const auto isClient = argv[1][0] == 'c';
+    if (argc > 2) {
+        ip = argv[2];
+    }
 
     cout << "size, connection, messages, seconds, msgps, user, kernel, total" << '\n';
     for (const size_t length : {1u, 2u, 4u, 8u, 16u, 32u, 64u, 128u, 256u, 512u}) {
