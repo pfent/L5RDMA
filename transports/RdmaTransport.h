@@ -5,8 +5,8 @@
 #include <cstddef>
 #include <string_view>
 #include <memory>
-#include <exchangeableTransports/datastructures/RDMAMessageBuffer.h>
-#include <exchangeableTransports/datastructures/VirtualRDMARingBuffer.h>
+#include "datastructures/RDMAMessageBuffer.h"
+#include "datastructures/VirtualRDMARingBuffer.h"
 #include "Transport.h"
 
 using RdmaMemoryDatastructure = VirtualRDMARingBuffer; // TODO: make this a template and benchmark the difference

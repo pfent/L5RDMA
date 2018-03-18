@@ -6,9 +6,9 @@
 #include <atomic>
 #include <memory>
 #include <unistd.h>
-#include <exchangeableTransports/transports/Buffer.h>
-#include <exchangeableTransports/util/RDMANetworking.h>
-#include <exchangeableTransports/util/virtualMemory.h>
+#include "transports/Buffer.h"
+#include "util/RDMANetworking.h"
+#include "util/virtualMemory.h"
 
 class VirtualRDMARingBuffer {
     static constexpr size_t validity = 0xDEADDEADBEEFBEEF;

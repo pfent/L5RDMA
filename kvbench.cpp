@@ -1,10 +1,10 @@
 #include <iostream>
-#include <exchangeableTransports/transports/Transport.h>
-#include <exchangeableTransports/transports/SharedMemoryTransport.h>
-#include <exchangeableTransports/util/bench.h>
-#include <exchangeableTransports/util/pinthread.h>
-#include <exchangeableTransports/transports/RdmaTransport.h>
-#include <exchangeableTransports/apps/KVStore.h>
+#include "transports/Transport.h"
+#include "transports/SharedMemoryTransport.h"
+#include "util/bench.h"
+#include "util/pinthread.h"
+#include "transports/RdmaTransport.h"
+#include "apps/KVStore.h"
 #include <algorithm>
 #include <random>
 

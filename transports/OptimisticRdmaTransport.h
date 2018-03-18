@@ -1,8 +1,8 @@
 #ifndef EXCHANGABLETRANSPORTS_OPTIMISTICRDMATRANSPORT_H
 #define EXCHANGABLETRANSPORTS_OPTIMISTICRDMATRANSPORT_H
 
-#include <exchangeableTransports/util/virtualMemory.h>
-#include <exchangeableTransports/util/RDMANetworking.h>
+#include "util/virtualMemory.h"
+#include "util/RDMANetworking.h"
 #include "Transport.h"
 
 /**

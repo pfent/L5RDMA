@@ -1,5 +1,5 @@
-#include <exchangeableTransports/transports/TcpTransport.h>
-#include <exchangeableTransports/apps/PingPong.h>
+#include "transports/TcpTransport.h"
+#include "apps/PingPong.h"
 #include <future>
 #include <iostream>
 

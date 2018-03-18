@@ -1,7 +1,7 @@
 #include "VirtualRingBuffer.h"
 #include <sys/mman.h>
-#include <exchangeableTransports/util/virtualMemory.h>
-#include <exchangeableTransports/util/busywait.h>
+#include "util/virtualMemory.h"
+#include "util/busywait.h"
 
 VirtualRingBuffer::VirtualRingBuffer(size_t size, int sock) : size(size), bitmask(size - 1) {
     const bool powerOfTwo = (size != 0) && !(size & (size - 1));

@@ -1,15 +1,15 @@
 #include <iostream>
 #include <thread>
-#include <exchangeableTransports/util/tcpWrapper.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-#include <libibverbscpp/libibverbscpp.h>
-#include <exchangeableTransports/rdma/Network.hpp>
-#include <exchangeableTransports/rdma/QueuePair.hpp>
-#include <exchangeableTransports/util/bench.h>
-#include <exchangeableTransports/rdma/RcQueuePair.h>
-#include <exchangeableTransports/rdma/UcQueuePair.h>
-#include <exchangeableTransports/rdma/UdQueuePair.h>
+#include "libibverbscpp/libibverbscpp.h"
+#include "rdma/Network.hpp"
+#include "rdma/QueuePair.hpp"
+#include "util/tcpWrapper.h"
+#include "util/bench.h"
+#include "rdma/RcQueuePair.h"
+#include "rdma/UcQueuePair.h"
+#include "rdma/UdQueuePair.h"
 
 using namespace std;
 

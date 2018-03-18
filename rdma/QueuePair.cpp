@@ -78,7 +78,7 @@ namespace rdma {
         cout << "[State of QP " << qp.get() << "]" << endl;
         cout << endl;
         cout << left << setw(44) << "qp_state:" << to_string(attr.getQpState()) << endl;
-        cout << left << setw(44) << "cur_qp_state:" << to_string(attr.getCurQpState()) << endl;
+        cout << left << setw(44) << "cur_qp_state:" << to_string(attr.getQpState()) << endl;
         cout << left << setw(44) << "path_mtu:" << to_string(attr.getPathMtu()) << endl;
         cout << left << setw(44) << "path_mig_state:" << to_string(attr.getPathMigState()) << endl;
         cout << left << setw(44) << "qkey:" << attr.getQkey() << endl;

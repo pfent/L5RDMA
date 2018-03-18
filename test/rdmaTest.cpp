@@ -1,9 +1,9 @@
-#include <exchangeableTransports/transports/RdmaTransport.h>
-#include <exchangeableTransports/apps/PingPong.h>
 #include <future>
 #include <iostream>
 #include <sys/wait.h>
 #include <zconf.h>
+#include "apps/PingPong.h"
+#include "transports/RdmaTransport.h"
 
 using namespace std;
 

@@ -2,7 +2,10 @@
 #define RDMA_HASH_MAP_RDMAMESSAGEBUFFER_H
 
 #include <atomic>
-#include <exchangeableTransports/util/RDMANetworking.h>
+#include <vector>
+#include <memory>
+#include "util/RDMANetworking.h"
+#include "rdma/Network.hpp"
 
 class RDMAMessageBuffer {
 public:

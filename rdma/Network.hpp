@@ -1,7 +1,7 @@
 #pragma once
 
 #include <memory>
-#include <libibverbscpp/libibverbscpp.h>
+#include "libibverbscpp/libibverbscpp.h"
 #include "CompletionQueuePair.hpp"
 
 namespace rdma {

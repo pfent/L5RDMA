@@ -9,7 +9,11 @@ IF(NOT CMAKE_BUILD_TYPE)
 ENDIF(NOT CMAKE_BUILD_TYPE)
 
 set(CMAKE_CXX_STANDARD 17)
-set(WARNINGS "-Wall -Wextra -Wnon-virtual-dtor -Wold-style-cast -Wno-terminate")
+#set(CMAKE_CXX_COMPILER clang++)
+#set(WARNINGS "-Weverything -Wno-c++98-compat")
+set(WARNINGS "-Wall -Wextra -Wnon-virtual-dtor -Wduplicated-cond -Wduplicated-branches -Wlogical-op -Wrestrict")
+set(WARNINGS "${Warnings} -Wnull-dereference -Wold-style-cast -Wuseless-cast -Wjump-misses-init -Wdouble-promotion")
+set(WARNINGS "${Warnings} -Wformat=2 -Wshadow=local -Wodr")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pedantic ${WARNINGS} -fshow-column -pipe -march=native")
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -ggdb3 -O0 -DDEBUG")
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=address")
@@ -42,7 +46,7 @@ SET(LINK_LIBRARIES
         tbb
         )
 
-include_directories(.. include)
+include_directories(. include)
 
 add_executable(bench bench.cpp $<TARGET_OBJECTS:common>)
 target_link_libraries(bench ${LINK_LIBRARIES})

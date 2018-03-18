@@ -6,8 +6,8 @@
 #include <atomic>
 #include <memory>
 #include <unistd.h>
-#include <exchangeableTransports/transports/Buffer.h>
-#include <exchangeableTransports/util/virtualMemory.h>
+#include "transports/Buffer.h"
+#include "util/virtualMemory.h"
 
 struct RingBufferInfo {
     std::atomic<size_t> read;

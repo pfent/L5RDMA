@@ -1,7 +1,7 @@
 #include "SharedMemoryTransport.h"
 
 #include <sys/un.h>
-#include <exchangeableTransports/util/domainSocketsWrapper.h>
+#include "util/domainSocketsWrapper.h"
 
 SharedMemoryTransportServer::SharedMemoryTransportServer(std::string_view domainSocket) :
         initialSocket(domain_socket()),

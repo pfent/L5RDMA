@@ -1,9 +1,9 @@
 #ifndef EXCHANGABLETRANSPORTS_RDMANETWORKING_H
 #define EXCHANGABLETRANSPORTS_RDMANETWORKING_H
 
-#include <exchangeableTransports/rdma/RcQueuePair.h>
-#include "exchangeableTransports/rdma/Network.hpp"
-#include "exchangeableTransports/rdma/CompletionQueuePair.hpp"
+#include "rdma/RcQueuePair.h"
+#include "rdma/Network.hpp"
+#include "rdma/CompletionQueuePair.hpp"
 #include "tcpWrapper.h"
 
 struct RDMANetworking {

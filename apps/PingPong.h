@@ -2,7 +2,7 @@
 #define EXCHANGABLETRANSPORTS_PINGPONG_H
 
 #include <cstdint>
-#include <exchangeableTransports/transports/Transport.h>
+#include "transports/Transport.h"
 
 using namespace std::string_view_literals;
 

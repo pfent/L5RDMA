@@ -1,5 +1,5 @@
-#include <exchangeableTransports/transports/LibRdmacmTransport.h>
-#include <exchangeableTransports/apps/PingPong.h>
+#include "transports/LibRdmacmTransport.h"
+#include "apps/PingPong.h"
 #include <future>
 #include <iostream>
 #include <sys/wait.h>

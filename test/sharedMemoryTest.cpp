@@ -1,5 +1,5 @@
-#include <exchangeableTransports/transports/SharedMemoryTransport.h>
-#include <exchangeableTransports/apps/PingPong.h>
+#include "transports/SharedMemoryTransport.h"
+#include "apps/PingPong.h"
 #include <future>
 #include <iostream>
 #include <sys/wait.h>

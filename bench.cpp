@@ -1,13 +1,13 @@
 #include <iostream>
-#include <exchangeableTransports/transports/Transport.h>
-#include <exchangeableTransports/transports/TcpTransport.h>
-#include <exchangeableTransports/transports/DomainSocketsTransport.h>
-#include <exchangeableTransports/transports/SharedMemoryTransport.h>
-#include <exchangeableTransports/apps/PingPong.h>
-#include <exchangeableTransports/util/bench.h>
-#include <exchangeableTransports/util/pinthread.h>
-#include <exchangeableTransports/transports/RdmaTransport.h>
-#include <exchangeableTransports/transports/LibRdmacmTransport.h>
+#include "transports/Transport.h"
+#include "transports/TcpTransport.h"
+#include "transports/DomainSocketsTransport.h"
+#include "transports/SharedMemoryTransport.h"
+#include "apps/PingPong.h"
+#include "util/bench.h"
+#include "util/pinthread.h"
+#include "transports/RdmaTransport.h"
+#include "transports/LibRdmacmTransport.h"
 
 using namespace std;
 
