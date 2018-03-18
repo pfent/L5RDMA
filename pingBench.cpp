@@ -498,6 +498,94 @@ void runWriteWithImm(bool isClient, size_t dataSize) {
     tcp_close(socket);
 }
 
+auto createRead(const ibv::memoryregion::Slice &slice, const ibv::memoryregion::RemoteAddress &rmr) {
+    auto read = ibv::workrequest::Simple<ibv::workrequest::Read>{};
+    read.setLocalAddress(slice);
+    read.setRemoteAddress(rmr);
+    read.setSignaled();
+    return read;
+}
+
+void runRead(bool isClient, size_t dataSize) {
+    std::string data(dataSize, 'A');
+    auto net = rdma::Network();
+    auto &cq = net.getSharedCompletionQueue();
+    auto qp = rdma::RcQueuePair(net);
+
+    auto recvbuf = std::vector<char>(data.size());
+    auto recvmr = net.registerMr(recvbuf.data(), recvbuf.size(),
+                                 {ibv::AccessFlag::LOCAL_WRITE, ibv::AccessFlag::REMOTE_WRITE,
+                                  ibv::AccessFlag::REMOTE_READ});
+    auto sendbuf = std::vector<char>(data.size());
+    auto sendmr = net.registerMr(sendbuf.data(), sendbuf.size(), {});
+
+    auto socket = tcp_socket();
+    if (isClient) { // client writes to server, then reads the written data back
+        connectSocket(socket);
+
+        std::copy(data.begin(), data.end(), sendbuf.begin());
+
+        auto remoteAddr = rdma::Address{qp.getQPN(), net.getLID()};
+        tcp_write(socket, &remoteAddr, sizeof(remoteAddr));
+        tcp_read(socket, &remoteAddr, sizeof(remoteAddr));
+        auto remoteMr = ibv::memoryregion::RemoteAddress{reinterpret_cast<uintptr_t>(recvbuf.data()),
+                                                         recvmr->getRkey()};
+        tcp_write(socket, &remoteMr, sizeof(remoteMr));
+        tcp_read(socket, &remoteMr, sizeof(remoteMr));
+
+        qp.connect(remoteAddr);
+
+        auto write = createWriteWrNoImm(sendmr->getSlice(), remoteMr);
+        auto read = createRead(recvmr->getSlice(), remoteMr);
+
+        bench(SHAREDMEM_MESSAGES, [&]() {
+            for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
+                std::fill(recvbuf.begin(), recvbuf.end(), 0);
+
+                qp.postWorkRequest(write);
+                qp.postWorkRequest(read);
+
+                cq.pollSendCompletionQueueBlocking(ibv::workcompletion::Opcode::RDMA_WRITE);
+                cq.pollSendCompletionQueueBlocking(ibv::workcompletion::Opcode::RDMA_READ);
+
+                // check if the data is still the same
+                if (not std::equal(recvbuf.begin(), recvbuf.end(), data.begin(), data.end())) {
+                    throw;
+                }
+            }
+        }, 1);
+
+        tcp_write(socket, "EOF", 4);
+    } else {
+        setUpListenSocket(socket);
+
+        const auto acced = [&] {
+            sockaddr_in ignored{};
+            return tcp_accept(socket, ignored);
+        }();
+
+        auto remoteAddr = rdma::Address{qp.getQPN(), net.getLID()};
+        tcp_write(acced, &remoteAddr, sizeof(remoteAddr));
+        tcp_read(acced, &remoteAddr, sizeof(remoteAddr));
+        auto remoteMr = ibv::memoryregion::RemoteAddress{reinterpret_cast<uintptr_t>(recvbuf.data()),
+                                                         recvmr->getRkey()};
+        tcp_write(acced, &remoteMr, sizeof(remoteMr));
+        tcp_read(acced, &remoteMr, sizeof(remoteMr));
+
+        qp.connect(remoteAddr);
+
+        char eof[4];
+        tcp_read(acced, &eof, 4);
+        if (std::string("EOF") != eof) {
+            throw;
+        }
+
+        tcp_close(acced);
+    }
+
+    tcp_close(socket);
+}
+
 int main(int argc, char **argv) {
     if (argc < 2) {
         cout << "Usage: " << argv[0] << " <client / server>" << endl;
@@ -506,7 +594,7 @@ int main(int argc, char **argv) {
     const auto isClient = argv[1][0] == 'c';
 
     cout << "size, connection, messages, seconds, msgps, user, kernel, total" << '\n';
-    for (const size_t length : {1, 2, 4, 8, 16, 32, 64, 128, 256, 512}) {
+    for (const size_t length : {1u, 2u, 4u, 8u, 16u, 32u, 64u, 128u, 256u, 512u}) {
         cout << length << ", SendRC, ";
         runConnected<rdma::RcQueuePair>(isClient, length);
         cout << length << ", SendUC, ";
@@ -521,5 +609,8 @@ int main(int argc, char **argv) {
         runWriteWithImm<rdma::RcQueuePair>(isClient, length);
         cout << length << ", WriteImmUC, ";
         runWriteWithImm<rdma::UcQueuePair>(isClient, length);
+        if (isClient)
+            cout << length << ", Read, ";
+        runRead(isClient, length);
     }
 }

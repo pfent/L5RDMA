@@ -83,7 +83,8 @@ void runImmData(bool isClient, uint32_t dataSize) {
         auto remoteAddr = rdma::Address{qp.getQPN(), net.getLID()};
         tcp_write(socket, &remoteAddr, sizeof(remoteAddr));
         tcp_read(socket, &remoteAddr, sizeof(remoteAddr));
-        auto remoteMr = rdma::RemoteMemoryRegion{reinterpret_cast<uintptr_t>(recvbuf.data()), recvmr->getRkey()};
+        auto remoteMr = ibv::memoryregion::RemoteAddress{reinterpret_cast<uintptr_t>(recvbuf.data()),
+                                                         recvmr->getRkey()};
         tcp_write(socket, &remoteMr, sizeof(remoteMr));
         tcp_read(socket, &remoteMr, sizeof(remoteMr));
 
@@ -94,7 +95,7 @@ void runImmData(bool isClient, uint32_t dataSize) {
         bench(SHAREDMEM_MESSAGES, [&]() {
             for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
                 auto destPos = randomDistribution(generator);
-                write.setRemoteAddress(remoteMr.address + destPos, remoteMr.key);
+                write.setRemoteAddress(remoteMr.offset(destPos));
                 write.setImmData(destPos);
                 qp.postWorkRequest(write);
                 cq.pollSendCompletionQueueBlocking(ibv::workcompletion::Opcode::RDMA_WRITE);
@@ -130,7 +131,8 @@ void runImmData(bool isClient, uint32_t dataSize) {
         auto remoteAddr = rdma::Address{qp.getQPN(), net.getLID()};
         tcp_write(acced, &remoteAddr, sizeof(remoteAddr));
         tcp_read(acced, &remoteAddr, sizeof(remoteAddr));
-        auto remoteMr = rdma::RemoteMemoryRegion{reinterpret_cast<uintptr_t>(recvbuf.data()), recvmr->getRkey()};
+        auto remoteMr = ibv::memoryregion::RemoteAddress{reinterpret_cast<uintptr_t>(recvbuf.data()),
+                                                         recvmr->getRkey()};
         tcp_write(acced, &remoteMr, sizeof(remoteMr));
         tcp_read(acced, &remoteMr, sizeof(remoteMr));
 
@@ -151,7 +153,7 @@ void runImmData(bool isClient, uint32_t dataSize) {
                 std::copy(begin, end, sendbuf.begin());
                 // echo back the received data
                 auto destPos = randomDistribution(generator);
-                write.setRemoteAddress(remoteMr.address + destPos, remoteMr.key);
+                write.setRemoteAddress(remoteMr.offset(destPos));
                 write.setImmData(destPos);
                 qp.postWorkRequest(write);
                 cq.pollSendCompletionQueueBlocking(ibv::workcompletion::Opcode::RDMA_WRITE);
@@ -213,8 +215,8 @@ void runPostedWrs(bool isClient, size_t dataSize, uint8_t pollPositions) {
         tcp_write(socket, &remoteMr, sizeof(remoteMr));
         tcp_read(socket, &remoteMr, sizeof(remoteMr));
         // TODO: vary the send address
-        auto remotePosMr = ibv::memoryregion::RemoteAddress{
-                reinterpret_cast<uintptr_t>(&recvPosBuf.back()), recvPosMr->getRkey()};
+        auto remotePosMr = ibv::memoryregion::RemoteAddress{reinterpret_cast<uintptr_t>(&recvPosBuf.back()),
+                                                            recvPosMr->getRkey()};
         tcp_write(socket, &remotePosMr, sizeof(remotePosMr));
         tcp_read(socket, &remotePosMr, sizeof(remotePosMr));
 
@@ -275,8 +277,8 @@ void runPostedWrs(bool isClient, size_t dataSize, uint8_t pollPositions) {
         tcp_write(acced, &remoteMr, sizeof(remoteMr));
         tcp_read(acced, &remoteMr, sizeof(remoteMr));
         // TODO: vary the send address
-        auto remotePosMr = ibv::memoryregion::RemoteAddress{
-                reinterpret_cast<uintptr_t>(&recvPosBuf.back()), recvPosMr->getRkey()};
+        auto remotePosMr = ibv::memoryregion::RemoteAddress{reinterpret_cast<uintptr_t>(&recvPosBuf.back()),
+                                                            recvPosMr->getRkey()};
         tcp_write(acced, &remotePosMr, sizeof(remotePosMr));
         tcp_read(acced, &remotePosMr, sizeof(remotePosMr));
 

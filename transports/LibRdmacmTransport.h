@@ -2,6 +2,7 @@
 #define EXCHANGABLETRANSPORTS_LIBRDMACMTRANSPORT_H
 
 #include "Transport.h"
+#include <linux/kernel.h>
 #include <rdma/rsocket.h>
 
 class LibRdmacmTransportServer : public TransportServer<LibRdmacmTransportServer> {
