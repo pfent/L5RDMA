@@ -7,8 +7,8 @@
 
 using namespace std;
 
-size_t MESSAGES = 4 * 1024; // ~ 1s
-size_t TIMEOUT_IN_SECONDS = 5;
+static size_t MESSAGES = 4 * 1024; // ~ 1s
+static size_t TIMEOUT_IN_SECONDS = 5;
 
 int main(int, const char** args) {
     if(string(args[0]).find("librdmacmLargeTest") != string::npos) {

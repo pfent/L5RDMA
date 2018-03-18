@@ -17,7 +17,7 @@ struct KVStore {
     std::unique_ptr<TransportServer<T>> transport;
     std::unordered_map<uint64_t, uint64_t> store;
 
-    explicit KVStore(std::unique_ptr<TransportServer<T>> t) : transport(std::move(t)) {};
+    explicit KVStore(std::unique_ptr<TransportServer<T>> t) : transport(std::move(t)) {}
 
     std::optional<uint64_t> get(uint64_t k) {
         auto res = store.find(k);
@@ -44,7 +44,7 @@ struct KVStore {
         static_assert(strlen(get) == strlen(del));
         static_assert(strlen(get) == 7);
 
-        KvInput input;
+        KvInput input{};
 
         transport->read(reinterpret_cast<uint8_t *>(&input), sizeof(input));
 

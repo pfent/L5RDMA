@@ -7,6 +7,8 @@ namespace rdma {
     /// A network exception
     struct NetworkException : public std::runtime_error {
         using std::runtime_error::runtime_error;
+
+        ~NetworkException() override;
     };
 }
 

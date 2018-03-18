@@ -5,6 +5,8 @@
 #include <stdexcept>
 #include <string>
 
+void pinThread(size_t cpu);
+
 void pinThread(size_t cpu) {
     using namespace std::string_literals;
 
