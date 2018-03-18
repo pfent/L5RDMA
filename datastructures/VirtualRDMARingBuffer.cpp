@@ -43,14 +43,14 @@ void VirtualRDMARingBuffer::send(const uint8_t *data, size_t length) {
 
     // then request it to be sent via RDMA
     const auto sendSlice = localSendMr->getSlice(startOfWrite, sizeToWrite);
-    const auto remoteSlice = remoteReceiveRmr.slice(startOfWrite);
+    const auto remoteSlice = remoteReceiveRmr.offset(startOfWrite);
     // occasionally clear the queue (this can probably also happen only every 16k times)
     // aka "selective signaling"
     const auto shouldClearQueue = messageCounter % (4 * 1024) == 0;
 
     ibv::workrequest::Simple<ibv::workrequest::Write> wr;
     wr.setLocalAddress(sendSlice);
-    wr.setRemoteAddress(remoteSlice.address, remoteSlice.key);
+    wr.setRemoteAddress(remoteSlice);
     if (shouldClearQueue) {
         wr.setSignaled();
     }
@@ -108,7 +108,7 @@ void VirtualRDMARingBuffer::waitUntilSendFree(size_t sizeToWrite) {
     while (sizeToWrite > safeToWrite) {
         ibv::workrequest::Simple<ibv::workrequest::Read> wr;
         wr.setLocalAddress(remoteReadPosMr->getSlice());
-        wr.setRemoteAddress(remoteReadPosRmr.address, remoteReadPosRmr.key);
+        wr.setRemoteAddress(remoteReadPosRmr);
         wr.setFlags({ibv::workrequest::Flags::SIGNALED});
         wr.setId(42);
         net.queuePair.postWorkRequest(wr);

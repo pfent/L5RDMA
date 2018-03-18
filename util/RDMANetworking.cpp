@@ -18,12 +18,12 @@ RDMANetworking::RDMANetworking(int sock) :
     exchangeQPNAndConnect(sock, network, queuePair);
 }
 
-void receiveAndSetupRmr(int sock, rdma::RemoteMemoryRegion &buffer, rdma::RemoteMemoryRegion &readPos) {
+void receiveAndSetupRmr(int sock, ibv::memoryregion::RemoteAddress &buffer, ibv::memoryregion::RemoteAddress &readPos) {
     RmrInfo rmrInfo{};
     tcp_read(sock, &rmrInfo, sizeof(rmrInfo));
-    buffer.key = rmrInfo.bufferKey;
+    buffer.rkey = rmrInfo.bufferKey;
     buffer.address = rmrInfo.bufferAddress;
-    readPos.key = rmrInfo.readPosKey;
+    readPos.rkey = rmrInfo.readPosKey;
     readPos.address = rmrInfo.readPosAddress;
 }
 

@@ -41,8 +41,8 @@ private:
     rdma::MemoryRegion localReceive;
     rdma::MemoryRegion localReadPos;
     rdma::MemoryRegion localCurrentRemoteReceive;
-    rdma::RemoteMemoryRegion remoteReceive;
-    rdma::RemoteMemoryRegion remoteReadPos;
+    ibv::memoryregion::RemoteAddress remoteReceive;
+    ibv::memoryregion::RemoteAddress remoteReadPos;
 
     void writeToSendBuffer(const uint8_t *data, size_t sizeToWrite);
 

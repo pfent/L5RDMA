@@ -16,9 +16,9 @@ static std::unique_ptr<ibv::context::Context> openUnambigousDevice(ibv::device::
 }
 
 namespace rdma {
-    ostream &operator<<(ostream &os, const RemoteMemoryRegion &remoteMemoryRegion) {
+    ostream &operator<<(ostream &os, const ibv::memoryregion::RemoteAddress &remoteMemoryRegion) {
         return os << "address=" << reinterpret_cast<void *>(remoteMemoryRegion.address) << " key="
-                  << remoteMemoryRegion.key;
+                  << remoteMemoryRegion.rkey;
     }
 
     ostream &operator<<(ostream &os, const Address &address) {
@@ -193,9 +193,5 @@ namespace rdma {
 
     CompletionQueuePair &Network::getSharedCompletionQueue() {
         return sharedCompletionQueuePair;
-    }
-
-    RemoteMemoryRegion RemoteMemoryRegion::slice(size_t offset) {
-        return RemoteMemoryRegion{this->address + offset, this->key};
     }
 }

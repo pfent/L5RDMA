@@ -53,7 +53,7 @@ class OptimisticRdmaTransportServer : public TransportServer<OptimisticRdmaTrans
     std::vector<uint8_t> sendBuf;
     rdma::MemoryRegion localSendBufMr;
 
-    std::vector<rdma::RemoteMemoryRegion> remoteReceiveRmrs;
+    std::vector<ibv::memoryregion::RemoteAddress> remoteReceiveRmrs;
     std::vector<ibv::workrequest::Simple<ibv::workrequest::SendWr>> answerWorkRequests;
 
     void listen(uint16_t port);

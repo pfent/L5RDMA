@@ -22,7 +22,7 @@ struct RmrInfo {
     uintptr_t readPosAddress;
 };
 
-void receiveAndSetupRmr(int sock, rdma::RemoteMemoryRegion &buffer, rdma::RemoteMemoryRegion &readPos);
+void receiveAndSetupRmr(int sock, ibv::memoryregion::RemoteAddress &buffer, ibv::memoryregion::RemoteAddress &readPos);
 
 void
 sendRmrInfo(int sock, const ibv::memoryregion::MemoryRegion &buffer, const ibv::memoryregion::MemoryRegion &readPos);

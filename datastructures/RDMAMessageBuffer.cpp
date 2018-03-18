@@ -110,13 +110,13 @@ void RDMAMessageBuffer::send(const uint8_t *data, size_t length, bool inln) {
 
     wraparound(size, sizeToWrite, startOfWrite, [&](auto, auto beginPos, auto endPos) {
         const auto sendSlice = localSend->getSlice(beginPos, endPos - beginPos);
-        const auto remoteSlice = remoteReceive.slice(beginPos);
+        const auto remoteSlice = remoteReceive.offset(beginPos);
         // occasionally clear the queue (this can probably also happen only every 16k times)
         const auto shouldClearQueue = messageCounter % (4 * 1024) == 0;
 
         ibv::workrequest::Simple<ibv::workrequest::Write> wr;
         wr.setLocalAddress(sendSlice);
-        wr.setRemoteAddress(remoteSlice.address, remoteSlice.key);
+        wr.setRemoteAddress(remoteSlice);
         if (shouldClearQueue) {
             wr.setSignaled();
         }
@@ -138,7 +138,7 @@ void RDMAMessageBuffer::writeToSendBuffer(const uint8_t *data, size_t sizeToWrit
     while (sizeToWrite > safeToWrite) {
         ibv::workrequest::Simple<ibv::workrequest::Read> wr;
         wr.setLocalAddress(localCurrentRemoteReceive->getSlice());
-        wr.setRemoteAddress(remoteReadPos.address, remoteReadPos.key);
+        wr.setRemoteAddress(remoteReadPos);
         wr.setFlags({ibv::workrequest::Flags::SIGNALED});
         wr.setId(42);
         net.queuePair.postWorkRequest(wr);

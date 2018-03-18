@@ -7,14 +7,7 @@
 namespace rdma {
     using MemoryRegion = std::unique_ptr<ibv::memoryregion::MemoryRegion>;
 
-    struct RemoteMemoryRegion {
-        uintptr_t address;
-        uint32_t key;
-
-        RemoteMemoryRegion slice(size_t offset);
-    };
-
-    std::ostream &operator<<(std::ostream &os, const RemoteMemoryRegion &remoteMemoryRegion);
+    std::ostream &operator<<(std::ostream &os, const ibv::memoryregion::RemoteAddress &remoteMemoryRegion);
 
     /// The LID and QPN uniquely address a queue pair
     struct Address {

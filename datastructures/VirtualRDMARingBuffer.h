@@ -28,8 +28,8 @@ class VirtualRDMARingBuffer {
     rdma::MemoryRegion localReceiveMr;
     rdma::MemoryRegion remoteReadPosMr;
 
-    rdma::RemoteMemoryRegion remoteReceiveRmr{};
-    rdma::RemoteMemoryRegion remoteReadPosRmr{};
+    ibv::memoryregion::RemoteAddress remoteReceiveRmr{};
+    ibv::memoryregion::RemoteAddress remoteReadPosRmr{};
 public:
     /// Establish a shared memory region of size with the remote side of sock
     VirtualRDMARingBuffer(size_t size, int sock);

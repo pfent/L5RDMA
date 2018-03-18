@@ -266,10 +266,10 @@ void runUnconnected(bool isClient, size_t dataSize) {
     tcp_close(socket);
 }
 
-auto createWriteWrNoImm(const ibv::memoryregion::Slice &slice, const rdma::RemoteMemoryRegion &rmr) {
+auto createWriteWrNoImm(const ibv::memoryregion::Slice &slice, const ibv::memoryregion::RemoteAddress &rmr) {
     auto write = ibv::workrequest::Simple<ibv::workrequest::Write>{};
     write.setLocalAddress(slice);
-    write.setRemoteAddress(rmr.address, rmr.key);
+    write.setRemoteAddress(rmr);
     write.setInline();
     write.setSignaled();
     return write;
@@ -297,7 +297,8 @@ void runWriteMemPolling(bool isClient, size_t dataSize) {
         auto remoteAddr = rdma::Address{qp.getQPN(), net.getLID()};
         tcp_write(socket, &remoteAddr, sizeof(remoteAddr));
         tcp_read(socket, &remoteAddr, sizeof(remoteAddr));
-        auto remoteMr = rdma::RemoteMemoryRegion{reinterpret_cast<uintptr_t>(recvbuf.data()), recvmr->getRkey()};
+        auto remoteMr = ibv::memoryregion::RemoteAddress{reinterpret_cast<uintptr_t>(recvbuf.data()),
+                                                         recvmr->getRkey()};
         tcp_write(socket, &remoteMr, sizeof(remoteMr));
         tcp_read(socket, &remoteMr, sizeof(remoteMr));
 
@@ -334,7 +335,8 @@ void runWriteMemPolling(bool isClient, size_t dataSize) {
         auto remoteAddr = rdma::Address{qp.getQPN(), net.getLID()};
         tcp_write(acced, &remoteAddr, sizeof(remoteAddr));
         tcp_read(acced, &remoteAddr, sizeof(remoteAddr));
-        auto remoteMr = rdma::RemoteMemoryRegion{reinterpret_cast<uintptr_t>(recvbuf.data()), recvmr->getRkey()};
+        auto remoteMr = ibv::memoryregion::RemoteAddress{reinterpret_cast<uintptr_t>(recvbuf.data()),
+                                                         recvmr->getRkey()};
         tcp_write(acced, &remoteMr, sizeof(remoteMr));
         tcp_read(acced, &remoteMr, sizeof(remoteMr));
 
@@ -362,10 +364,10 @@ void runWriteMemPolling(bool isClient, size_t dataSize) {
     tcp_close(socket);
 }
 
-auto createWriteWrWithImm(const ibv::memoryregion::Slice &slice, const rdma::RemoteMemoryRegion &rmr) {
+auto createWriteWrWithImm(const ibv::memoryregion::Slice &slice, const ibv::memoryregion::RemoteAddress &rmr) {
     auto write = ibv::workrequest::Simple<ibv::workrequest::WriteWithImm>{};
     write.setLocalAddress(slice);
-    write.setRemoteAddress(rmr.address, rmr.key);
+    write.setRemoteAddress(rmr);
     write.setInline();
     write.setSignaled();
     return write;
@@ -412,7 +414,8 @@ void runWriteWithImm(bool isClient, size_t dataSize) {
         auto remoteAddr = rdma::Address{qp.getQPN(), net.getLID()};
         tcp_write(socket, &remoteAddr, sizeof(remoteAddr));
         tcp_read(socket, &remoteAddr, sizeof(remoteAddr));
-        auto remoteMr = rdma::RemoteMemoryRegion{reinterpret_cast<uintptr_t>(recvbuf.data()), recvmr->getRkey()};
+        auto remoteMr = ibv::memoryregion::RemoteAddress{reinterpret_cast<uintptr_t>(recvbuf.data()),
+                                                         recvmr->getRkey()};
         tcp_write(socket, &remoteMr, sizeof(remoteMr));
         tcp_read(socket, &remoteMr, sizeof(remoteMr));
 
@@ -464,7 +467,8 @@ void runWriteWithImm(bool isClient, size_t dataSize) {
         auto remoteAddr = rdma::Address{qp.getQPN(), net.getLID()};
         tcp_write(acced, &remoteAddr, sizeof(remoteAddr));
         tcp_read(acced, &remoteAddr, sizeof(remoteAddr));
-        auto remoteMr = rdma::RemoteMemoryRegion{reinterpret_cast<uintptr_t>(recvbuf.data()), recvmr->getRkey()};
+        auto remoteMr = ibv::memoryregion::RemoteAddress{reinterpret_cast<uintptr_t>(recvbuf.data()),
+                                                         recvmr->getRkey()};
         tcp_write(acced, &remoteMr, sizeof(remoteMr));
         tcp_read(acced, &remoteMr, sizeof(remoteMr));
 
