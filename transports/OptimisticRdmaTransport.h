@@ -5,6 +5,15 @@
 #include "util/RDMANetworking.h"
 #include "Transport.h"
 
+struct IncomingConnection {
+    int tcpSocket = -1;
+    int doorBellPos = -1;
+    rdma::RcQueuePair qp;
+    ibv::workrequest::Simple<ibv::workrequest::Write> answerWr;
+
+    explicit IncomingConnection(rdma::RcQueuePair qp) : qp(std::move(qp)) {}
+};
+
 /**
   * Based on Victors idea:
   * A single consumer, multi producer message queue, which allows ultra-low latency messages in the common
@@ -37,24 +46,22 @@
   * only the length needs to be set each time and the buffer doesn't need to be cleared.
   */
 class OptimisticRdmaTransportServer : public TransportServer<OptimisticRdmaTransportServer> {
-    const size_t receiveBufferSize = 16 * 1024 * 1024;
-    const size_t bitmask = receiveBufferSize - 1;
+    static constexpr size_t receiveBufferSize = 16 * 1024 * 1024; // 16 MB
+    static constexpr size_t bitmask = receiveBufferSize - 1;
     const int sock;
     rdma::Network net;
-
-    std::vector<int> acceptedSockets;
-    /// A separate QueuePair per potential remote writer, as RC queues can't be shared TODO: [citation needed]
-    std::vector<rdma::RcQueuePair> qps;
-    std::vector<ibv::workrequest::Recv> recvRequests;
+    rdma::CompletionQueuePair &sharedCq;
 
     WraparoundBuffer receiveBuf;
     rdma::MemoryRegion localReceiveMr;
 
+    std::array<int32_t, 256> doorBells;
+    rdma::MemoryRegion doorBellMr;
+
+    std::vector<IncomingConnection> connections;
+
     std::vector<uint8_t> sendBuf;
     rdma::MemoryRegion localSendBufMr;
-
-    std::vector<ibv::memoryregion::RemoteAddress> remoteReceiveRmrs;
-    std::vector<ibv::workrequest::Simple<ibv::workrequest::SendWr>> answerWorkRequests;
 
     void listen(uint16_t port);
 
@@ -73,18 +80,23 @@ public:
 };
 
 class OptimisticRdmaTransportClient : public TransportClient<OptimisticRdmaTransportClient> {
-    const size_t size;
-    const size_t bitmask;
-    RDMANetworking net;
+    static constexpr size_t size = 512;
+    const int sock;
+    rdma::Network net;
+    rdma::CompletionQueuePair &sharedCq;
 
-    WraparoundBuffer receiveBuf;
+    std::vector<uint8_t> receiveBuf;
     rdma::MemoryRegion localReceiveMr;
+
+    rdma::RcQueuePair qp;
 
     // TODO
 public:
     OptimisticRdmaTransportClient();
 
     ~OptimisticRdmaTransportClient() override = default;
+
+    void connect_impl(std::string_view whereTo);
 };
 
 #endif //EXCHANGABLETRANSPORTS_OPTIMISTICRDMATRANSPORT_H

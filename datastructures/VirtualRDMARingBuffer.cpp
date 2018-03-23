@@ -42,7 +42,7 @@ void VirtualRDMARingBuffer::send(const uint8_t *data, size_t length) {
 
     // first write the data
     write(&length, sizeof(length));
-    write(data, length);
+    write(data, length); // TODO: this calls memmove, which is probably slow for size < 256
     write(&validity, sizeof(validity));
 
     // then request it to be sent via RDMA

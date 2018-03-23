@@ -13,7 +13,17 @@ void tcp_connect(int sock, const sockaddr_in &addr);
 
 void tcp_write(int sock, const void *buffer, std::size_t size);
 
+template<typename T>
+void tcp_write(int sock, const T &buffer) {
+    return tcp_write(sock, &buffer, sizeof(T));
+}
+
 void tcp_read(int sock, void *buffer, std::size_t size);
+
+template<typename T>
+void tcp_read(int sock, T &buffer) {
+    return tcp_read(sock, &buffer, sizeof(T));
+}
 
 void tcp_bind(int sock, const sockaddr_in &addr);
 

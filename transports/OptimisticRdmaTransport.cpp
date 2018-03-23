@@ -1,15 +1,26 @@
 #include <netinet/in.h>
+#include <boost/uuid/random_generator.hpp>
+#include <boost/uuid/uuid_io.hpp>
+#include <arpa/inet.h>
 #include "OptimisticRdmaTransport.h"
 
+static auto uuidGenerator = boost::uuids::random_generator{};
+
 OptimisticRdmaTransportServer::OptimisticRdmaTransportServer(std::string_view port) :
-        sock(tcp_socket()), net() {
+        sock(tcp_socket()), net(), sharedCq(net.getSharedCompletionQueue()) {
     auto p = std::stoi(std::string(port.data(), port.size()));
     listen(p);
 
-    // TODO: init WraparoundBuffer
-    // TODO: init receiveMr
-    // TODO: init localSendBuffer
-    // TODO: init sendBuf
+    receiveBuf = mmapSharedRingBuffer(to_string(uuidGenerator()), receiveBufferSize, true);
+    localReceiveMr = net.registerMr(receiveBuf.get(), receiveBufferSize,
+                                    {ibv::AccessFlag::LOCAL_WRITE, ibv::AccessFlag::REMOTE_WRITE});
+
+    sendBuf = std::vector<uint8_t>(512);
+    localSendBufMr = net.registerMr(sendBuf.data(), sendBuf.size(), {});
+
+    std::fill(doorBells.begin(), doorBells.end(), -1);
+    doorBellMr = net.registerMr(doorBells.data(), doorBells.size() * sizeof(int32_t),
+                                {ibv::AccessFlag::LOCAL_WRITE, ibv::AccessFlag::REMOTE_WRITE});
 }
 
 void OptimisticRdmaTransportServer::listen(uint16_t port) {
@@ -23,48 +34,63 @@ void OptimisticRdmaTransportServer::listen(uint16_t port) {
 }
 
 void OptimisticRdmaTransportServer::accept_impl() {
-    const auto currentIndex = acceptedSockets.size();
+    auto pos = static_cast<int>(connections.size());
 
     auto ignored = sockaddr_in{};
-    acceptedSockets.push_back(tcp_accept(sock, ignored));
+    auto acced = tcp_accept(sock, ignored);
 
-    // for each freshly connected remote side, we need a new queue pair
-    qps.emplace_back(net);
-    auto address = rdma::Address{qps.back().getQPN(), net.getLID()};
-    tcp_write(acceptedSockets.back(), &address, sizeof(address));
-    tcp_read(acceptedSockets.back(), &address, sizeof(address));
+    // Connect Queue Pairs
+    auto connection = IncomingConnection(rdma::RcQueuePair(net));
+    connection.doorBellPos = pos;
+    connection.tcpSocket = acced;
+    auto address = rdma::Address{connection.qp.getQPN(), net.getLID()};
+    tcp_write(connection.tcpSocket, address);
+    tcp_read(connection.tcpSocket, address);
 
-    // TODO: also exchange memory locations / remote memory regions
+    // Exchange information of the huge buffer and where the answer should go
+    auto remoteMr = ibv::memoryregion::RemoteAddress{
+            reinterpret_cast<uintptr_t>(receiveBuf.get()),
+            localReceiveMr->getRkey()
+    };
+    tcp_write(connection.tcpSocket, remoteMr);
+    tcp_read(connection.tcpSocket, remoteMr);
 
-    qps.back().connect(address);
+    const auto doorBell = ibv::memoryregion::RemoteAddress{
+            reinterpret_cast<uintptr_t>(&doorBells[connection.doorBellPos]),
+            doorBellMr->getRkey()
+    };
+    tcp_write(connection.tcpSocket, doorBell);
 
-    recvRequests.emplace_back();
-    recvRequests.back().setId(currentIndex);
+    connection.qp.connect(address);
 
-    // TODO: set up answerWorkRequests
+    connection.answerWr = ibv::workrequest::Simple<ibv::workrequest::Write>();
+    connection.answerWr.setLocalAddress(localSendBufMr->getSlice());
+    connection.answerWr.setInline();
+    connection.answerWr.setSignaled();
 
-    // post a recv for each connection
-    qps.back().postRecvRequest(recvRequests.back());
+    connections.push_back(std::move(connection));
 }
 
 OptimisticRdmaTransportServer::~OptimisticRdmaTransportServer() {
-    for (const auto accepted : acceptedSockets) {
-        tcp_close(accepted);
+    for (const auto &accepted : connections) {
+        tcp_close(accepted.tcpSocket);
     }
 }
 
 size_t OptimisticRdmaTransportServer::receive(void *whereTo, size_t maxSize) {
-    // TODO: this would probably be easier on the CPU with ibv_req_notify_cq
-    auto wc = net.getSharedCompletionQueue().pollRecvWorkCompletionBlocking();
-    if (not wc.hasImmData()) {
-        throw "unexpected work completion";
+    size_t idOfSender = 0;
+    int32_t writePos = -1;
+    while (writePos == -1) { // TODO: vectorize: https://godbolt.org/g/jgiU74
+        for (size_t i = 0; i < doorBells.size(); ++i) {
+            auto data = *reinterpret_cast<volatile int32_t *>(&doorBells[i]);
+            idOfSender = i;
+            writePos = data;
+        }
     }
-
-    const auto idOfSender = wc.getId();
-    const auto writeInfo = wc.getImmData();
+    doorBells[idOfSender] = -1;
 
     // write info only contains the write offset
-    auto start = receiveBuf.get() + writeInfo;
+    auto start = receiveBuf.get() + writePos;
     auto messageSize = *reinterpret_cast<size_t *>(start);
     if (messageSize > receiveBufferSize) {
         throw "can't receive messages > buffersize";
@@ -76,22 +102,65 @@ size_t OptimisticRdmaTransportServer::receive(void *whereTo, size_t maxSize) {
     auto begin = start + sizeof(messageSize);
     auto end = begin + messageSize;
     std::copy(begin, end, reinterpret_cast<uint8_t *>(whereTo));
-
-    // prepare to receive another message from the same remote
-    qps[idOfSender].postRecvRequest(recvRequests[idOfSender]);
+    // TODO: message verification: Sender + CRC
 
     return idOfSender;
 }
 
 void OptimisticRdmaTransportServer::send(size_t receiverId, const uint8_t *data, size_t size) {
     if (size > sendBuf.size()) {
-        throw "can't send messages > sendBuf.size()";
+        throw "can't send message > sendBuf.size()";
     }
-    // TODO: write size, validity
-    std::copy(data, data + size, sendBuf.data());
-    auto &wr = answerWorkRequests[receiverId];
-    wr.setLocalAddress(localSendBufMr->getSlice(0, size));
-    qps[receiverId].postWorkRequest(wr);
+    auto whereToWrite = 0;
+    const auto write = [&](auto what, auto howManyBytes) {
+        auto whatPtr = reinterpret_cast<const uint8_t *>(what);
+        volatile auto dest = &sendBuf.data()[whereToWrite];
+        std::copy(whatPtr, &whatPtr[howManyBytes], dest);
+        whereToWrite += howManyBytes;
+    };
 
-    // TODO: selective signaling
+    write(size, sizeof(size));
+    write(data, size);
+    // TODO: validity
+    auto &connection = connections[receiverId];
+    connection.qp.postWorkRequest(connection.answerWr);
+    sharedCq.pollSendCompletionQueueBlocking(ibv::workcompletion::Opcode::RDMA_WRITE);
+}
+
+OptimisticRdmaTransportClient::OptimisticRdmaTransportClient() :
+        sock(tcp_socket()), net(), sharedCq(net.getSharedCompletionQueue()), qp(net) {
+    receiveBuf = std::vector<uint8_t>(size);
+    localReceiveMr = net.registerMr(receiveBuf.data(), size,
+                                    {ibv::AccessFlag::LOCAL_WRITE, ibv::AccessFlag::REMOTE_WRITE});
+}
+
+void OptimisticRdmaTransportClient::connect_impl(std::string_view whereTo) {
+    const auto pos = whereTo.find(':');
+    if (pos == std::string::npos) {
+        throw std::runtime_error("usage: <0.0.0.0:port>");
+    }
+    const auto ip = std::string(whereTo.data(), pos);
+    const auto port = std::stoi(std::string(whereTo.begin() + pos + 1, whereTo.end()));
+    sockaddr_in addr = {};
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(port);
+    inet_pton(AF_INET, ip.c_str(), &addr.sin_addr);
+
+    tcp_connect(sock, addr);
+
+    auto address = rdma::Address{qp.getQPN(), net.getLID()};
+    tcp_write(sock, address);
+    tcp_read(sock, address);
+
+    auto remoteMr = ibv::memoryregion::RemoteAddress{
+            reinterpret_cast<uintptr_t>(receiveBuf.data()),
+            localReceiveMr->getRkey()
+    };
+    tcp_write(sock, remoteMr);
+    tcp_read(sock, remoteMr);
+
+    auto doorBell = ibv::memoryregion::RemoteAddress{};
+    tcp_read(sock, doorBell);
+
+    qp.connect(address);
 }
