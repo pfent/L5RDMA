@@ -1,6 +1,7 @@
 #ifndef EXCHANGABLETRANSPORTS_OPTIMISTICRDMATRANSPORT_H
 #define EXCHANGABLETRANSPORTS_OPTIMISTICRDMATRANSPORT_H
 
+#include <random>
 #include "util/virtualMemory.h"
 #include "util/RDMANetworking.h"
 #include "Transport.h"
@@ -84,19 +85,34 @@ class OptimisticRdmaTransportClient : public TransportClient<OptimisticRdmaTrans
     const int sock;
     rdma::Network net;
     rdma::CompletionQueuePair &sharedCq;
+    rdma::RcQueuePair qp;
 
     std::vector<uint8_t> receiveBuf;
     rdma::MemoryRegion localReceiveMr;
 
-    rdma::RcQueuePair qp;
+    std::vector<uint8_t> sendBuf;
+    rdma::MemoryRegion localSendMr;
+    ibv::workrequest::Simple<ibv::workrequest::Write> dataWr;
 
-    // TODO
+    uint32_t writePos;
+    rdma::MemoryRegion writePosMr;
+    ibv::workrequest::Simple<ibv::workrequest::Write> doorBellWr;
+
+    ibv::memoryregion::RemoteAddress bigBuffer;
+
+    std::default_random_engine generator = std::default_random_engine{};
+    std::uniform_int_distribution<uint32_t> randomDistribution = std::uniform_int_distribution<uint32_t>{0, 16 * 1024 *
+                                                                                                            1024};
 public:
     OptimisticRdmaTransportClient();
 
     ~OptimisticRdmaTransportClient() override = default;
 
     void connect_impl(std::string_view whereTo);
+
+    void send_impl(const uint8_t *data, size_t size);
+
+    size_t receive_impl(void *whereTo, size_t maxSize);
 };
 
 #endif //EXCHANGABLETRANSPORTS_OPTIMISTICRDMATRANSPORT_H

@@ -132,6 +132,17 @@ OptimisticRdmaTransportClient::OptimisticRdmaTransportClient() :
     receiveBuf = std::vector<uint8_t>(size);
     localReceiveMr = net.registerMr(receiveBuf.data(), size,
                                     {ibv::AccessFlag::LOCAL_WRITE, ibv::AccessFlag::REMOTE_WRITE});
+    sendBuf = std::vector<uint8_t>(size);
+    localSendMr = net.registerMr(sendBuf.data(), size, {});
+    dataWr.setLocalAddress(localSendMr->getSlice());
+    dataWr.setSignaled();
+    dataWr.setInline();
+
+    writePos = 0;
+    writePosMr = net.registerMr(&writePos, sizeof(writePos), {});
+    doorBellWr.setLocalAddress(writePosMr->getSlice());
+    doorBellWr.setSignaled();
+    doorBellWr.setInline();
 }
 
 void OptimisticRdmaTransportClient::connect_impl(std::string_view whereTo) {
@@ -158,9 +169,54 @@ void OptimisticRdmaTransportClient::connect_impl(std::string_view whereTo) {
     };
     tcp_write(sock, remoteMr);
     tcp_read(sock, remoteMr);
+    bigBuffer = remoteMr;
 
-    auto doorBell = ibv::memoryregion::RemoteAddress{};
-    tcp_read(sock, doorBell);
+    // read doorbell position
+    ibv::memoryregion::RemoteAddress doorBellPos{};
+    tcp_read(sock, doorBellPos);
+    doorBellWr.setRemoteAddress(doorBellPos);
 
     qp.connect(address);
+}
+
+void OptimisticRdmaTransportClient::send_impl(const uint8_t *data, size_t size) {
+    if (size > this->size) {
+        throw "no more than 512B fit into inline buffers";
+    }
+
+    auto whereToWrite = 0;
+    const auto write = [&](auto what, auto howManyBytes) {
+        auto whatPtr = reinterpret_cast<const uint8_t *>(what);
+        volatile auto dest = &sendBuf.data()[whereToWrite];
+        std::copy(whatPtr, &whatPtr[howManyBytes], dest);
+        whereToWrite += howManyBytes;
+    };
+
+    write(size, sizeof(size));
+    write(data, size);
+    // TODO: message verification: sender/crc
+
+    writePos = randomDistribution(generator); // set data for doorBellWr TODO: volatile?
+    dataWr.setRemoteAddress(bigBuffer.offset(writePos));
+
+    // first! write data, then signal it written
+    qp.postWorkRequest(dataWr);
+    qp.postWorkRequest(doorBellWr);
+
+    sharedCq.pollSendCompletionQueueBlocking(ibv::workcompletion::Opcode::RDMA_WRITE);
+    sharedCq.pollSendCompletionQueueBlocking(ibv::workcompletion::Opcode::RDMA_WRITE);
+}
+
+size_t OptimisticRdmaTransportClient::receive_impl(void *whereTo, size_t maxSize) {
+    size_t receiveSize;
+    size_t checkMe;
+    size_t validity = 0; // TODO
+    do {
+        receiveSize = *reinterpret_cast<volatile size_t *>(receiveBuf.data());
+        checkMe = *reinterpret_cast<volatile size_t *>(&receiveBuf.data()[sizeof(size_t) + receiveSize]);
+    } while (checkMe != validity);
+
+    std::copy(&receiveBuf.data()[sizeof(size_t)],
+              &receiveBuf.data()[sizeof(size_t) + receiveSize],
+              reinterpret_cast<uint8_t *>(whereTo));
 }
