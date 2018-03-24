@@ -219,4 +219,6 @@ size_t OptimisticRdmaTransportClient::receive_impl(void *whereTo, size_t maxSize
     std::copy(&receiveBuf.data()[sizeof(size_t)],
               &receiveBuf.data()[sizeof(size_t) + receiveSize],
               reinterpret_cast<uint8_t *>(whereTo));
+
+    return receiveSize;
 }
