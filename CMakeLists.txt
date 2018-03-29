@@ -60,10 +60,10 @@ target_link_libraries(parallel ${LINK_LIBRARIES})
 add_executable(pingBench pingBench.cpp $<TARGET_OBJECTS:common>)
 target_link_libraries(pingBench ${LINK_LIBRARIES})
 
-add_executable(randomWriteBench randomWriteBench.cpp $<TARGET_OBJECTS:common>)
+add_executable(randomWriteBench indirectWrite.cpp $<TARGET_OBJECTS:common>)
 target_link_libraries(randomWriteBench ${LINK_LIBRARIES})
 
-add_executable(randomWriteClients randomWriteClients.cpp $<TARGET_OBJECTS:common>)
+add_executable(randomWriteClients multiclientIndirectWrite.cpp $<TARGET_OBJECTS:common>)
 target_link_libraries(randomWriteClients ${LINK_LIBRARIES})
 
 file(GLOB tests "test/*Test.cpp")

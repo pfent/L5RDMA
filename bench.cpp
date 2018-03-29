@@ -21,13 +21,6 @@ int main(int argc, char **argv) {
     }
     const auto isClient = argv[1][0] == 'c';
 
-    /**
-     * TODO for benchmarking:
-     * Compare IBV_SEND / IBV_WRITE
-     * Additionally with IBV_SEND_INLINE
-     * Compare with accelio
-     */
-
     if (isClient) {
         pinThread(0);
         cout << "implementation, messages, time, msg/s, user, system, total\n";
