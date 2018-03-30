@@ -12,12 +12,13 @@
 #include "rdma/UdQueuePair.h"
 #include <random>
 #include <immintrin.h>
+#include <boost/assert.hpp>
 
 using namespace std;
 
 constexpr uint16_t port = 1234;
 const char *ip = "127.0.0.1";
-constexpr size_t SHAREDMEM_MESSAGES = 1024 * 1024;
+constexpr size_t SHAREDMEM_MESSAGES = 1024;// * 1024;
 constexpr size_t BIGBADBUFFER_SIZE = 1024 * 1024 * 8; // 8MB
 
 void connectSocket(int socket) {
@@ -111,7 +112,7 @@ void runImmData(bool isClient, uint32_t dataSize) {
                 auto end = begin + dataSize;
                 // check if the data is still the same
                 if (not std::equal(begin, end, data.begin(), data.end())) {
-                    throw;
+                    throw std::runtime_error("received string not equal");
                 }
             }
         }, 1);
@@ -246,7 +247,7 @@ void bigBuffer(bool isClient, size_t dataSize, uint8_t pollPositions, F pollFunc
                 auto end = begin + dataSize;
                 // check if the data is still the same
                 if (not std::equal(begin, end, data.begin(), data.end())) {
-                    throw;
+                    throw std::runtime_error("received string not equal");
                 }
             }
         }, 1);
@@ -322,7 +323,7 @@ static std::tuple<size_t, int32_t> poll(int32_t *doorBells, size_t count) {
 #ifdef __AVX2__
 __always_inline
 static std::tuple<size_t, int32_t> SIMDPoll(int32_t *doorBells, size_t count) {
-    if (count % 8 != 0) throw;
+    assert(count % 8 == 0);
     const auto invalid = _mm256_set1_epi32(-1);
 
     for (;;) {
@@ -410,7 +411,7 @@ void exclusiveBuffer(bool isClient, size_t dataSize, uint8_t pollPositions, F po
                 auto end = begin + dataSize;
                 // check if the data is still the same
                 if (not std::equal(begin, end, data.begin(), data.end())) {
-                    throw;
+                    throw std::runtime_error("received string not equal");
                 }
             }
         }, 1);
@@ -485,7 +486,7 @@ static size_t exPoll(char *doorBells, size_t count) {
 #ifdef __AVX2__
 __always_inline
 static size_t exPollSIMD(char *doorBells, size_t count) {
-    if (count % 32 != 0) throw;
+    assert(count % 32 == 0);
     const auto zero = _mm256_setzero_si256();
     for (;;) {
         for (size_t i = 0; i < count; i += 32) { // _mm256_cmpeq_epi8
@@ -506,7 +507,7 @@ static size_t exPollSIMD(char *doorBells, size_t count) {
 
 __always_inline
 static size_t exPollPCMP(char *doorBells, size_t count) {
-    if (count % 16 != 0) throw;
+    assert (count % 16 == 0);
     const auto needle = _mm_set1_epi8('\0');
     for (;;) {
         for (size_t i = 0; i < count; i += 16) {
@@ -548,13 +549,13 @@ void test() {
         {
             rearmPositions();
             auto[s, w] = poll(positions[i], dimension);
-            if (w != i || s != i) throw;
+            if (w != i || s != i) throw std::runtime_error("poll");;
         }
 #ifdef __AVX2__
         {
             rearmPositions();
             auto[s, w] = SIMDPoll(positions[i], dimension);
-            if (w != i || s != i) throw;
+            if (w != i || s != i) throw std::runtime_error("SIMDPoll");;
         }
 #endif
     }
@@ -578,13 +579,13 @@ void test() {
 
     for (size_t i = 0; i < dimension; ++i) {
         rearmMarkers();
-        if (exPoll(markers[i], dimension) != i) throw;
+        if (exPoll(markers[i], dimension) != i) throw std::runtime_error("exPoll");;
 #ifdef __AVX2__
         rearmMarkers();
-        if (exPollSIMD(markers[i], dimension) != i) throw;
+        if (exPollSIMD(markers[i], dimension) != i) throw std::runtime_error("exPollSIMD");;
 #endif
         rearmMarkers();
-        if (exPollPCMP(markers[i], dimension) != i) throw;
+        if (exPollPCMP(markers[i], dimension) != i) throw std::runtime_error("exPollPCMP");;
     }
 }
 
