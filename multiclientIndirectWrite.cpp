@@ -319,6 +319,7 @@ static std::tuple<size_t, int32_t> poll(int32_t *doorBells, size_t count) {
     }
 }
 
+#ifdef __AVX2__
 __always_inline
 static std::tuple<size_t, int32_t> SIMDPoll(int32_t *doorBells, size_t count) {
     if (count % 8 != 0) throw;
@@ -329,7 +330,7 @@ static std::tuple<size_t, int32_t> SIMDPoll(int32_t *doorBells, size_t count) {
             auto data = *reinterpret_cast<volatile __m256i *>(&doorBells[i]);
             auto cmp = _mm256_cmpeq_epi32(invalid, data); // sadly no neq
             uint32_t cmpMask = compl _mm256_movemask_epi8(cmp);
-            auto lzcnt = __lzcnt32(cmpMask);
+            auto lzcnt = __builtin_clz(cmpMask);
             if (lzcnt != 32) {
                 // 4 bits per value, since cmpeq32, but movemask8
                 auto sender = i + ((32 - lzcnt) / 4 - 1);
@@ -340,6 +341,8 @@ static std::tuple<size_t, int32_t> SIMDPoll(int32_t *doorBells, size_t count) {
         }
     }
 }
+
+#endif
 
 template<class QueuePair, class F>
 void exclusiveBuffer(bool isClient, size_t dataSize, uint8_t pollPositions, F pollFunc) {
@@ -479,6 +482,7 @@ static size_t exPoll(char *doorBells, size_t count) {
     }
 }
 
+#ifdef __AVX2__
 __always_inline
 static size_t exPollSIMD(char *doorBells, size_t count) {
     if (count % 32 != 0) throw;
@@ -488,7 +492,7 @@ static size_t exPollSIMD(char *doorBells, size_t count) {
             auto data = *reinterpret_cast<volatile __m256i *>(&doorBells[i]);
             auto cmp = _mm256_cmpeq_epi8(zero, data);
             uint32_t cmpMask = compl _mm256_movemask_epi8(cmp);
-            auto lzcnt = __lzcnt32(cmpMask);
+            auto lzcnt = __builtin_clz(cmpMask);
             if (lzcnt != 32) {
                 auto sender = 32 - (lzcnt + 1) + i;
                 doorBells[sender] = -1;
@@ -497,6 +501,8 @@ static size_t exPollSIMD(char *doorBells, size_t count) {
         }
     }
 }
+
+#endif
 
 __always_inline
 static size_t exPollPCMP(char *doorBells, size_t count) {
@@ -510,8 +516,8 @@ static size_t exPollPCMP(char *doorBells, size_t count) {
                                            _SIDD_LEAST_SIGNIFICANT);
             const auto res = _mm_extract_epi16(mask, 0);
             if (res != 0) {
-                const auto lzcnt = __lzcnt16(res);
-                const size_t sender = (15 - lzcnt) + i;
+                const auto lzcnt = __builtin_clz(res);
+                const size_t sender = (31 - lzcnt) + i;
                 doorBells[sender] = '\0';
                 return sender;
             }
@@ -544,12 +550,13 @@ void test() {
             auto[s, w] = poll(positions[i], dimension);
             if (w != i || s != i) throw;
         }
-
+#ifdef __AVX2__
         {
             rearmPositions();
             auto[s, w] = SIMDPoll(positions[i], dimension);
             if (w != i || s != i) throw;
         }
+#endif
     }
 
     char markers[dimension][dimension];
@@ -572,8 +579,10 @@ void test() {
     for (size_t i = 0; i < dimension; ++i) {
         rearmMarkers();
         if (exPoll(markers[i], dimension) != i) throw;
+#ifdef __AVX2__
         rearmMarkers();
         if (exPollSIMD(markers[i], dimension) != i) throw;
+#endif
         rearmMarkers();
         if (exPollPCMP(markers[i], dimension) != i) throw;
     }
@@ -597,16 +606,20 @@ int main(int argc, char **argv) {
         runImmData<rdma::RcQueuePair>(isClient, length);
         cout << length << ", scalar_poll " << clients << ", ";
         bigBuffer<rdma::RcQueuePair>(isClient, length, clients, poll);
+#ifdef __AVX2__
         if (clients >= 8) {
             cout << length << ", simd_poll " << clients << ", ";
             bigBuffer<rdma::RcQueuePair>(isClient, length, clients, SIMDPoll);
         }
+#endif
         cout << length << ", exclusive_buffer " << clients << ", ";
         exclusiveBuffer<rdma::RcQueuePair>(isClient, length, clients, exPoll);
+#ifdef __AVX2__
         if (clients >= 32) {
             cout << length << ", exclusive_simd " << clients << ", ";
             exclusiveBuffer<rdma::RcQueuePair>(isClient, length, clients, exPollSIMD);
         }
+#endif
         if (clients >= 16) {
             cout << length << ", exclusive_pcmp " << clients << ", ";
             exclusiveBuffer<rdma::RcQueuePair>(isClient, length, clients, exPollPCMP);
