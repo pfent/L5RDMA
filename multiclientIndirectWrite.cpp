@@ -334,8 +334,8 @@ static std::tuple<size_t, int32_t> SIMDPoll(int32_t *doorBells, size_t count) {
             auto data = *reinterpret_cast<volatile __m256i *>(&doorBells[i]);
             auto cmp = _mm256_cmpeq_epi32(invalid, data); // sadly no neq
             uint32_t cmpMask = compl _mm256_movemask_epi8(cmp);
-            auto lzcnt = __builtin_clz(cmpMask);
-            if (lzcnt != 32) {
+            if (cmpMask != 0) {
+                auto lzcnt = __builtin_clz(cmpMask);
                 // 4 bits per value, since cmpeq32, but movemask8
                 auto sender = i + ((32 - lzcnt) / 4 - 1);
                 auto writePos = doorBells[sender];
@@ -357,8 +357,8 @@ static std::tuple<size_t, int32_t> SSEPoll(int32_t *doorBells, size_t count) {
             auto data = *reinterpret_cast<volatile __m128i *>(&doorBells[i]);
             auto cmp = _mm_cmpeq_epi32(invalid, data);
             uint16_t cmpMask = compl _mm_movemask_epi8(cmp);
-            auto lzcnt = __builtin_clz(cmpMask);
-            if (lzcnt != 32) {
+            if (cmpMask != 0) {
+                auto lzcnt = __builtin_clz(cmpMask);
                 auto sender = i + ((32 - lzcnt) / 4 - 1);
                 auto writePos = doorBells[sender];
                 doorBells[sender] = -1;
@@ -503,8 +503,8 @@ static size_t exPollSIMD(char *doorBells, size_t count) {
             auto data = *reinterpret_cast<volatile __m256i *>(&doorBells[i]);
             auto cmp = _mm256_cmpeq_epi8(zero, data);
             uint32_t cmpMask = compl _mm256_movemask_epi8(cmp);
-            auto lzcnt = __builtin_clz(cmpMask);
-            if (lzcnt != 32) {
+            if (cmpMask != 0) {
+                auto lzcnt = __builtin_clz(cmpMask);
                 auto sender = 32 - (lzcnt + 1) + i;
                 doorBells[sender] = '\0';
                 return sender;
@@ -524,8 +524,8 @@ static size_t exPollSSE(char *doorBells, size_t count) {
             auto data = *reinterpret_cast<volatile __m128i *>(&doorBells[i]);
             auto cmp = _mm_cmpeq_epi8(zero, data);
             uint16_t cmpMask = compl _mm_movemask_epi8(cmp);
-            auto lzcnt = __builtin_clz(cmpMask);
-            if (lzcnt != 32) {
+            if (cmpMask != 0) {
+                auto lzcnt = __builtin_clz(cmpMask);
                 auto sender = 32 - (lzcnt + 1) + i;
                 doorBells[sender] = '\0';
                 return sender;
