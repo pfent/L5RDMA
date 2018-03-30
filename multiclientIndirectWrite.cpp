@@ -178,7 +178,7 @@ auto createWriteWr(const ibv::memoryregion::Slice &slice) {
 }
 
 template<class QueuePair, class F>
-void bigBuffer(bool isClient, size_t dataSize, uint8_t pollPositions, F pollFunc) {
+void bigBuffer(bool isClient, size_t dataSize, uint16_t pollPositions, F pollFunc) {
     std::string data(dataSize, 'A');
     auto net = rdma::Network();
     auto &cq = net.getSharedCompletionQueue();
@@ -307,7 +307,7 @@ void bigBuffer(bool isClient, size_t dataSize, uint8_t pollPositions, F pollFunc
     tcp_close(socket);
 }
 
-__always_inline
+//__always_inline
 static std::tuple<size_t, int32_t> poll(int32_t *doorBells, size_t count) {
     for (;;) {
         for (size_t i = 0; i < count; ++i) {
@@ -321,7 +321,8 @@ static std::tuple<size_t, int32_t> poll(int32_t *doorBells, size_t count) {
 }
 
 #ifdef __AVX2__
-__always_inline
+
+//__always_inline
 static std::tuple<size_t, int32_t> SIMDPoll(int32_t *doorBells, size_t count) {
     assert(count % 8 == 0);
     const auto invalid = _mm256_set1_epi32(-1);
@@ -346,57 +347,72 @@ static std::tuple<size_t, int32_t> SIMDPoll(int32_t *doorBells, size_t count) {
 #endif
 
 template<class QueuePair, class F>
-void exclusiveBuffer(bool isClient, size_t dataSize, uint8_t pollPositions, F pollFunc) {
+void exclusiveBuffer(bool isClient, size_t dataSize, uint16_t pollPositions, F pollFunc) {
     std::string data(dataSize, 'A');
     auto net = rdma::Network();
     auto &cq = net.getSharedCompletionQueue();
     auto qp = QueuePair(net);
 
+    auto myPos = pollPositions - 1;
     auto recvbuf = std::vector<char>(dataSize * pollPositions); // for each pollPosition one buffer
     auto recvmr = net.registerMr(recvbuf.data(), recvbuf.size(),
                                  {ibv::AccessFlag::LOCAL_WRITE, ibv::AccessFlag::REMOTE_WRITE});
-    auto doorBells = std::vector<char>(pollPositions);
-    auto doorBellMr = net.registerMr(doorBells.data(), doorBells.size() * sizeof(char),
+    auto recvDoorBells = std::vector<char>(pollPositions);
+    auto recvDoorBellMr = net.registerMr(recvDoorBells.data(), recvDoorBells.size() * sizeof(char),
                                      {ibv::AccessFlag::LOCAL_WRITE, ibv::AccessFlag::REMOTE_WRITE});
 
     auto sendbuf = std::vector<char>(data.size());
     auto sendmr = net.registerMr(sendbuf.data(), sendbuf.size(), {});
 
-    auto sendPosBuf = std::vector<char>(1);
-    auto sendPosMr = net.registerMr(sendPosBuf.data(), sendPosBuf.size() * sizeof(char),
+    auto sendDoorBellBuf = std::vector<char>(1);
+    auto sendDoorBellMr = net.registerMr(sendDoorBellBuf.data(), sendDoorBellBuf.size() * sizeof(char),
                                     {ibv::AccessFlag::LOCAL_WRITE, ibv::AccessFlag::REMOTE_WRITE});
 
     auto socket = tcp_socket();
+    int commsocket;
+
     if (isClient) {
         connectSocket(socket);
+        commsocket = socket;
+    } else {
+        setUpListenSocket(socket);
 
+        const auto acced = [&] {
+            sockaddr_in ignored{};
+            return tcp_accept(socket, ignored);
+        }();
+        commsocket = acced;
+    }
+
+    // invalidate recv door bells
+    std::fill(recvDoorBells.begin(), recvDoorBells.end(), '\0');
+
+    auto remoteAddr = rdma::Address{qp.getQPN(), net.getLID()};
+    tcp_write(commsocket, &remoteAddr, sizeof(remoteAddr));
+    tcp_read(commsocket, &remoteAddr, sizeof(remoteAddr));
+
+    auto remoteMr = ibv::memoryregion::RemoteAddress{reinterpret_cast<uintptr_t>(&recvbuf[dataSize * myPos]),
+                                                     recvmr->getRkey()};
+    tcp_write(commsocket, &remoteMr, sizeof(remoteMr));
+    tcp_read(commsocket, &remoteMr, sizeof(remoteMr));
+
+    auto remoteDoorbellMr = ibv::memoryregion::RemoteAddress{reinterpret_cast<uintptr_t>(&recvDoorBells[myPos]),
+                                                             recvDoorBellMr->getRkey()};
+    tcp_write(commsocket, &remoteDoorbellMr, sizeof(remoteDoorbellMr));
+    tcp_read(commsocket, &remoteDoorbellMr, sizeof(remoteDoorbellMr));
+
+    qp.connect(remoteAddr);
+
+    auto write = createWriteWr(sendmr->getSlice());
+    auto doorBellWrite = createWriteWr(sendDoorBellMr->getSlice());
+    doorBellWrite.setRemoteAddress(remoteDoorbellMr);
+
+    if (isClient) {
         std::copy(data.begin(), data.end(), sendbuf.begin());
-
-        // invalidate recv address
-        std::fill(doorBells.begin(), doorBells.end(), '\0');
-
-        auto remoteAddr = rdma::Address{qp.getQPN(), net.getLID()};
-        tcp_write(socket, &remoteAddr, sizeof(remoteAddr));
-        tcp_read(socket, &remoteAddr, sizeof(remoteAddr));
-        auto remoteMr = ibv::memoryregion::RemoteAddress{reinterpret_cast<uintptr_t>(recvbuf.data()),
-                                                         recvmr->getRkey()};
-        tcp_write(socket, &remoteMr, sizeof(remoteMr));
-        tcp_read(socket, &remoteMr, sizeof(remoteMr));
-        // TODO: vary the doorBell position
-        auto remotePosMr = ibv::memoryregion::RemoteAddress{reinterpret_cast<uintptr_t>(&doorBells.back()),
-                                                            doorBellMr->getRkey()};
-        tcp_write(socket, &remotePosMr, sizeof(remotePosMr));
-        tcp_read(socket, &remotePosMr, sizeof(remotePosMr));
-
-        qp.connect(remoteAddr);
-
-        auto write = createWriteWr(sendmr->getSlice());
-        auto doorBellWrite = createWriteWr(sendPosMr->getSlice());
-        doorBellWrite.setRemoteAddress(remotePosMr);
 
         bench(SHAREDMEM_MESSAGES, [&]() {
             for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
-                sendPosBuf[0] = 'X'; // indicator that something arrived
+                sendDoorBellBuf[0] = 'X'; // indicator that something arrived
                 write.setRemoteAddress(remoteMr);
 
                 qp.postWorkRequest(write);
@@ -405,7 +421,7 @@ void exclusiveBuffer(bool isClient, size_t dataSize, uint8_t pollPositions, F po
                 cq.pollSendCompletionQueueBlocking(ibv::workcompletion::Opcode::RDMA_WRITE);
 
                 // wait for incoming message
-                const auto sender = pollFunc(doorBells.data(), pollPositions);
+                const auto sender = pollFunc(recvDoorBells.data(), pollPositions);
 
                 auto begin = recvbuf.begin() + (dataSize * sender);
                 auto end = begin + dataSize;
@@ -417,60 +433,31 @@ void exclusiveBuffer(bool isClient, size_t dataSize, uint8_t pollPositions, F po
         }, 1);
 
     } else {
-        setUpListenSocket(socket);
-
-        const auto acced = [&] {
-            sockaddr_in ignored{};
-            return tcp_accept(socket, ignored);
-        }();
-
-        // invalidate recv address
-        std::fill(doorBells.begin(), doorBells.end(), '\0');
-
-        auto remoteAddr = rdma::Address{qp.getQPN(), net.getLID()};
-        tcp_write(acced, &remoteAddr, sizeof(remoteAddr));
-        tcp_read(acced, &remoteAddr, sizeof(remoteAddr));
-        auto remoteMr = ibv::memoryregion::RemoteAddress{reinterpret_cast<uintptr_t>(recvbuf.data()),
-                                                         recvmr->getRkey()};
-        tcp_write(acced, &remoteMr, sizeof(remoteMr));
-        tcp_read(acced, &remoteMr, sizeof(remoteMr));
-        // TODO: vary the send address
-        auto remotePosMr = ibv::memoryregion::RemoteAddress{reinterpret_cast<uintptr_t>(&doorBells.back()),
-                                                            doorBellMr->getRkey()};
-        tcp_write(acced, &remotePosMr, sizeof(remotePosMr));
-        tcp_read(acced, &remotePosMr, sizeof(remotePosMr));
-
-        qp.connect(remoteAddr);
-
-        auto write = createWriteWr(sendmr->getSlice());
-        auto posWrite = createWriteWr(sendPosMr->getSlice());
-        posWrite.setRemoteAddress(remotePosMr);
-
         bench(SHAREDMEM_MESSAGES, [&]() {
             for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
                 // wait for incoming message
-                const auto sender = pollFunc(doorBells.data(), pollPositions);
+                const auto sender = pollFunc(recvDoorBells.data(), pollPositions);
 
                 auto begin = recvbuf.begin() + (dataSize * sender);
                 auto end = begin + dataSize;
                 std::copy(begin, end, sendbuf.begin());
                 // echo back the received data
-                sendPosBuf[0] = 'X';
+                sendDoorBellBuf[0] = 'X';
                 write.setRemoteAddress(remoteMr);
                 qp.postWorkRequest(write);
-                qp.postWorkRequest(posWrite);
+                qp.postWorkRequest(doorBellWrite);
                 cq.pollSendCompletionQueueBlocking(ibv::workcompletion::Opcode::RDMA_WRITE);
                 cq.pollSendCompletionQueueBlocking(ibv::workcompletion::Opcode::RDMA_WRITE);
             }
         }, 1);
 
-        tcp_close(acced);
+        tcp_close(commsocket);
     }
 
     tcp_close(socket);
 }
 
-__always_inline
+//__always_inline
 static size_t exPoll(char *doorBells, size_t count) {
     for (;;) {
         for (size_t i = 0; i < count; ++i) {
@@ -484,7 +471,8 @@ static size_t exPoll(char *doorBells, size_t count) {
 }
 
 #ifdef __AVX2__
-__always_inline
+
+//__always_inline
 static size_t exPollSIMD(char *doorBells, size_t count) {
     assert(count % 32 == 0);
     const auto zero = _mm256_setzero_si256();
@@ -505,7 +493,7 @@ static size_t exPollSIMD(char *doorBells, size_t count) {
 
 #endif
 
-__always_inline
+//__always_inline
 static size_t exPollPCMP(char *doorBells, size_t count) {
     assert (count % 16 == 0);
     const auto needle = _mm_set1_epi8('\0');
@@ -602,7 +590,7 @@ int main(int argc, char **argv) {
 
     cout << "size, connection, clients, messages, seconds, msgps, user, kernel, total" << '\n';
     const auto length = 64;
-    for (const int clients : {1, 2, 4, 8, 16, 32, 64, 128, 192, 255}) {
+    for (const int clients : {1, 2, 4, 8, 16, 32, 64, 128, 192, 256}) {
         cout << length << ", ImmData " << clients << ", ";
         runImmData<rdma::RcQueuePair>(isClient, length);
         cout << length << ", scalar_poll " << clients << ", ";
