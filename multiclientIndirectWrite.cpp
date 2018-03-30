@@ -308,19 +308,6 @@ void bigBuffer(bool isClient, size_t dataSize, uint8_t pollPositions, F pollFunc
 
 __always_inline
 static std::tuple<size_t, int32_t> poll(int32_t *doorBells, size_t count) {
-    size_t idOfSender = 0;
-    int32_t writePos = -1;
-    while (writePos == -1) {
-        for (idOfSender = 0; idOfSender < count && writePos == -1; ++idOfSender) {
-            writePos = *reinterpret_cast<volatile int32_t *>(&doorBells[idOfSender]);
-        }
-    }
-    doorBells[idOfSender] = -1;
-    return {idOfSender, writePos};
-}
-
-__always_inline
-static std::tuple<size_t, int32_t> poll2(int32_t *doorBells, size_t count) {
     for (;;) {
         for (size_t i = 0; i < count; ++i) {
             int32_t writePos = *reinterpret_cast<volatile int32_t *>(&doorBells[i]);
@@ -339,13 +326,13 @@ static std::tuple<size_t, int32_t> SIMDPoll(int32_t *doorBells, size_t count) {
 
     for (;;) {
         for (size_t i = 0; i < count; i += 8) {
-            auto data = *reinterpret_cast<volatile __m256i *>(doorBells);
+            auto data = *reinterpret_cast<volatile __m256i *>(&doorBells[i]);
             auto cmp = _mm256_cmpeq_epi32(invalid, data); // sadly no neq
             uint32_t cmpMask = compl _mm256_movemask_epi8(cmp);
-            auto lzcnt = __builtin_clz(cmpMask);
+            auto lzcnt = __lzcnt32(cmpMask);
             if (lzcnt != 32) {
-                // 4 bits per value, since cmpeq32, but movemask8. Plus one for the first 1
-                auto sender = __builtin_clz(cmpMask) / 4 + 1;
+                // 4 bits per value, since cmpeq32, but movemask8
+                auto sender = i + ((32 - lzcnt) / 4 - 1);
                 int32_t writePos = doorBells[sender];
                 doorBells[sender] = -1;
                 return {sender, writePos};
@@ -494,15 +481,16 @@ static size_t exPoll(char *doorBells, size_t count) {
 
 __always_inline
 static size_t exPollSIMD(char *doorBells, size_t count) {
+    if (count % 32 != 0) throw;
     const auto zero = _mm256_setzero_si256();
     for (;;) {
         for (size_t i = 0; i < count; i += 32) { // _mm256_cmpeq_epi8
             auto data = *reinterpret_cast<volatile __m256i *>(&doorBells[i]);
             auto cmp = _mm256_cmpeq_epi8(zero, data);
             uint32_t cmpMask = compl _mm256_movemask_epi8(cmp);
-            auto lzcnt = __builtin_clz(cmpMask);
+            auto lzcnt = __lzcnt32(cmpMask);
             if (lzcnt != 32) {
-                auto sender = __builtin_clz(cmpMask) + 1;
+                auto sender = 32 - (lzcnt + 1) + i;
                 doorBells[sender] = -1;
                 return sender;
             }
@@ -512,6 +500,7 @@ static size_t exPollSIMD(char *doorBells, size_t count) {
 
 __always_inline
 static size_t exPollPCMP(char *doorBells, size_t count) {
+    if (count % 16 != 0) throw;
     const auto needle = _mm_set1_epi8('\0');
     for (;;) {
         for (size_t i = 0; i < count; i += 16) {
@@ -528,7 +517,68 @@ static size_t exPollPCMP(char *doorBells, size_t count) {
     }
 }
 
+void test() {
+    const auto dimension = 64;
+    int32_t positions[dimension][dimension];
+    for (auto &position : positions) {
+        for (int &j : position) {
+            j = -1;
+        }
+    }
+
+    auto rearmPositions = [&]() {
+        for (int i = 0; i < dimension; ++i) {
+            for (int j = 0; j < dimension; ++j) {
+                if (i == j) {
+                    positions[i][j] = i;
+                }
+            }
+        }
+    };
+
+    for (int i = 0; i < dimension; ++i) {
+        {
+            rearmPositions();
+            auto[s, w] = poll(positions[i], dimension);
+            if (w != i || s != i) throw;
+        }
+
+        {
+            rearmPositions();
+            auto[s, w] = SIMDPoll(positions[i], dimension);
+            if (w != i || s != i) throw;
+        }
+    }
+
+    char markers[dimension][dimension];
+    for (auto &marker : markers) {
+        for (char &j : marker) {
+            j = '\0';
+        }
+    }
+
+    auto rearmMarkers = [&]() {
+        for (int i = 0; i < dimension; ++i) {
+            for (int j = 0; j < dimension; ++j) {
+                if (i == j) {
+                    markers[i][j] = 'X';
+                }
+            }
+        }
+    };
+
+    for (size_t i = 0; i < dimension; ++i) {
+        rearmMarkers();
+        if (exPoll(markers[i], dimension) != i) throw;
+        rearmMarkers();
+        if (exPollSIMD(markers[i], dimension) != i) throw;
+        rearmMarkers();
+        //if (exPollPCMP(markers[i], dimension) != i) throw;
+    }
+}
+
 int main(int argc, char **argv) {
+    test();
     if (argc < 2) {
         cout << "Usage: " << argv[0] << " <client / server> <(optional) 127.0.0.1>" << endl;
         return -1;
