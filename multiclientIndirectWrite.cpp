@@ -18,7 +18,7 @@ using namespace std;
 constexpr uint16_t port = 1234;
 const char *ip = "127.0.0.1";
 constexpr size_t SHAREDMEM_MESSAGES = 1024 * 1024;
-constexpr size_t BIGBADBUFFER_SIZE = 1024 * 1024 * 8; // 8MB
+constexpr uint32_t BIGBADBUFFER_SIZE = 1024 * 1024 * 8; // 8MB
 
 class Random32 {
     uint32_t state;
@@ -29,7 +29,7 @@ public:
         state ^= (state << 13);
         state ^= (state >> 7);
         state ^= (state << 5);
-        return state;
+        return state % BIGBADBUFFER_SIZE;
     }
 };
 
