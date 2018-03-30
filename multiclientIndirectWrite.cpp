@@ -18,7 +18,7 @@ using namespace std;
 
 constexpr uint16_t port = 1234;
 const char *ip = "127.0.0.1";
-constexpr size_t SHAREDMEM_MESSAGES = 1024;// * 1024;
+constexpr size_t SHAREDMEM_MESSAGES = 1024 * 1024;
 constexpr size_t BIGBADBUFFER_SIZE = 1024 * 1024 * 8; // 8MB
 
 void connectSocket(int socket) {
@@ -307,7 +307,7 @@ void bigBuffer(bool isClient, size_t dataSize, uint16_t pollPositions, F pollFun
     tcp_close(socket);
 }
 
-//__always_inline
+__always_inline
 static std::tuple<size_t, int32_t> poll(int32_t *doorBells, size_t count) {
     for (;;) {
         for (size_t i = 0; i < count; ++i) {
@@ -322,7 +322,7 @@ static std::tuple<size_t, int32_t> poll(int32_t *doorBells, size_t count) {
 
 #ifdef __AVX2__
 
-//__always_inline
+__always_inline
 static std::tuple<size_t, int32_t> SIMDPoll(int32_t *doorBells, size_t count) {
     assert(count % 8 == 0);
     const auto invalid = _mm256_set1_epi32(-1);
@@ -457,7 +457,7 @@ void exclusiveBuffer(bool isClient, size_t dataSize, uint16_t pollPositions, F p
     tcp_close(socket);
 }
 
-//__always_inline
+__always_inline
 static size_t exPoll(char *doorBells, size_t count) {
     for (;;) {
         for (size_t i = 0; i < count; ++i) {
@@ -472,7 +472,7 @@ static size_t exPoll(char *doorBells, size_t count) {
 
 #ifdef __AVX2__
 
-//__always_inline
+__always_inline
 static size_t exPollSIMD(char *doorBells, size_t count) {
     assert(count % 32 == 0);
     const auto zero = _mm256_setzero_si256();
@@ -493,7 +493,7 @@ static size_t exPollSIMD(char *doorBells, size_t count) {
 
 #endif
 
-//__always_inline
+__always_inline
 static size_t exPollPCMP(char *doorBells, size_t count) {
     assert (count % 16 == 0);
     const auto needle = _mm_set1_epi8('\0');
@@ -513,6 +513,8 @@ static size_t exPollPCMP(char *doorBells, size_t count) {
         }
     }
 }
+
+// TODO: _mm_cmpeq_epi8: __m128i
 
 void test() {
     const auto dimension = 64;
