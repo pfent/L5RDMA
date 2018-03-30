@@ -242,6 +242,7 @@ void bigBuffer(bool isClient, size_t dataSize, uint16_t pollPositions, F pollFun
 
                 // wait for incoming message
                 const auto[sender, recvPos] = pollFunc(recvPosBuf.data(), pollPositions);
+                std::ignore = sender;
 
                 auto begin = recvbuf.begin() + recvPos;
                 auto end = begin + dataSize;
@@ -286,6 +287,7 @@ void bigBuffer(bool isClient, size_t dataSize, uint16_t pollPositions, F pollFun
             for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
                 // wait for incoming message
                 const auto[sender, recvPos] = pollFunc(recvPosBuf.data(), pollPositions);
+                std::ignore = sender;
 
                 auto begin = recvbuf.begin() + recvPos;
                 auto end = begin + dataSize;
@@ -336,7 +338,7 @@ static std::tuple<size_t, int32_t> SIMDPoll(int32_t *doorBells, size_t count) {
             if (lzcnt != 32) {
                 // 4 bits per value, since cmpeq32, but movemask8
                 auto sender = i + ((32 - lzcnt) / 4 - 1);
-                int32_t writePos = doorBells[sender];
+                auto writePos = doorBells[sender];
                 doorBells[sender] = -1;
                 return {sender, writePos};
             }
@@ -345,6 +347,26 @@ static std::tuple<size_t, int32_t> SIMDPoll(int32_t *doorBells, size_t count) {
 }
 
 #endif
+
+//__always_inline
+static std::tuple<size_t, int32_t> SSEPoll(int32_t *doorBells, size_t count) {
+    assert(count % 4 == 0);
+    const auto invalid = _mm_set1_epi32(-1);
+    for (;;) {
+        for (size_t i = 0; i < count; i += 4) {
+            auto data = *reinterpret_cast<volatile __m128i *>(&doorBells[i]);
+            auto cmp = _mm_cmpeq_epi32(invalid, data);
+            uint16_t cmpMask = compl _mm_movemask_epi8(cmp);
+            auto lzcnt = __builtin_clz(cmpMask);
+            if (lzcnt != 32) {
+                auto sender = i + ((32 - lzcnt) / 4 - 1);
+                auto writePos = doorBells[sender];
+                doorBells[sender] = -1;
+                return {sender, writePos};
+            }
+        }
+    }
+}
 
 template<class QueuePair, class F>
 void exclusiveBuffer(bool isClient, size_t dataSize, uint16_t pollPositions, F pollFunc) {
@@ -359,14 +381,14 @@ void exclusiveBuffer(bool isClient, size_t dataSize, uint16_t pollPositions, F p
                                  {ibv::AccessFlag::LOCAL_WRITE, ibv::AccessFlag::REMOTE_WRITE});
     auto recvDoorBells = std::vector<char>(pollPositions);
     auto recvDoorBellMr = net.registerMr(recvDoorBells.data(), recvDoorBells.size() * sizeof(char),
-                                     {ibv::AccessFlag::LOCAL_WRITE, ibv::AccessFlag::REMOTE_WRITE});
+                                         {ibv::AccessFlag::LOCAL_WRITE, ibv::AccessFlag::REMOTE_WRITE});
 
     auto sendbuf = std::vector<char>(data.size());
     auto sendmr = net.registerMr(sendbuf.data(), sendbuf.size(), {});
 
     auto sendDoorBellBuf = std::vector<char>(1);
     auto sendDoorBellMr = net.registerMr(sendDoorBellBuf.data(), sendDoorBellBuf.size() * sizeof(char),
-                                    {ibv::AccessFlag::LOCAL_WRITE, ibv::AccessFlag::REMOTE_WRITE});
+                                         {ibv::AccessFlag::LOCAL_WRITE, ibv::AccessFlag::REMOTE_WRITE});
 
     auto socket = tcp_socket();
     int commsocket;
@@ -494,6 +516,25 @@ static size_t exPollSIMD(char *doorBells, size_t count) {
 #endif
 
 __always_inline
+static size_t exPollSSE(char *doorBells, size_t count) {
+    assert(count % 16 == 0);
+    const auto zero = _mm_set1_epi8('\0');
+    for (;;) {
+        for (size_t i = 0; i < count; i += 16) {
+            auto data = *reinterpret_cast<volatile __m128i *>(&doorBells[i]);
+            auto cmp = _mm_cmpeq_epi8(zero, data);
+            uint16_t cmpMask = compl _mm_movemask_epi8(cmp);
+            auto lzcnt = __builtin_clz(cmpMask);
+            if (lzcnt != 32) {
+                auto sender = 32 - (lzcnt + 1) + i;
+                doorBells[sender] = -1;
+                return sender;
+            }
+        }
+    }
+}
+
+__always_inline
 static size_t exPollPCMP(char *doorBells, size_t count) {
     assert (count % 16 == 0);
     const auto needle = _mm_set1_epi8('\0');
@@ -513,8 +554,6 @@ static size_t exPollPCMP(char *doorBells, size_t count) {
         }
     }
 }
-
-// TODO: _mm_cmpeq_epi8: __m128i
 
 void test() {
     const auto dimension = 64;
@@ -539,15 +578,20 @@ void test() {
         {
             rearmPositions();
             auto[s, w] = poll(positions[i], dimension);
-            if (w != i || s != i) throw std::runtime_error("poll");;
+            if (w != i || static_cast<int>(s) != i) throw std::runtime_error("poll");
         }
 #ifdef __AVX2__
         {
             rearmPositions();
             auto[s, w] = SIMDPoll(positions[i], dimension);
-            if (w != i || s != i) throw std::runtime_error("SIMDPoll");;
+            if (w != i || static_cast<int>(s) != i) throw std::runtime_error("SIMDPoll");
         }
 #endif
+        {
+            rearmPositions();
+            auto[s, w] = SSEPoll(positions[i], dimension);
+            if (w != i || static_cast<int>(s) != i) throw std::runtime_error("SSEPoll");
+        }
     }
 
     char markers[dimension][dimension];
@@ -569,13 +613,15 @@ void test() {
 
     for (size_t i = 0; i < dimension; ++i) {
         rearmMarkers();
-        if (exPoll(markers[i], dimension) != i) throw std::runtime_error("exPoll");;
+        if (exPoll(markers[i], dimension) != i) throw std::runtime_error("exPoll");
 #ifdef __AVX2__
         rearmMarkers();
-        if (exPollSIMD(markers[i], dimension) != i) throw std::runtime_error("exPollSIMD");;
+        if (exPollSIMD(markers[i], dimension) != i) throw std::runtime_error("exPollSIMD");
 #endif
         rearmMarkers();
-        if (exPollPCMP(markers[i], dimension) != i) throw std::runtime_error("exPollPCMP");;
+        if (exPollPCMP(markers[i], dimension) != i) throw std::runtime_error("exPollPCMP");
+        rearmMarkers();
+        if (exPollSSE(markers[i], dimension) != i) throw std::runtime_error("exPollSSE");
     }
 }
 
@@ -603,6 +649,10 @@ int main(int argc, char **argv) {
             bigBuffer<rdma::RcQueuePair>(isClient, length, clients, SIMDPoll);
         }
 #endif
+        if (clients >= 4) {
+            cout << length << ", sse_poll " << clients << ", ";
+            bigBuffer<rdma::RcQueuePair>(isClient, length, clients, SSEPoll);
+        }
         cout << length << ", exclusive_buffer " << clients << ", ";
         exclusiveBuffer<rdma::RcQueuePair>(isClient, length, clients, exPoll);
 #ifdef __AVX2__
@@ -614,6 +664,10 @@ int main(int argc, char **argv) {
         if (clients >= 16) {
             cout << length << ", exclusive_pcmp " << clients << ", ";
             exclusiveBuffer<rdma::RcQueuePair>(isClient, length, clients, exPollPCMP);
+        }
+        if (clients >= 16) {
+            cout << length << ", exclusive_sse " << clients << ", ";
+            exclusiveBuffer<rdma::RcQueuePair>(isClient, length, clients, exPollSSE);
         }
     }
 }
