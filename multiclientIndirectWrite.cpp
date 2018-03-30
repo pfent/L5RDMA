@@ -506,7 +506,7 @@ static size_t exPollSIMD(char *doorBells, size_t count) {
             auto lzcnt = __builtin_clz(cmpMask);
             if (lzcnt != 32) {
                 auto sender = 32 - (lzcnt + 1) + i;
-                doorBells[sender] = -1;
+                doorBells[sender] = '\0';
                 return sender;
             }
         }
@@ -527,7 +527,7 @@ static size_t exPollSSE(char *doorBells, size_t count) {
             auto lzcnt = __builtin_clz(cmpMask);
             if (lzcnt != 32) {
                 auto sender = 32 - (lzcnt + 1) + i;
-                doorBells[sender] = -1;
+                doorBells[sender] = '\0';
                 return sender;
             }
         }
