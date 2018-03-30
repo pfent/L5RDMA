@@ -10,7 +10,6 @@
 #include "rdma/RcQueuePair.h"
 #include "rdma/UcQueuePair.h"
 #include "rdma/UdQueuePair.h"
-#include <random>
 #include <immintrin.h>
 #include <boost/assert.hpp>
 
@@ -20,6 +19,19 @@ constexpr uint16_t port = 1234;
 const char *ip = "127.0.0.1";
 constexpr size_t SHAREDMEM_MESSAGES = 1024 * 1024;
 constexpr size_t BIGBADBUFFER_SIZE = 1024 * 1024 * 8; // 8MB
+
+class Random32 {
+    uint32_t state;
+public:
+    explicit Random32(uint32_t seed = 314159265) : state(seed) {}
+
+    uint32_t next() {
+        state ^= (state << 13);
+        state ^= (state >> 7);
+        state ^= (state << 5);
+        return state;
+    }
+};
 
 void connectSocket(int socket) {
     sockaddr_in addr = {};
@@ -69,8 +81,7 @@ void runImmData(bool isClient, uint32_t dataSize) {
     auto sendbuf = std::vector<char>(data.size());
     auto sendmr = net.registerMr(sendbuf.data(), sendbuf.size(), {});
 
-    auto generator = std::default_random_engine{};
-    auto randomDistribution = std::uniform_int_distribution<uint32_t>{0, BIGBADBUFFER_SIZE};
+    auto rand = Random32();
 
     auto socket = tcp_socket();
     if (isClient) {
@@ -97,7 +108,7 @@ void runImmData(bool isClient, uint32_t dataSize) {
 
         bench(SHAREDMEM_MESSAGES, [&]() {
             for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
-                auto destPos = randomDistribution(generator);
+                auto destPos = rand.next();
                 write.setRemoteAddress(remoteMr.offset(destPos));
                 write.setImmData(destPos);
                 qp.postWorkRequest(write);
@@ -145,6 +156,7 @@ void runImmData(bool isClient, uint32_t dataSize) {
 
         bench(SHAREDMEM_MESSAGES, [&]() {
             for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
+                auto destPos = rand.next();
                 // wait for message being written
                 auto wc = cq.pollRecvWorkCompletionBlocking();
                 qp.postRecvRequest(recv);
@@ -155,7 +167,6 @@ void runImmData(bool isClient, uint32_t dataSize) {
                 auto end = begin + dataSize;
                 std::copy(begin, end, sendbuf.begin());
                 // echo back the received data
-                auto destPos = randomDistribution(generator);
                 write.setRemoteAddress(remoteMr.offset(destPos));
                 write.setImmData(destPos);
                 qp.postWorkRequest(write);
@@ -198,8 +209,7 @@ void bigBuffer(bool isClient, size_t dataSize, uint16_t pollPositions, F pollFun
     auto sendPosMr = net.registerMr(sendPosBuf.data(), sendPosBuf.size() * sizeof(int32_t),
                                     {ibv::AccessFlag::LOCAL_WRITE, ibv::AccessFlag::REMOTE_WRITE});
 
-    auto generator = std::default_random_engine{};
-    auto randomDistribution = std::uniform_int_distribution<uint32_t>{0, BIGBADBUFFER_SIZE};
+    auto rand = Random32();
 
     auto socket = tcp_socket();
     if (isClient) {
@@ -231,7 +241,7 @@ void bigBuffer(bool isClient, size_t dataSize, uint16_t pollPositions, F pollFun
 
         bench(SHAREDMEM_MESSAGES, [&]() {
             for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
-                auto destPos = randomDistribution(generator);
+                auto destPos = rand.next();
                 sendPosBuf[0] = destPos;
                 write.setRemoteAddress(remoteMr.offset(destPos));
 
@@ -285,6 +295,7 @@ void bigBuffer(bool isClient, size_t dataSize, uint16_t pollPositions, F pollFun
 
         bench(SHAREDMEM_MESSAGES, [&]() {
             for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
+                auto destPos = rand.next();
                 // wait for incoming message
                 const auto[sender, recvPos] = pollFunc(recvPosBuf.data(), pollPositions);
                 std::ignore = sender;
@@ -293,7 +304,6 @@ void bigBuffer(bool isClient, size_t dataSize, uint16_t pollPositions, F pollFun
                 auto end = begin + dataSize;
                 std::copy(begin, end, sendbuf.begin());
                 // echo back the received data
-                auto destPos = randomDistribution(generator);
                 sendPosBuf[0] = destPos;
                 write.setRemoteAddress(remoteMr.offset(destPos));
                 qp.postWorkRequest(write);
@@ -348,7 +358,7 @@ static std::tuple<size_t, int32_t> SIMDPoll(int32_t *doorBells, size_t count) {
 
 #endif
 
-//__always_inline
+__always_inline
 static std::tuple<size_t, int32_t> SSEPoll(int32_t *doorBells, size_t count) {
     assert(count % 4 == 0);
     const auto invalid = _mm_set1_epi32(-1);
@@ -425,7 +435,9 @@ void exclusiveBuffer(bool isClient, size_t dataSize, uint16_t pollPositions, F p
 
     qp.connect(remoteAddr);
 
+    sendDoorBellBuf[0] = 'X'; // indicator that something arrived
     auto write = createWriteWr(sendmr->getSlice());
+    write.setRemoteAddress(remoteMr);
     auto doorBellWrite = createWriteWr(sendDoorBellMr->getSlice());
     doorBellWrite.setRemoteAddress(remoteDoorbellMr);
 
@@ -434,9 +446,6 @@ void exclusiveBuffer(bool isClient, size_t dataSize, uint16_t pollPositions, F p
 
         bench(SHAREDMEM_MESSAGES, [&]() {
             for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
-                sendDoorBellBuf[0] = 'X'; // indicator that something arrived
-                write.setRemoteAddress(remoteMr);
-
                 qp.postWorkRequest(write);
                 qp.postWorkRequest(doorBellWrite);
                 cq.pollSendCompletionQueueBlocking(ibv::workcompletion::Opcode::RDMA_WRITE);
@@ -464,8 +473,6 @@ void exclusiveBuffer(bool isClient, size_t dataSize, uint16_t pollPositions, F p
                 auto end = begin + dataSize;
                 std::copy(begin, end, sendbuf.begin());
                 // echo back the received data
-                sendDoorBellBuf[0] = 'X';
-                write.setRemoteAddress(remoteMr);
                 qp.postWorkRequest(write);
                 qp.postWorkRequest(doorBellWrite);
                 cq.pollSendCompletionQueueBlocking(ibv::workcompletion::Opcode::RDMA_WRITE);
