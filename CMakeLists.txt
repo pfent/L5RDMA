@@ -2,11 +2,11 @@ cmake_minimum_required(VERSION 3.0)
 enable_testing()
 project(exchangableTransports) # TODO: rename to L5RDMA: Low level, low latency library for RDMA
 
-IF(NOT CMAKE_BUILD_TYPE)
+IF (NOT CMAKE_BUILD_TYPE)
     SET(CMAKE_BUILD_TYPE Release
-        CACHE STRING "Choose the type of build : None Debug Release RelWithDebInfo."
-        FORCE)
-ENDIF(NOT CMAKE_BUILD_TYPE)
+            CACHE STRING "Choose the type of build : None Debug Release RelWithDebInfo."
+            FORCE)
+ENDIF (NOT CMAKE_BUILD_TYPE)
 
 set(CMAKE_CXX_STANDARD 17)
 #set(CMAKE_CXX_COMPILER clang++)
@@ -65,6 +65,9 @@ target_link_libraries(indirectWrite ${LINK_LIBRARIES})
 
 add_executable(multiclientIndirectWrite multiclientIndirectWrite.cpp $<TARGET_OBJECTS:common>)
 target_link_libraries(multiclientIndirectWrite ${LINK_LIBRARIES})
+
+add_executable(multiclientBench multiclientBench.cpp $<TARGET_OBJECTS:common>)
+target_link_libraries(multiclientBench ${LINK_LIBRARIES})
 
 file(GLOB tests "test/*Test.cpp")
 foreach (test ${tests})
