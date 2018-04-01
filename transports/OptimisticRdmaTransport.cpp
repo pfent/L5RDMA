@@ -80,7 +80,7 @@ OptimisticRdmaTransportServer::~OptimisticRdmaTransportServer() {
 size_t OptimisticRdmaTransportServer::receive(void *whereTo, size_t maxSize) {
     size_t idOfSender = 0;
     int32_t writePos = -1;
-    while (writePos == -1) { // TODO: vectorize: https://godbolt.org/g/jgiU74
+    while (writePos == -1) {
         for (size_t i = 0; i < doorBells.size(); ++i) {
             auto data = *reinterpret_cast<volatile int32_t *>(&doorBells[i]);
             idOfSender = i;
@@ -146,18 +146,7 @@ OptimisticRdmaTransportClient::OptimisticRdmaTransportClient() :
 }
 
 void OptimisticRdmaTransportClient::connect_impl(std::string_view whereTo) {
-    const auto pos = whereTo.find(':');
-    if (pos == std::string::npos) {
-        throw std::runtime_error("usage: <0.0.0.0:port>");
-    }
-    const auto ip = std::string(whereTo.data(), pos);
-    const auto port = std::stoi(std::string(whereTo.begin() + pos + 1, whereTo.end()));
-    sockaddr_in addr = {};
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons(port);
-    inet_pton(AF_INET, ip.c_str(), &addr.sin_addr);
-
-    tcp_connect(sock, addr);
+    tcp_connect(sock, whereTo);
 
     auto address = rdma::Address{qp.getQPN(), net.getLID()};
     tcp_write(sock, address);

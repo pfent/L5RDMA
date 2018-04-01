@@ -2,6 +2,7 @@
 #define TCPWRAPPER_H
 
 #include <cstddef>
+#include <string_view>
 
 struct sockaddr_in;
 
@@ -10,6 +11,8 @@ int tcp_socket();
 void tcp_listen(int sock);
 
 void tcp_connect(int sock, const sockaddr_in &addr);
+
+void tcp_connect(int sock, std::string_view whereTo);
 
 void tcp_write(int sock, const void *buffer, std::size_t size);
 

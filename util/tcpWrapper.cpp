@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <stdexcept>
 #include <cstring>
+#include <arpa/inet.h>
 #include "tcpWrapper.h"
 
 using namespace std::string_literals;
@@ -68,4 +69,19 @@ void tcp_listen(int sock) {
     if (listen(sock, SOMAXCONN) < 0) {
         throw std::runtime_error{"error listen'ing: "s + strerror(errno)};
     }
+}
+
+void tcp_connect(int sock, std::string_view whereTo) {
+    const auto pos = whereTo.find(':');
+    if (pos == std::string::npos) {
+        throw std::runtime_error("usage: <0.0.0.0:port>");
+    }
+    const auto ip = std::string(whereTo.data(), pos);
+    const auto port = std::stoi(std::string(whereTo.begin() + pos + 1, whereTo.end())); // TODO: std::from_chars?
+    sockaddr_in addr = {};
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(port);
+    inet_pton(AF_INET, ip.c_str(), &addr.sin_addr);
+
+    tcp_connect(sock, addr);
 }
