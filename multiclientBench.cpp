@@ -14,8 +14,9 @@
 
 using namespace std;
 
-constexpr uint16_t port = 1234;
-const char *ip = "127.0.0.1";
+static constexpr uint16_t port = 1234;
+static const char *ip = "127.0.0.1";
+static constexpr auto MESSAGES = 1024 * 1024;
 
 int main(int argc, char **argv) {
     if (argc < 2) {
@@ -34,20 +35,26 @@ int main(int argc, char **argv) {
         const char *testdata = "asdfghjkl";
         std::vector<char> buf(10);
 
-        // TODO: repeat
-        client.send(reinterpret_cast<const uint8_t *>(testdata), 10);
-        client.receive(buf.data(), 10);
+        bench(MESSAGES, [&]() {
+            for (size_t m = 0; m < MESSAGES; ++m) {
+                client.send(reinterpret_cast<const uint8_t *>(testdata), 10);
+                client.receive(buf.data(), 10);
 
-        for (size_t i = 0; i < 10; ++i) {
-            if (testdata[i] != buf[i]) throw runtime_error("NEQ");
-        }
+                for (size_t i = 0; i < 10; ++i) {
+                    if (testdata[i] != buf[i]) throw runtime_error("NEQ");
+                }
+            }
+        });
     } else {
         auto server = MulticlientTransportServer(to_string(port));
         server.accept();
 
         std::vector<uint8_t> buf(10);
-        // TODO: repeat
-        auto client = server.receive(buf.data(), 10);
-        server.send(client, buf.data(), 10);
+        bench(MESSAGES, [&]() {
+            for (size_t m = 0; m < MESSAGES; ++m) {
+                auto client = server.receive(buf.data(), 10);
+                server.send(client, buf.data(), 10);
+            }
+        });
     }
 }
