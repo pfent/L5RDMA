@@ -63,6 +63,7 @@ MulticlientTransportServer::~MulticlientTransportServer() {
             tcp_close(conn.socket);
         }
     }
+    tcp_close(listenSock);
 }
 
 __always_inline
@@ -129,7 +130,7 @@ void MulticlientTransportServer::send(size_t receiverId, const uint8_t *data, si
 
     con.answerWr.setLocalAddress(sendBuffer.getSlice(0, totalLength));
     con.qp.postWorkRequest(con.answerWr);
-    sharedCq.pollSendCompletionQueueBlocking(ibv::workcompletion::Opcode::RDMA_WRITE);
+    sharedCq.pollSendCompletionQueueBlocking(ibv::workcompletion::Opcode::RDMA_WRITE); // TODO: selective signaling
 }
 
 MultiClientTransportClient::MultiClientTransportClient()
