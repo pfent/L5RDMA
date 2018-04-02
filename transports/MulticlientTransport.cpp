@@ -28,6 +28,8 @@ void MulticlientTransportServer::listen(uint16_t port) {
 }
 
 void MulticlientTransportServer::accept() {
+    const auto clientId = connections.size();
+
     auto ignored = sockaddr_in{};
     auto acced = tcp_accept(listenSock, ignored);
 
@@ -37,11 +39,11 @@ void MulticlientTransportServer::accept() {
     tcp_write(acced, address);
     tcp_read(acced, address);
 
-    auto receiveAddr = receives.getAddr();
+    auto receiveAddr = receives.getAddr().offset(sizeof(uint8_t[MAX_MESSAGESIZE]) * clientId);
     tcp_write(acced, receiveAddr);
     tcp_read(acced, receiveAddr);
 
-    auto doorBellAddr = doorBells.getAddr();
+    auto doorBellAddr = doorBells.getAddr().offset(sizeof(char) * clientId);
     tcp_write(acced, doorBellAddr);
 
     qp.connect(address);
