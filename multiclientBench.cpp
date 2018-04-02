@@ -18,6 +18,46 @@ static constexpr uint16_t port = 1234;
 static const char *ip = "127.0.0.1";
 static constexpr auto MESSAGES = 1024 * 1024;
 
+void doRun(size_t clients, bool isClient) {
+    if (isClient) {
+        const char *testdata = "asdfghjkl";
+
+        std::vector<std::thread> clientThreads;
+        for (size_t c = 0; c < clients; ++c) {
+            clientThreads.emplace_back([&] {
+                auto client = MultiClientTransportClient();
+                client.connect(ip, port);
+                std::vector<char> buf(10);
+
+                for (size_t m = 0; m < MESSAGES; ++m) {
+                    client.send(reinterpret_cast<const uint8_t *>(testdata), 10);
+                    client.receive(buf.data(), 10);
+
+                    for (size_t i = 0; i < 10; ++i) {
+                        if (testdata[i] != buf[i]) throw runtime_error("NEQ");
+                    }
+                }
+            });
+        }
+        for (auto &t : clientThreads) {
+            t.join();
+        }
+    } else {
+        auto server = MulticlientTransportServer(to_string(port));
+        for (size_t i = 0; i < clients; ++i) {
+            server.accept();
+        }
+
+        std::vector<uint8_t> buf(10);
+        bench(MESSAGES * clients, [&] {
+            for (size_t m = 0; m < MESSAGES * clients; ++m) {
+                auto client = server.receive(buf.data(), 10);
+                server.send(client, buf.data(), 10);
+            }
+        });
+    }
+}
+
 int main(int argc, char **argv) {
     if (argc < 2) {
         cout << "Usage: " << argv[0] << " <client / server> <(optional) 127.0.0.1>" << endl;
@@ -28,33 +68,8 @@ int main(int argc, char **argv) {
         ip = argv[2];
     }
 
-    if (isClient) {
-        auto client = MultiClientTransportClient();
-        client.connect(ip, port);
-
-        const char *testdata = "asdfghjkl";
-        std::vector<char> buf(10);
-
-        bench(MESSAGES, [&]() {
-            for (size_t m = 0; m < MESSAGES; ++m) {
-                client.send(reinterpret_cast<const uint8_t *>(testdata), 10);
-                client.receive(buf.data(), 10);
-
-                for (size_t i = 0; i < 10; ++i) {
-                    if (testdata[i] != buf[i]) throw runtime_error("NEQ");
-                }
-            }
-        });
-    } else {
-        auto server = MulticlientTransportServer(to_string(port));
-        server.accept();
-
-        std::vector<uint8_t> buf(10);
-        bench(MESSAGES, [&]() {
-            for (size_t m = 0; m < MESSAGES; ++m) {
-                auto client = server.receive(buf.data(), 10);
-                server.send(client, buf.data(), 10);
-            }
-        });
+    for (auto clients : {1, 2, 3, 4, 5, 6, 7, 8}) {
+        cout << clients << ", ";
+        doRun(clients, isClient);
     }
 }
