@@ -26,7 +26,16 @@ void doRun(size_t clients, bool isClient) {
         for (size_t c = 0; c < clients; ++c) {
             clientThreads.emplace_back([&] {
                 auto client = MultiClientTransportClient();
-                client.connect(ip, port);
+                for (int i = 0;; ++i) {
+                    try {
+                        client.connect(ip, port);
+                        break;
+                    } catch (...) {
+                        std::this_thread::sleep_for(20ms);
+                        if (i > 10) throw;
+                    }
+                }
+
                 std::vector<char> buf(10);
 
                 for (size_t m = 0; m < MESSAGES; ++m) {
@@ -68,8 +77,10 @@ int main(int argc, char **argv) {
         ip = argv[2];
     }
 
-    for (auto clients : {1, 2, 3, 4, 5, 6, 7, 8}) {
-        cout << clients << ", ";
+    for (auto clients : {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}) {
+        if (!isClient) {
+            cout << clients << ", ";
+        }
         doRun(clients, isClient);
     }
 }
