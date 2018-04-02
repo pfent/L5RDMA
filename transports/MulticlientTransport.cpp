@@ -213,6 +213,7 @@ size_t MultiClientTransportClient::receive(void *whereTo, size_t maxSize) {
     const auto end = begin + size;
 
     std::copy(begin, end, reinterpret_cast<uint8_t *>(whereTo));
+    *reinterpret_cast<volatile size_t *>(receiveBuffer.data()) = 0;
 
     return size;
 }
