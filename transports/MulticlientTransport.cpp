@@ -111,7 +111,8 @@ size_t MulticlientTransportServer::receive(void *whereTo, size_t maxSize) {
 }
 
 void MulticlientTransportServer::send(size_t receiverId, const uint8_t *data, size_t size) {
-    if (size + sizeof(size_t) + sizeof(validity) > MAX_MESSAGESIZE) {
+    const auto totalLength = size + sizeof(size_t) + sizeof(validity);
+    if (totalLength > MAX_MESSAGESIZE) {
         throw std::runtime_error("can't send messages > MAX_MESSAGESIZE");
     }
     if (receiverId > connections.size()) {
@@ -124,6 +125,7 @@ void MulticlientTransportServer::send(size_t receiverId, const uint8_t *data, si
     std::copy(data, data + size, sendBuffer.data() + sizeof(size_t));
     std::copy(&validity, &validity + 1, sendBuffer.data() + sizeof(size_t) + size);
 
+    con.answerWr.setLocalAddress(sendBuffer.getSlice(0, totalLength));
     con.qp.postWorkRequest(con.answerWr);
     sharedCq.pollSendCompletionQueueBlocking(ibv::workcompletion::Opcode::RDMA_WRITE);
 }
@@ -180,12 +182,14 @@ void MultiClientTransportClient::connect(std::string_view ip, uint16_t port) {
 
 
 void MultiClientTransportClient::send(const uint8_t *data, size_t size) {
-    if (size + sizeof(size_t) > MAX_MESSAGESIZE) {
+    const auto dataWrSize = size + sizeof(size_t);
+    if (dataWrSize > MAX_MESSAGESIZE) {
         throw std::runtime_error("can't send messages > MAX_MESSAGESIZE");
     }
 
     std::copy(&size, &size + 1, reinterpret_cast<size_t *>(sendBuffer.data()));
-    std::copy(data, data + size, sendBuffer.data());
+    std::copy(data, data + size, sendBuffer.data() + sizeof(size_t));
+    dataWr.setLocalAddress(sendBuffer.getSlice(0, dataWrSize));
     qp.postWorkRequest(dataWr);
 
     doorBell.data()[0] = 'X'; // could be anything, really

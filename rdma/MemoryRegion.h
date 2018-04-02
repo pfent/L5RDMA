@@ -42,6 +42,10 @@ namespace rdma {
             return mr->getSlice();
         }
 
+        ibv::memoryregion::Slice getSlice(uint32_t offset, uint32_t sliceLength) {
+            return mr->getSlice(offset, sliceLength);
+        }
+
         RegisteredMemoryRegion(const RegisteredMemoryRegion &) = delete;
 
         RegisteredMemoryRegion &operator=(const RegisteredMemoryRegion &) = delete;
