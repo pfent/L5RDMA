@@ -59,10 +59,14 @@ class MultiClientTransportClient {
     ibv::workrequest::Simple<ibv::workrequest::Write> dataWr;
     ibv::workrequest::Simple<ibv::workrequest::Write> doorBellWr;
 
+    void rdmaConnect();
+
 public:
     MultiClientTransportClient();
 
     void connect(std::string_view whereTo);
+
+    void connect(std::string_view ip, uint16_t port);
 
     void send(const uint8_t *data, size_t size);
 

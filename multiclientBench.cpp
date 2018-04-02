@@ -29,7 +29,7 @@ int main(int argc, char **argv) {
 
     if (isClient) {
         auto client = MultiClientTransportClient();
-        client.connect(string(ip) + to_string(port));
+        client.connect(ip, port);
 
         const char *testdata = "asdfghjkl";
         std::vector<char> buf(10);

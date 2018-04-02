@@ -148,9 +148,7 @@ MultiClientTransportClient::MultiClientTransportClient()
     doorBellWr.setInline();
 }
 
-void MultiClientTransportClient::connect(std::string_view whereTo) {
-    tcp_connect(sock, whereTo);
-
+void MultiClientTransportClient::rdmaConnect() {
     auto address = rdma::Address{qp.getQPN(), net.getLID()};
     tcp_write(sock, address);
     tcp_read(sock, address);
@@ -167,6 +165,19 @@ void MultiClientTransportClient::connect(std::string_view whereTo) {
     dataWr.setRemoteAddress(receiveAddr);
     doorBellWr.setRemoteAddress(doorBellAddr);
 }
+
+void MultiClientTransportClient::connect(std::string_view whereTo) {
+    tcp_connect(sock, whereTo);
+
+    rdmaConnect();
+}
+
+void MultiClientTransportClient::connect(std::string_view ip, uint16_t port) {
+    tcp_connect(sock, std::string(ip), port);
+
+    rdmaConnect();
+}
+
 
 void MultiClientTransportClient::send(const uint8_t *data, size_t size) {
     if (size + sizeof(size_t) > MAX_MESSAGESIZE) {
@@ -201,5 +212,3 @@ size_t MultiClientTransportClient::receive(void *whereTo, size_t maxSize) {
 
     return size;
 }
-
-

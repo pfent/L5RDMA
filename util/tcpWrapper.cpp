@@ -78,6 +78,11 @@ void tcp_connect(int sock, std::string_view whereTo) {
     }
     const auto ip = std::string(whereTo.data(), pos);
     const auto port = std::stoi(std::string(whereTo.begin() + pos + 1, whereTo.end())); // TODO: std::from_chars?
+
+    tcp_connect(sock, ip, port);
+}
+
+void tcp_connect(int sock, const std::string &ip, uint16_t port) {
     sockaddr_in addr = {};
     addr.sin_family = AF_INET;
     addr.sin_port = htons(port);
