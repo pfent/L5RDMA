@@ -129,8 +129,15 @@ void MulticlientTransportServer::send(size_t receiverId, const uint8_t *data, si
     std::copy(&validity, &validity + 1, sendBuffer.data() + sizeof(size_t) + size);
 
     con.answerWr.setLocalAddress(sendBuffer.getSlice(0, totalLength));
-    con.qp.postWorkRequest(con.answerWr);
-    sharedCq.pollSendCompletionQueueBlocking(ibv::workcompletion::Opcode::RDMA_WRITE); // TODO: selective signaling
+    sendCounter++;
+    if (sendCounter % 1024 == 0) { // selective signaling
+        con.answerWr.setFlags({ibv::workrequest::Flags::INLINE, ibv::workrequest::Flags::SIGNALED});
+        con.qp.postWorkRequest(con.answerWr);
+        sharedCq.pollSendCompletionQueueBlocking(ibv::workcompletion::Opcode::RDMA_WRITE);
+    } else {
+        con.answerWr.setFlags({ibv::workrequest::Flags::INLINE});
+        con.qp.postWorkRequest(con.answerWr);
+    }
 }
 
 MultiClientTransportClient::MultiClientTransportClient()
@@ -146,7 +153,6 @@ MultiClientTransportClient::MultiClientTransportClient()
     dataWr.setLocalAddress(sendBuffer.getSlice());
     dataWr.setSignaled();
     dataWr.setInline();
-    // TODO: dataWr.setRemoteAddress()
 
     doorBellWr.setLocalAddress(doorBell.getSlice());
     doorBellWr.setSignaled();

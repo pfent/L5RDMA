@@ -24,6 +24,7 @@ class MulticlientTransportServer {
     rdma::RegisteredMemoryRegion<char> doorBells;
 
     rdma::RegisteredMemoryRegion<uint8_t> sendBuffer;
+    size_t sendCounter = 0;
 
     std::vector<Connection> connections;
 
