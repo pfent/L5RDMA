@@ -2,18 +2,24 @@
 #define EXCHANGABLETRANSPORTS_PINGPONG_H
 
 #include <cstdint>
+#include <vector>
 #include "transports/Transport.h"
 
 using namespace std::string_view_literals;
 
 template<class T>
 class Ping {
-    static constexpr std::string_view data = "123456789012345678901234567890123456789012345678901234567890123\0"sv;
+    std::vector<uint8_t> data;
     std::unique_ptr<TransportClient<T>> transport;
-    std::array<uint8_t, data.size()> buffer;
+    std::vector<uint8_t> buffer;
 public:
-    Ping(std::unique_ptr<TransportClient<T>> t, std::string_view whereTo) : transport(std::move(t)) {
-        this->transport->connect(whereTo);
+    Ping(std::unique_ptr<TransportClient<T>> t, std::string_view whereTo, size_t dataSize = 64)
+            : transport(std::move(t)),
+              buffer(dataSize) {
+        transport->connect(whereTo);
+        for (size_t i = 0; i < dataSize; ++i) {
+            data.push_back(i % 255);
+        }
     }
 
     void ping() {
@@ -28,12 +34,14 @@ public:
     }
 };
 
-template<class T, size_t messageSize = 64>
+template<class T>
 class Pong {
     std::unique_ptr<TransportServer<T>> transport;
-    std::array<uint8_t, messageSize> buffer;
+    std::vector<uint8_t> buffer;
 public:
-    explicit Pong(std::unique_ptr<TransportServer<T>> transport) : transport(std::move(transport)) {}
+    explicit Pong(std::unique_ptr<TransportServer<T>> transport, size_t dataSize = 64)
+            : transport(std::move(transport)),
+              buffer(dataSize) {}
 
     void start() {
         transport->accept();

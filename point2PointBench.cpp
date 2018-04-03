@@ -26,47 +26,51 @@ int main(int argc, char **argv) {
         ip = argv[2];
     }
 
-    if (isClient) {
-        cout << "implementation, messages, time, msg/s, user, system, total\n";
-        {
-            cout << "domainsockets, ";
-            auto client = Ping(make_transportClient<DomainSocketsTransportClient>(), "/dev/shm/pingPong");
-            bench(MESSAGES, [&]() {
-                for (size_t i = 0; i < MESSAGES; ++i) {
-                    client.ping();
-                }
-            }, 5);
-        }
-        sleep(1);
-        {
-            cout << "shared memory, ";
-            auto client = Ping(make_transportClient<SharedMemoryTransportClient>(), "/dev/shm/pingPong");
-            bench(SHAREDMEM_MESSAGES, [&]() {
-                for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
-                    client.ping();
-                }
-            }, 5);
-        }
-        sleep(1);
-        {
-            cout << "tcp, ";
-            auto client = Ping(make_transportClient<TcpTransportClient>(), ip + string(":") + to_string(port));
-            bench(MESSAGES, [&]() {
-                for (size_t i = 0; i < MESSAGES; ++i) {
-                    client.ping();
-                }
-            }, 5);
-        }
-        sleep(1);
-        {
-            cout << "rdma, ";
-            auto client = Ping(make_transportClient<RdmaTransportClient>(), ip + string(":") + to_string(port));
-            bench(SHAREDMEM_MESSAGES, [&]() {
-                for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
-                    client.ping();
-                }
-            }, 1);
-        }
+    cout << "size, connection, messages, time, msgps, user, system, total\n";
+    for (const size_t size : {1u, 2u, 4u, 8u, 16u, 32u, 64u, 128u, 256u}) {
+        if (isClient) {
+            sleep(1);
+            {
+                cout << size << ", " << "domainsockets, ";
+                auto client = Ping(make_transportClient<DomainSocketsTransportClient>(), "/dev/shm/pingPong", size);
+                bench(MESSAGES, [&]() {
+                    for (size_t i = 0; i < MESSAGES; ++i) {
+                        client.ping();
+                    }
+                });
+            }
+            sleep(1);
+            {
+                cout << size << ", " << "shared memory, ";
+                auto client = Ping(make_transportClient<SharedMemoryTransportClient>(), "/dev/shm/pingPong", size);
+                bench(SHAREDMEM_MESSAGES, [&]() {
+                    for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
+                        client.ping();
+                    }
+                });
+            }
+            sleep(1);
+            {
+                cout << size << ", " << "tcp, ";
+                auto client = Ping(make_transportClient<TcpTransportClient>(), ip + string(":") + to_string(port),
+                                   size);
+                bench(MESSAGES, [&]() {
+                    for (size_t i = 0; i < MESSAGES; ++i) {
+                        client.ping();
+                    }
+                });
+            }
+            sleep(1);
+            {
+                cout << size << ", " << "rdma, ";
+                auto client = Ping(make_transportClient<RdmaTransportClient>(), ip + string(":") + to_string(port),
+                                   size);
+                bench(SHAREDMEM_MESSAGES, [&]() {
+                    for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
+                        client.ping();
+                    }
+                });
+            }
 //        { // librdmacm doesn't seem to work with the current server config
 //            cout << "librdmacm, ";
 //            auto client = Ping(make_transportClient<LibRdmacmTransportClient>(), ip + string(":") + to_string(port));
@@ -76,48 +80,48 @@ int main(int argc, char **argv) {
 //                }
 //            }, 1);
 //        }
-    } else {
-        cout << "implementation, messages, time, msg/s, user, system, total\n";
-        {
-            cout << "domainsockets, ";
-            auto server = Pong(make_transportServer<DomainSocketsTransportServer>("/dev/shm/pingPong"));
-            server.start();
-            bench(MESSAGES, [&]() {
-                for (size_t i = 0; i < MESSAGES; ++i) {
-                    server.pong();
-                }
-            }, 5);
-        }
-        {
-            cout << "shared memory, ";
-            auto server = Pong(make_transportServer<SharedMemoryTransportServer>("/dev/shm/pingPong"));
-            server.start();
-            bench(SHAREDMEM_MESSAGES, [&]() {
-                for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
-                    server.pong();
-                }
-            }, 5);
-        }
-        {
-            cout << "tcp, ";
-            auto server = Pong(make_transportServer<TcpTransportServer>(to_string(port)));
-            server.start();
-            bench(MESSAGES, [&]() {
-                for (size_t i = 0; i < MESSAGES; ++i) {
-                    server.pong();
-                }
-            }, 5);
-        }
-        {
-            cout << "rdma, ";
-            auto server = Pong(make_transportServer<RdmaTransportServer>(to_string(port)));
-            server.start();
-            bench(SHAREDMEM_MESSAGES, [&]() {
-                for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
-                    server.pong();
-                }
-            }, 1);
-        }
+        } else {
+
+            {
+                cout << size << ", " << "domainsockets, ";
+                auto server = Pong(make_transportServer<DomainSocketsTransportServer>("/dev/shm/pingPong"), size);
+                server.start();
+                bench(MESSAGES, [&]() {
+                    for (size_t i = 0; i < MESSAGES; ++i) {
+                        server.pong();
+                    }
+                });
+            }
+            {
+                cout << size << ", " << "shared memory, ";
+                auto server = Pong(make_transportServer<SharedMemoryTransportServer>("/dev/shm/pingPong"), size);
+                server.start();
+                bench(SHAREDMEM_MESSAGES, [&]() {
+                    for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
+                        server.pong();
+                    }
+                });
+            }
+            {
+                cout << size << ", " << "tcp, ";
+                auto server = Pong(make_transportServer<TcpTransportServer>(to_string(port)), size);
+                server.start();
+                bench(MESSAGES, [&]() {
+                    for (size_t i = 0; i < MESSAGES; ++i) {
+                        server.pong();
+                    }
+                });
+            }
+            {
+                cout << size << ", " << "rdma, ";
+                auto server = Pong(make_transportServer<RdmaTransportServer>(to_string(port)), size);
+                server.start();
+                bench(SHAREDMEM_MESSAGES, [&]() {
+                    for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
+                        server.pong();
+                    }
+                });
+            }
 //        {
 //            cout << "librdmacm, ";
 //            auto server = Pong(make_transportServer<LibRdmacmTransportServer>(to_string(port)));
@@ -128,6 +132,7 @@ int main(int argc, char **argv) {
 //                }
 //            }, 1);
 //        }
+        }
     }
 
     return 0;
