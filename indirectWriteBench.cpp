@@ -588,13 +588,13 @@ int main(int argc, char **argv) {
 
     cout << "size, connection, messages, seconds, msgps, user, kernel, total" << '\n';
     for (const size_t length : {1u, 2u, 4u, 8u, 16u, 32u, 64u, 128u, 256u, 512u}) {
-        cout << length << ", ImmPosRC, ";
+        cout << length << ", ImmPos, ";
         runImmData<rdma::RcQueuePair>(isClient, length);
-        cout << length << ", 2WrChainedRC, ";
+        cout << length << ", 2WrChained, ";
         runChainedWrs<rdma::RcQueuePair>(isClient, length);
-        cout << length << ", 2WrSeparateRC, ";
+        cout << length << ", 2WrSeparate, ";
         runPostedWrs<rdma::RcQueuePair>(isClient, length);
-        cout << length << ", 2WrDoublePollRC, ";
+        cout << length << ", 2WrDoublePoll, ";
         runDoublePollingWrs<rdma::RcQueuePair>(isClient, length);
     }
 }
