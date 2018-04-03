@@ -15,7 +15,7 @@ using namespace std;
 
 constexpr uint16_t port = 1234;
 const char *ip = "127.0.0.1";
-const size_t SHAREDMEM_MESSAGES = 1024 * 1024;
+const size_t MESSAGES = 1024 * 1024;
 
 void connectSocket(int socket) {
     sockaddr_in addr = {};
@@ -84,8 +84,8 @@ void runConnected(bool isClient, size_t dataSize) {
         tcp_read(socket, &remoteAddr, sizeof(remoteAddr));
         qp.connect(remoteAddr);
 
-        bench(SHAREDMEM_MESSAGES, [&]() {
-            for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
+        bench(MESSAGES, [&]() {
+            for (size_t i = 0; i < MESSAGES; ++i) {
                 std::fill(recvbuf.begin(), recvbuf.end(), 0);
 
                 qp.postWorkRequest(send);
@@ -126,8 +126,8 @@ void runConnected(bool isClient, size_t dataSize) {
         tcp_read(acced, &remoteAddr, sizeof(remoteAddr));
         qp.connect(remoteAddr);
 
-        bench(SHAREDMEM_MESSAGES, [&]() {
-            for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
+        bench(MESSAGES, [&]() {
+            for (size_t i = 0; i < MESSAGES; ++i) {
                 // receive into buf
                 if (cq.pollRecvCompletionQueueBlocking() != 42) {
                     throw;
@@ -203,8 +203,8 @@ void runUnconnected(bool isClient, size_t dataSize) {
 
         auto send = createSendWrUnconnected(sendmr->getSlice(), *ah, remoteAddr.qpn);
 
-        bench(SHAREDMEM_MESSAGES, [&]() {
-            for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
+        bench(MESSAGES, [&]() {
+            for (size_t i = 0; i < MESSAGES; ++i) {
                 std::fill(recvbuf.begin(), recvbuf.end(), 0);
 
                 qp.postWorkRequest(send);
@@ -246,8 +246,8 @@ void runUnconnected(bool isClient, size_t dataSize) {
 
         auto send = createSendWrUnconnected(sendmr->getSlice(), *ah, remoteAddr.qpn);
 
-        bench(SHAREDMEM_MESSAGES, [&]() {
-            for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
+        bench(MESSAGES, [&]() {
+            for (size_t i = 0; i < MESSAGES; ++i) {
                 // receive into buf
                 if (cq.pollRecvCompletionQueueBlocking() != 42) {
                     throw;
@@ -306,8 +306,8 @@ void runWriteMemPolling(bool isClient, size_t dataSize) {
 
         auto write = createWriteWrNoImm(sendmr->getSlice(), remoteMr);
 
-        bench(SHAREDMEM_MESSAGES, [&]() {
-            for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
+        bench(MESSAGES, [&]() {
+            for (size_t i = 0; i < MESSAGES; ++i) {
                 std::fill(recvbuf.begin(), recvbuf.end(), 0);
 
                 qp.postWorkRequest(write);
@@ -344,8 +344,8 @@ void runWriteMemPolling(bool isClient, size_t dataSize) {
 
         auto write = createWriteWrNoImm(sendmr->getSlice(), remoteMr);
 
-        bench(SHAREDMEM_MESSAGES, [&]() {
-            for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
+        bench(MESSAGES, [&]() {
+            for (size_t i = 0; i < MESSAGES; ++i) {
                 // wait for message being written
                 while (*static_cast<volatile char *>(recvbuf.data()) == '\0');
                 while (*static_cast<volatile char *>(recvbuf.data() + recvbuf.size() - 1) == '\0');
@@ -423,8 +423,8 @@ void runWriteWithImm(bool isClient, size_t dataSize) {
 
         auto write = createWriteWrWithImm(sendmr->getSlice(), remoteMr);
 
-        bench(SHAREDMEM_MESSAGES, [&]() {
-            for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
+        bench(MESSAGES, [&]() {
+            for (size_t i = 0; i < MESSAGES; ++i) {
                 std::fill(recvbuf.begin(), recvbuf.end(), 0);
 
                 qp.postWorkRequest(write);
@@ -476,8 +476,8 @@ void runWriteWithImm(bool isClient, size_t dataSize) {
 
         auto write = createWriteWrWithImm(sendmr->getSlice(), remoteMr);
 
-        bench(SHAREDMEM_MESSAGES, [&]() {
-            for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
+        bench(MESSAGES, [&]() {
+            for (size_t i = 0; i < MESSAGES; ++i) {
                 // wait for message being written
                 if (cq.pollRecvCompletionQueueBlocking(ibv::workcompletion::Opcode::RECV_RDMA_WITH_IMM) != 42) {
                     throw;
@@ -538,8 +538,8 @@ void runRead(bool isClient, size_t dataSize) {
         auto write = createWriteWrNoImm(sendmr->getSlice(), remoteMr);
         auto read = createRead(recvmr->getSlice(), remoteMr);
 
-        bench(SHAREDMEM_MESSAGES, [&]() {
-            for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
+        bench(MESSAGES, [&]() {
+            for (size_t i = 0; i < MESSAGES; ++i) {
                 std::fill(recvbuf.begin(), recvbuf.end(), 0);
 
                 qp.postWorkRequest(write);
@@ -588,7 +588,7 @@ void runRead(bool isClient, size_t dataSize) {
 
 int main(int argc, char **argv) {
     if (argc < 2) {
-        cout << "Usage: " << argv[0] << " <client / server> <(optional) 127.0.0.1>" << endl;
+        cout << "Usage: " << argv[0] << " <client / server> <(IP, optional) 127.0.0.1>" << endl;
         return -1;
     }
     const auto isClient = argv[1][0] == 'c';

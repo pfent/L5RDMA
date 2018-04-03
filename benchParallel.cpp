@@ -8,7 +8,7 @@
 
 using namespace std;
 
-const size_t SHAREDMEM_MESSAGES = 4 * 1024 * 128 * 16;
+const size_t MESSAGES = 4 * 1024 * 128 * 16;
 
 int main(int argc, char **argv) {
     if (argc < 3) {
@@ -19,7 +19,7 @@ int main(int argc, char **argv) {
     const auto threads = atoi(argv[2]);
 
     tbb::task_scheduler_init taskScheduler(threads);
-    const auto messagesPerThread = SHAREDMEM_MESSAGES / threads;
+    const auto messagesPerThread = MESSAGES / threads;
 
     if (isClient) {
         vector<Ping<RdmaTransportClient>> clients;

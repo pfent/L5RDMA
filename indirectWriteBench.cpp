@@ -16,7 +16,7 @@ using namespace std;
 
 constexpr uint16_t port = 1234;
 const char *ip = "127.0.0.1";
-constexpr size_t SHAREDMEM_MESSAGES = 1024 * 1024;
+constexpr size_t MESSAGES = 1024 * 1024;
 constexpr size_t BIGBADBUFFER_SIZE = 1024 * 1024 * 8; // 8MB
 
 void connectSocket(int socket) {
@@ -92,8 +92,8 @@ void runImmData(bool isClient, uint32_t dataSize) {
 
         auto write = createWriteWrWithImm(sendmr->getSlice());
 
-        bench(SHAREDMEM_MESSAGES, [&]() {
-            for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
+        bench(MESSAGES, [&]() {
+            for (size_t i = 0; i < MESSAGES; ++i) {
                 auto destPos = randomDistribution(generator);
                 write.setRemoteAddress(remoteMr.offset(destPos));
                 write.setImmData(destPos);
@@ -140,8 +140,8 @@ void runImmData(bool isClient, uint32_t dataSize) {
 
         auto write = createWriteWrWithImm(sendmr->getSlice());
 
-        bench(SHAREDMEM_MESSAGES, [&]() {
-            for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
+        bench(MESSAGES, [&]() {
+            for (size_t i = 0; i < MESSAGES; ++i) {
                 // wait for message being written
                 auto wc = cq.pollRecvWorkCompletionBlocking();
                 qp.postRecvRequest(recv);
@@ -226,8 +226,8 @@ void runChainedWrs(bool isClient, size_t dataSize) {
         posWrite.setRemoteAddress(remotePosMr);
         write.setNext(&posWrite);
 
-        bench(SHAREDMEM_MESSAGES, [&]() {
-            for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
+        bench(MESSAGES, [&]() {
+            for (size_t i = 0; i < MESSAGES; ++i) {
                 auto destPos = randomDistribution(generator);
                 sendPosBuf[0] = destPos;
                 write.setRemoteAddress(remoteMr.offset(destPos));
@@ -280,8 +280,8 @@ void runChainedWrs(bool isClient, size_t dataSize) {
         posWrite.setRemoteAddress(remotePosMr);
         write.setNext(&posWrite);
 
-        bench(SHAREDMEM_MESSAGES, [&]() {
-            for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
+        bench(MESSAGES, [&]() {
+            for (size_t i = 0; i < MESSAGES; ++i) {
                 // wait for incoming message
                 while (*static_cast<volatile int32_t *>(&recvPosBuf[0]) == -1);
                 auto recvPos = recvPosBuf[0];
@@ -357,8 +357,8 @@ void runPostedWrs(bool isClient, size_t dataSize) {
         auto posWrite = createWriteWr(sendPosMr->getSlice());
         posWrite.setRemoteAddress(remotePosMr);
 
-        bench(SHAREDMEM_MESSAGES, [&]() {
-            for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
+        bench(MESSAGES, [&]() {
+            for (size_t i = 0; i < MESSAGES; ++i) {
                 auto destPos = randomDistribution(generator);
                 sendPosBuf[0] = destPos;
                 write.setRemoteAddress(remoteMr.offset(destPos));
@@ -411,8 +411,8 @@ void runPostedWrs(bool isClient, size_t dataSize) {
         auto posWrite = createWriteWr(sendPosMr->getSlice());
         posWrite.setRemoteAddress(remotePosMr);
 
-        bench(SHAREDMEM_MESSAGES, [&]() {
-            for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
+        bench(MESSAGES, [&]() {
+            for (size_t i = 0; i < MESSAGES; ++i) {
                 // wait for incoming message
                 while (*static_cast<volatile int32_t *>(&recvPosBuf[0]) == -1);
                 auto recvPos = recvPosBuf[0];
@@ -489,8 +489,8 @@ void runDoublePollingWrs(bool isClient, size_t dataSize) {
         auto posWrite = createWriteWr(sendPosMr->getSlice());
         posWrite.setRemoteAddress(remotePosMr);
 
-        bench(SHAREDMEM_MESSAGES, [&]() {
-            for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
+        bench(MESSAGES, [&]() {
+            for (size_t i = 0; i < MESSAGES; ++i) {
                 auto destPos = randomDistribution(generator);
                 sendPosBuf[0] = destPos;
                 write.setRemoteAddress(remoteMr.offset(destPos));
@@ -546,8 +546,8 @@ void runDoublePollingWrs(bool isClient, size_t dataSize) {
         auto posWrite = createWriteWr(sendPosMr->getSlice());
         posWrite.setRemoteAddress(remotePosMr);
 
-        bench(SHAREDMEM_MESSAGES, [&]() {
-            for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
+        bench(MESSAGES, [&]() {
+            for (size_t i = 0; i < MESSAGES; ++i) {
                 // wait for incoming message
                 while (*static_cast<volatile int32_t *>(&recvPosBuf[0]) == -1);
                 auto recvPos = recvPosBuf[0];
@@ -578,7 +578,7 @@ void runDoublePollingWrs(bool isClient, size_t dataSize) {
 
 int main(int argc, char **argv) {
     if (argc < 2) {
-        cout << "Usage: " << argv[0] << " <client / server> <(optional) 127.0.0.1>" << endl;
+        cout << "Usage: " << argv[0] << " <client / server> <(IP, optional) 127.0.0.1>" << endl;
         return -1;
     }
     const auto isClient = argv[1][0] == 'c';
@@ -587,22 +587,14 @@ int main(int argc, char **argv) {
     }
 
     cout << "size, connection, messages, seconds, msgps, user, kernel, total" << '\n';
-    for (const uint32_t length : {1, 2, 4, 8, 16, 32, 64, 128, 256, 512}) {
+    for (const size_t length : {1u, 2u, 4u, 8u, 16u, 32u, 64u, 128u, 256u, 512u}) {
         cout << length << ", ImmPosRC, ";
         runImmData<rdma::RcQueuePair>(isClient, length);
-        cout << length << ", ImmPosUC, ";
-        runImmData<rdma::UcQueuePair>(isClient, length);
         cout << length << ", 2WrChainedRC, ";
         runChainedWrs<rdma::RcQueuePair>(isClient, length);
-        cout << length << ", 2WrChainedUC, ";
-        runChainedWrs<rdma::UcQueuePair>(isClient, length);
         cout << length << ", 2WrSeparateRC, ";
         runPostedWrs<rdma::RcQueuePair>(isClient, length);
-        cout << length << ", 2WrSeparateUC, ";
-        runPostedWrs<rdma::UcQueuePair>(isClient, length);
         cout << length << ", 2WrDoublePollRC, ";
         runDoublePollingWrs<rdma::RcQueuePair>(isClient, length);
-        cout << length << ", 2WrDoublePollUC, ";
-        runDoublePollingWrs<rdma::UcQueuePair>(isClient, length);
     }
 }

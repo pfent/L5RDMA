@@ -17,7 +17,7 @@ using namespace std;
 
 constexpr uint16_t port = 1234;
 const char *ip = "127.0.0.1";
-constexpr size_t SHAREDMEM_MESSAGES = 1024 * 1024;
+constexpr size_t MESSAGES = 1024 * 1024;
 constexpr uint32_t BIGBADBUFFER_SIZE = 1024 * 1024 * 8; // 8MB
 
 class Random32 {
@@ -106,8 +106,8 @@ void runImmData(bool isClient, uint32_t dataSize) {
 
         auto write = createWriteWrWithImm(sendmr->getSlice());
 
-        bench(SHAREDMEM_MESSAGES, [&]() {
-            for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
+        bench(MESSAGES, [&]() {
+            for (size_t i = 0; i < MESSAGES; ++i) {
                 auto destPos = rand.next();
                 write.setRemoteAddress(remoteMr.offset(destPos));
                 write.setImmData(destPos);
@@ -154,8 +154,8 @@ void runImmData(bool isClient, uint32_t dataSize) {
 
         auto write = createWriteWrWithImm(sendmr->getSlice());
 
-        bench(SHAREDMEM_MESSAGES, [&]() {
-            for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
+        bench(MESSAGES, [&]() {
+            for (size_t i = 0; i < MESSAGES; ++i) {
                 auto destPos = rand.next();
                 // wait for message being written
                 auto wc = cq.pollRecvWorkCompletionBlocking();
@@ -239,8 +239,8 @@ void bigBuffer(bool isClient, size_t dataSize, uint16_t pollPositions, F pollFun
         auto posWrite = createWriteWr(sendPosMr->getSlice());
         posWrite.setRemoteAddress(remotePosMr);
 
-        bench(SHAREDMEM_MESSAGES, [&]() {
-            for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
+        bench(MESSAGES, [&]() {
+            for (size_t i = 0; i < MESSAGES; ++i) {
                 auto destPos = rand.next();
                 sendPosBuf[0] = destPos;
                 write.setRemoteAddress(remoteMr.offset(destPos));
@@ -293,8 +293,8 @@ void bigBuffer(bool isClient, size_t dataSize, uint16_t pollPositions, F pollFun
         auto posWrite = createWriteWr(sendPosMr->getSlice());
         posWrite.setRemoteAddress(remotePosMr);
 
-        bench(SHAREDMEM_MESSAGES, [&]() {
-            for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
+        bench(MESSAGES, [&]() {
+            for (size_t i = 0; i < MESSAGES; ++i) {
                 auto destPos = rand.next();
                 // wait for incoming message
                 const auto[sender, recvPos] = pollFunc(recvPosBuf.data(), pollPositions);
@@ -444,8 +444,8 @@ void exclusiveBuffer(bool isClient, size_t dataSize, uint16_t pollPositions, F p
     if (isClient) {
         std::copy(data.begin(), data.end(), sendbuf.begin());
 
-        bench(SHAREDMEM_MESSAGES, [&]() {
-            for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
+        bench(MESSAGES, [&]() {
+            for (size_t i = 0; i < MESSAGES; ++i) {
                 qp.postWorkRequest(write);
                 qp.postWorkRequest(doorBellWrite);
                 cq.pollSendCompletionQueueBlocking(ibv::workcompletion::Opcode::RDMA_WRITE);
@@ -464,8 +464,8 @@ void exclusiveBuffer(bool isClient, size_t dataSize, uint16_t pollPositions, F p
         }, 1);
 
     } else {
-        bench(SHAREDMEM_MESSAGES, [&]() {
-            for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
+        bench(MESSAGES, [&]() {
+            for (size_t i = 0; i < MESSAGES; ++i) {
                 // wait for incoming message
                 const auto sender = pollFunc(recvDoorBells.data(), pollPositions);
 
@@ -635,7 +635,7 @@ void test() {
 int main(int argc, char **argv) {
     test();
     if (argc < 2) {
-        cout << "Usage: " << argv[0] << " <client / server> <(optional) 127.0.0.1>" << endl;
+        cout << "Usage: " << argv[0] << " <client / server> <(IP, optional) 127.0.0.1>" << endl;
         return -1;
     }
     const auto isClient = argv[1][0] == 'c';
@@ -645,7 +645,7 @@ int main(int argc, char **argv) {
 
     cout << "size, connection, clients, messages, seconds, msgps, user, kernel, total" << '\n';
     const auto length = 64;
-    for (const int clients : {1, 2, 4, 8, 16, 32, 64, 128, 192, 256}) {
+    for (const size_t clients : {1u, 2u, 4u, 8u, 16u, 32u, 64u, 128u, 192u, 256u}) {
         cout << length << ", ImmData " << clients << ", ";
         runImmData<rdma::RcQueuePair>(isClient, length);
         cout << length << ", scalar_poll " << clients << ", ";

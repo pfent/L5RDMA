@@ -57,14 +57,14 @@ target_link_libraries(kv ${LINK_LIBRARIES})
 add_executable(parallel benchParallel.cpp $<TARGET_OBJECTS:common>)
 target_link_libraries(parallel ${LINK_LIBRARIES})
 
-add_executable(pingBench pingBench.cpp $<TARGET_OBJECTS:common>)
-target_link_libraries(pingBench ${LINK_LIBRARIES})
+add_executable(rawCommandBench rawCommandBench.cpp $<TARGET_OBJECTS:common>)
+target_link_libraries(rawCommandBench ${LINK_LIBRARIES})
 
-add_executable(indirectWrite indirectWrite.cpp $<TARGET_OBJECTS:common>)
-target_link_libraries(indirectWrite ${LINK_LIBRARIES})
+add_executable(indirectWriteBench indirectWriteBench.cpp $<TARGET_OBJECTS:common>)
+target_link_libraries(indirectWriteBench ${LINK_LIBRARIES})
 
-add_executable(multiclientIndirectWrite multiclientIndirectWrite.cpp $<TARGET_OBJECTS:common>)
-target_link_libraries(multiclientIndirectWrite ${LINK_LIBRARIES})
+add_executable(multiclientPollingBench multiclientPollingBench.cpp $<TARGET_OBJECTS:common>)
+target_link_libraries(multiclientPollingBench ${LINK_LIBRARIES})
 
 add_executable(multiclientBench multiclientBench.cpp $<TARGET_OBJECTS:common>)
 target_link_libraries(multiclientBench ${LINK_LIBRARIES})
