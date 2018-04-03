@@ -2,7 +2,10 @@
 
 WraparoundBuffer mmapSharedRingBuffer(const std::string &name, size_t size, bool init) {
     // create a new mapping in /dev/shm
-    const auto pos = name.rfind('/');
+    auto pos = name.rfind('/');
+    if (pos == std::string::npos) {
+        pos = 0;
+    }
     const auto fd = shm_open(name.c_str() + pos, O_CREAT | O_TRUNC | O_RDWR, 0666);
     if (fd < 0) {
         perror("shm_open");
