@@ -227,7 +227,6 @@ void bigBuffer(bool isClient, size_t dataSize, uint16_t pollPositions, F pollFun
                                                          recvmr->getRkey()};
         tcp_write(socket, &remoteMr, sizeof(remoteMr));
         tcp_read(socket, &remoteMr, sizeof(remoteMr));
-        // TODO: vary the send address
         auto remotePosMr = ibv::memoryregion::RemoteAddress{reinterpret_cast<uintptr_t>(&recvPosBuf.back()),
                                                             recvPosMr->getRkey()};
         tcp_write(socket, &remotePosMr, sizeof(remotePosMr));
@@ -281,7 +280,6 @@ void bigBuffer(bool isClient, size_t dataSize, uint16_t pollPositions, F pollFun
                                                          recvmr->getRkey()};
         tcp_write(acced, &remoteMr, sizeof(remoteMr));
         tcp_read(acced, &remoteMr, sizeof(remoteMr));
-        // TODO: vary the send address
         auto remotePosMr = ibv::memoryregion::RemoteAddress{reinterpret_cast<uintptr_t>(&recvPosBuf.back()),
                                                             recvPosMr->getRkey()};
         tcp_write(acced, &remotePosMr, sizeof(remotePosMr));
