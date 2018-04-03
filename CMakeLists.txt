@@ -48,14 +48,14 @@ SET(LINK_LIBRARIES
 
 include_directories(. include)
 
-add_executable(bench bench.cpp $<TARGET_OBJECTS:common>)
-target_link_libraries(bench ${LINK_LIBRARIES})
+add_executable(point2PointBench point2PointBench.cpp $<TARGET_OBJECTS:common>)
+target_link_libraries(point2PointBench ${LINK_LIBRARIES})
 
 add_executable(kv kvbench.cpp $<TARGET_OBJECTS:common>)
 target_link_libraries(kv ${LINK_LIBRARIES})
 
-add_executable(parallel benchParallel.cpp $<TARGET_OBJECTS:common>)
-target_link_libraries(parallel ${LINK_LIBRARIES})
+add_executable(parallelP2PBench parallelP2PBench.cpp $<TARGET_OBJECTS:common>)
+target_link_libraries(parallelP2PBench ${LINK_LIBRARIES})
 
 add_executable(rawCommandBench rawCommandBench.cpp $<TARGET_OBJECTS:common>)
 target_link_libraries(rawCommandBench ${LINK_LIBRARIES})
@@ -66,8 +66,8 @@ target_link_libraries(indirectWriteBench ${LINK_LIBRARIES})
 add_executable(multiclientPollingBench multiclientPollingBench.cpp $<TARGET_OBJECTS:common>)
 target_link_libraries(multiclientPollingBench ${LINK_LIBRARIES})
 
-add_executable(multiclientBench multiclientBench.cpp $<TARGET_OBJECTS:common>)
-target_link_libraries(multiclientBench ${LINK_LIBRARIES})
+add_executable(many2OneBench many2OneBench.cpp $<TARGET_OBJECTS:common>)
+target_link_libraries(many2OneBench ${LINK_LIBRARIES})
 
 file(GLOB tests "test/*Test.cpp")
 foreach (test ${tests})

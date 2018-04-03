@@ -11,18 +11,22 @@
 
 using namespace std;
 
-const size_t MESSAGES = 256 * 1024; // ~ 1s
-const size_t SHAREDMEM_MESSAGES = 4 * 1024 * 128;
+static const size_t MESSAGES = 256 * 1024; // ~ 1s
+static const size_t SHAREDMEM_MESSAGES = 4 * 1024 * 128;
+static const char *ip = "127.0.0.1";
+static constexpr uint16_t port = 1234;
 
 int main(int argc, char **argv) {
     if (argc < 2) {
-        cout << "Usage: " << argv[0] << " <client / server>" << endl;
+        cout << "Usage: " << argv[0] << " <client / server> <(IP, optional) 127.0.0.1>" << endl;
         return -1;
     }
     const auto isClient = argv[1][0] == 'c';
+    if (argc > 2) {
+        ip = argv[2];
+    }
 
     if (isClient) {
-        pinThread(0);
         cout << "implementation, messages, time, msg/s, user, system, total\n";
 //        {
 //            cout << "domainsockets, ";
@@ -46,7 +50,7 @@ int main(int argc, char **argv) {
 //        sleep(1);
 //        {
 //            cout << "tcp, ";
-//            auto client = Ping(make_transportClient<TcpTransportClient>(), "127.0.0.1:1234");
+//            auto client = Ping(make_transportClient<TcpTransportClient>(), ip + string(":") + to_string(port));
 //            bench(MESSAGES, [&]() {
 //                for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
 //                    client.ping();
@@ -56,7 +60,7 @@ int main(int argc, char **argv) {
 //        sleep(1);
         {
             cout << "rdma, ";
-            auto client = Ping(make_transportClient<RdmaTransportClient>(), "127.0.0.1:1234");
+            auto client = Ping(make_transportClient<RdmaTransportClient>(), ip + string(":") + to_string(port));
             bench(SHAREDMEM_MESSAGES, [&]() {
                 for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
                     client.ping();
@@ -65,7 +69,7 @@ int main(int argc, char **argv) {
         }
 //        {
 //            cout << "librdmacm, ";
-//            auto client = Ping(make_transportClient<LibRdmacmTransportClient>(), "127.0.0.1:1234");
+//            auto client = Ping(make_transportClient<LibRdmacmTransportClient>(), ip + string(":") + to_string(port));
 //            bench(SHAREDMEM_MESSAGES, [&]() {
 //                for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
 //                    client.ping();
@@ -73,7 +77,6 @@ int main(int argc, char **argv) {
 //            }, 1);
 //        }
     } else {
-        pinThread(1);
         cout << "implementation, messages, time, msg/s, user, system, total\n";
 //        {
 //            cout << "domainsockets, ";
@@ -97,7 +100,7 @@ int main(int argc, char **argv) {
 //        }
 //        {
 //            cout << "tcp, ";
-//            auto server = Pong(make_transportServer<TcpTransportServer>("1234"));
+//            auto server = Pong(make_transportServer<TcpTransportServer>(to_string(port)));
 //            server.start();
 //            bench(MESSAGES, [&]() {
 //                for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
@@ -107,7 +110,7 @@ int main(int argc, char **argv) {
 //        }
         {
             cout << "rdma, ";
-            auto server = Pong(make_transportServer<RdmaTransportServer>("1234"));
+            auto server = Pong(make_transportServer<RdmaTransportServer>(to_string(port)));
             server.start();
             bench(SHAREDMEM_MESSAGES, [&]() {
                 for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
@@ -117,7 +120,7 @@ int main(int argc, char **argv) {
         }
 //        {
 //            cout << "librdmacm, ";
-//            auto server = Pong(make_transportServer<LibRdmacmTransportServer>("1234"));
+//            auto server = Pong(make_transportServer<LibRdmacmTransportServer>(to_string(port)));
 //            server.start();
 //            bench(SHAREDMEM_MESSAGES, [&]() {
 //                for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {

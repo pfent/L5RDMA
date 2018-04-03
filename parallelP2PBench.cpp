@@ -18,7 +18,7 @@ int main(int argc, char **argv) {
     const auto isClient = argv[1][0] == 'c';
     const auto threads = atoi(argv[2]);
 
-    tbb::task_scheduler_init taskScheduler(threads);
+    tbb::task_scheduler_init taskScheduler(threads); // TODO do this similar to parallel N to one bench
     const auto messagesPerThread = MESSAGES / threads;
 
     if (isClient) {
