@@ -3,9 +3,8 @@
 
 #include <cstdint>
 #include <vector>
+#include <thread>
 #include "transports/Transport.h"
-
-using namespace std::string_view_literals;
 
 template<class T>
 class Ping {
@@ -16,7 +15,15 @@ public:
     Ping(std::unique_ptr<TransportClient<T>> t, std::string_view whereTo, size_t dataSize = 64)
             : transport(std::move(t)),
               buffer(dataSize) {
-        transport->connect(whereTo);
+        for (int i = 0;; ++i) {
+            try {
+                transport->connect(whereTo);
+                break;
+            } catch (...) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(20));
+                if (i > 10) throw;
+            }
+        }
         for (size_t i = 0; i < dataSize; ++i) {
             data.push_back(i % 255);
         }

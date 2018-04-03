@@ -78,7 +78,7 @@ int main(int argc, char **argv) {
     }
 
     cout << "clients, messages, seconds, msgps, user, kernel, total\n";
-    for (auto clients : {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}) {
+    for (const size_t clients : {1u, 2u, 3u, 4u, 5u, 6u, 7u, 8u, 9u, 10u, 11u, 12u, 13u, 14u, 15u, 16u}) {
         if (!isClient) {
             cout << clients << ", ";
         }

@@ -1,5 +1,6 @@
 #include <iostream>
 #include <tbb/tbb.h>
+#include <thread>
 #include "transports/Transport.h"
 #include "apps/PingPong.h"
 #include "util/bench.h"
@@ -8,67 +9,68 @@
 
 using namespace std;
 
-const size_t MESSAGES = 4 * 1024 * 128 * 16;
+static constexpr uint16_t port = 1234;
+static const char *ip = "127.0.0.1";
+static constexpr auto MESSAGES = 1024 * 1024;
 
-int main(int argc, char **argv) {
-    if (argc < 3) {
-        cout << "Usage: " << argv[0] << " <client / server> <#threads>" << endl;
-        return -1;
-    }
-    const auto isClient = argv[1][0] == 'c';
-    const auto threads = atoi(argv[2]);
-
-    tbb::task_scheduler_init taskScheduler(threads); // TODO do this similar to parallel N to one bench
-    const auto messagesPerThread = MESSAGES / threads;
-
+void doRun(size_t clients, bool isClient) {
     if (isClient) {
-        vector<Ping<RdmaTransportClient>> clients;
-        for (int i = 0; i < threads; ++i) {
-            const auto port = 1234 + i;
-            const auto connectionString = string("127.0.0.1:") + to_string(port);
-            clients.emplace_back(make_transportClient<RdmaTransportClient>(), connectionString);
+        sleep(2);
+        vector<Ping<RdmaTransportClient>> rdmaClients;
+        for (size_t i = 0; i < clients; ++i) {
+            rdmaClients.emplace_back(make_transportClient<RdmaTransportClient>(),
+                                     ip + string(":") + to_string(port + i));
         }
 
-        cout << "implementation, messages, time, msg/s, user, system, total\n";
-        {
-            cout << "rdma, ";
-            tbb::task_group g;
-            bench(messagesPerThread * threads, [&]() {
-                for (int i = 0; i < threads; ++i) {
-                    g.run([&, i] {
-                        for (size_t j = 0; j < messagesPerThread; ++j) {
-                            clients[i].ping();
-                        }
-                    });
+        std::vector<std::thread> clientThreads;
+        for (size_t i = 0; i < clients; ++i) {
+            clientThreads.emplace_back([&, i] {
+                for (size_t j = 0; j < MESSAGES; ++j) {
+                    rdmaClients[i].ping();
                 }
-                g.wait();
-            }, 1);
+            });
         }
+        for (auto &t : clientThreads) t.join();
     } else {
         vector<Pong<RdmaTransportServer>> servers;
-        for (int i = 0; i < threads; ++i) {
-            const auto port = 1234 + i;
-            servers.emplace_back(make_transportServer<RdmaTransportServer>(to_string(port)));
+        for (size_t i = 0; i < clients; ++i) {
+            servers.emplace_back(make_transportServer<RdmaTransportServer>(to_string(port + i)));
             servers.back().start();
         }
 
-        cout << "implementation, messages, time, msg/s, user, system, total\n";
-        {
-            cout << "rdma, ";
-            tbb::task_group g;
-            bench(messagesPerThread * threads, [&]() {
-                for (int i = 0; i < threads; ++i) {
-                    g.run([&, i] {
-                        for (size_t j = 0; j < messagesPerThread; ++j) {
-                            servers[i].pong();
-                        }
-                    });
-                }
-                g.wait();
-            }, 1);
-        }
+        std::vector<std::thread> serverThreads;
+        bench(MESSAGES * clients, [&] {
+            for (size_t i = 0; i < clients; ++i) {
+                serverThreads.emplace_back([&, i] {
+                    for (size_t j = 0; j < MESSAGES; ++j) {
+                        servers[i].pong();
+                    }
+                });
+            }
+
+            for (auto &t: serverThreads) t.join();
+        }, 1);
     }
 
-    return 0;
 }
 
+int main(int argc, char **argv) {
+    if (argc < 2) {
+        cout << "Usage: " << argv[0] << " <client / server> <(optional) 127.0.0.1>" << endl;
+        return -1;
+    }
+    const auto isClient = argv[1][0] == 'c';
+    if (argc > 2) {
+        ip = argv[2];
+    }
+
+    if (!isClient) {
+        cout << "clients, messages, seconds, msgps, user, kernel, total\n";
+    }
+    for (size_t clients = 1; clients <= 32; ++clients) {
+        if (!isClient) {
+            cout << clients << ", ";
+        }
+        doRun(clients, isClient);
+    }
+}
