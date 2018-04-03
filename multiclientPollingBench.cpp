@@ -644,34 +644,34 @@ int main(int argc, char **argv) {
     cout << "size, connection, clients, messages, seconds, msgps, user, kernel, total" << '\n';
     const auto length = 64;
     for (const size_t clients : {1u, 2u, 4u, 8u, 16u, 32u, 64u, 128u, 192u, 256u}) {
-        cout << length << ", ImmData " << clients << ", ";
+        cout << length << ", ImmData, " << clients << ", ";
         runImmData<rdma::RcQueuePair>(isClient, length);
-        cout << length << ", scalar_poll " << clients << ", ";
+        cout << length << ", scalar_poll, " << clients << ", ";
         bigBuffer<rdma::RcQueuePair>(isClient, length, clients, poll);
 #ifdef __AVX2__
         if (clients >= 8) {
-            cout << length << ", simd_poll " << clients << ", ";
+            cout << length << ", simd_poll, " << clients << ", ";
             bigBuffer<rdma::RcQueuePair>(isClient, length, clients, SIMDPoll);
         }
 #endif
         if (clients >= 4) {
-            cout << length << ", sse_poll " << clients << ", ";
+            cout << length << ", sse_poll, " << clients << ", ";
             bigBuffer<rdma::RcQueuePair>(isClient, length, clients, SSEPoll);
         }
-        cout << length << ", exclusive_buffer " << clients << ", ";
+        cout << length << ", exclusive_buffer, " << clients << ", ";
         exclusiveBuffer<rdma::RcQueuePair>(isClient, length, clients, exPoll);
 #ifdef __AVX2__
         if (clients >= 32) {
-            cout << length << ", exclusive_simd " << clients << ", ";
+            cout << length << ", exclusive_simd, " << clients << ", ";
             exclusiveBuffer<rdma::RcQueuePair>(isClient, length, clients, exPollSIMD);
         }
 #endif
         if (clients >= 16) {
-            cout << length << ", exclusive_pcmp " << clients << ", ";
+            cout << length << ", exclusive_pcmp, " << clients << ", ";
             exclusiveBuffer<rdma::RcQueuePair>(isClient, length, clients, exPollPCMP);
         }
         if (clients >= 16) {
-            cout << length << ", exclusive_sse " << clients << ", ";
+            cout << length << ", exclusive_sse, " << clients << ", ";
             exclusiveBuffer<rdma::RcQueuePair>(isClient, length, clients, exPollSSE);
         }
     }
