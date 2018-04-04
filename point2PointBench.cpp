@@ -29,26 +29,26 @@ int main(int argc, char **argv) {
     cout << "size, connection, messages, time, msgps, user, system, total\n";
     for (const size_t size : {1u, 2u, 4u, 8u, 16u, 32u, 64u, 128u, 256u}) {
         if (isClient) {
-            sleep(1);
-            {
-                cout << size << ", " << "domainsockets, ";
-                auto client = Ping(make_transportClient<DomainSocketsTransportClient>(), "/dev/shm/pingPong", size);
-                bench(MESSAGES, [&]() {
-                    for (size_t i = 0; i < MESSAGES; ++i) {
-                        client.ping();
-                    }
-                });
-            }
-            sleep(1);
-            {
-                cout << size << ", " << "shared memory, ";
-                auto client = Ping(make_transportClient<SharedMemoryTransportClient>(), "/dev/shm/pingPong", size);
-                bench(SHAREDMEM_MESSAGES, [&]() {
-                    for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
-                        client.ping();
-                    }
-                });
-            }
+            //sleep(1);
+            //{
+            //    cout << size << ", " << "domainsockets, ";
+            //    auto client = Ping(make_transportClient<DomainSocketsTransportClient>(), "/dev/shm/pingPong", size);
+            //    bench(MESSAGES, [&]() {
+            //        for (size_t i = 0; i < MESSAGES; ++i) {
+            //            client.ping();
+            //        }
+            //    });
+            //}
+            //sleep(1);
+            //{
+            //    cout << size << ", " << "shared memory, ";
+            //    auto client = Ping(make_transportClient<SharedMemoryTransportClient>(), "/dev/shm/pingPong", size);
+            //    bench(SHAREDMEM_MESSAGES, [&]() {
+            //        for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
+            //            client.ping();
+            //        }
+            //    });
+            //}
             sleep(1);
             {
                 cout << size << ", " << "tcp, ";
@@ -81,26 +81,26 @@ int main(int argc, char **argv) {
 //            }, 1);
 //        }
         } else {
-            {
-                cout << size << ", " << "domainsockets, ";
-                auto server = Pong(make_transportServer<DomainSocketsTransportServer>("/dev/shm/pingPong"), size);
-                server.start();
-                bench(MESSAGES, [&]() {
-                    for (size_t i = 0; i < MESSAGES; ++i) {
-                        server.pong();
-                    }
-                });
-            }
-            {
-                cout << size << ", " << "shared memory, ";
-                auto server = Pong(make_transportServer<SharedMemoryTransportServer>("/dev/shm/pingPong"), size);
-                server.start();
-                bench(SHAREDMEM_MESSAGES, [&]() {
-                    for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
-                        server.pong();
-                    }
-                });
-            }
+            //{
+            //    cout << size << ", " << "domainsockets, ";
+            //    auto server = Pong(make_transportServer<DomainSocketsTransportServer>("/dev/shm/pingPong"), size);
+            //    server.start();
+            //    bench(MESSAGES, [&]() {
+            //        for (size_t i = 0; i < MESSAGES; ++i) {
+            //            server.pong();
+            //        }
+            //    });
+            //}
+            //{
+            //    cout << size << ", " << "shared memory, ";
+            //    auto server = Pong(make_transportServer<SharedMemoryTransportServer>("/dev/shm/pingPong"), size);
+            //    server.start();
+            //    bench(SHAREDMEM_MESSAGES, [&]() {
+            //        for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
+            //            server.pong();
+            //        }
+            //    });
+            //}
             {
                 cout << size << ", " << "tcp, ";
                 auto server = Pong(make_transportServer<TcpTransportServer>(to_string(port)), size);
