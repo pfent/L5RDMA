@@ -1,4 +1,5 @@
 #include <iostream>
+#include <transports/MulticlientTransport.h>
 #include "transports/Transport.h"
 #include "transports/TcpTransport.h"
 #include "transports/DomainSocketsTransport.h"
@@ -11,8 +12,7 @@
 
 using namespace std;
 
-static const size_t MESSAGES = 256 * 1024;  //~ 1s
-static const size_t SHAREDMEM_MESSAGES = 1024 * 1024;
+static const size_t MESSAGES = 1024 * 1024;
 static const char *ip = "127.0.0.1";
 static constexpr uint16_t port = 1234;
 
@@ -39,8 +39,8 @@ int main(int argc, char **argv) {
                 auto client = RdmaTransportClient();
                 client.connect(ip + string(":") + to_string(port));
                 std::vector<uint8_t> buf(size);
-                bench(SHAREDMEM_MESSAGES, [&]() {
-                    for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
+                bench(MESSAGES, [&]() {
+                    for (size_t i = 0; i < MESSAGES; ++i) {
                         client.write(testdata.data(), size);
                         client.read(buf.data(), size);
 
@@ -56,13 +56,47 @@ int main(int argc, char **argv) {
                 auto client = RdmaTransportClient();
                 client.connect(ip + string(":") + to_string(port));
                 std::vector<char> buf(size);
-                bench(SHAREDMEM_MESSAGES, [&]() {
-                    for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
+                bench(MESSAGES, [&]() {
+                    for (size_t i = 0; i < MESSAGES; ++i) {
                         client.writeZC([&](auto begin) {
                             std::copy(testdata.data(), testdata.data() + size, begin);
                             return size;
                         });
                         client.readZC([&](auto begin, auto end) {
+                            if (not std::equal(begin, end, testdata.data())) throw runtime_error("NEQ");
+                        });
+                    }
+                });
+            }
+            sleep(1);
+            {
+                cout << size << ", " << "many, ";
+                auto client = MultiClientTransportClient();
+                client.connect(ip + string(":") + to_string(port));
+                std::vector<uint8_t> buf(size);
+                bench(MESSAGES, [&]() {
+                    for (size_t i = 0; i < MESSAGES; ++i) {
+                        client.send(testdata.data(), size);
+                        client.receive(buf.data(), size);
+
+                        for (size_t j = 0; j < size; ++j) {
+                            if (testdata[j] != buf[j]) throw runtime_error("NEQ");
+                        }
+                    }
+                });
+            }
+            sleep(1);
+            {
+                cout << size << ", " << "many_zerocopy, ";
+                auto client = MultiClientTransportClient();
+                client.connect(ip + string(":") + to_string(port));
+                bench(MESSAGES, [&]() {
+                    for (size_t i = 0; i < MESSAGES; ++i) {
+                        client.send([&](auto begin) {
+                            std::copy(testdata.data(), testdata.data() + size, begin);
+                            return size;
+                        });
+                        client.receive([&](auto begin, auto end) {
                             if (not std::equal(begin, end, testdata.data())) throw runtime_error("NEQ");
                         });
                     }
@@ -74,8 +108,8 @@ int main(int argc, char **argv) {
                 auto server = RdmaTransportServer(to_string(port));
                 server.accept();
                 std::vector<uint8_t> buf(size);
-                bench(SHAREDMEM_MESSAGES, [&]() {
-                    for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
+                bench(MESSAGES, [&]() {
+                    for (size_t i = 0; i < MESSAGES; ++i) {
                         server.read(buf.data(), size);
                         server.write(buf.data(), size);
                     }
@@ -85,10 +119,38 @@ int main(int argc, char **argv) {
                 cout << size << ", " << "zerocopy, ";
                 auto server = RdmaTransportServer(to_string(port));
                 server.accept();
-                bench(SHAREDMEM_MESSAGES, [&]() {
-                    for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
+                bench(MESSAGES, [&]() {
+                    for (size_t i = 0; i < MESSAGES; ++i) {
                         server.readZC([&](auto begin, auto end) -> void {
                             server.writeZC([&](auto writeBegin) -> size_t {
+                                std::copy(begin, end, writeBegin);
+                                return std::distance(begin, end);
+                            });
+                        });
+                    }
+                });
+            }
+            {
+                cout << size << ", " << "many, ";
+                auto server = MulticlientTransportServer(to_string(port));
+                server.accept();
+                std::vector<uint8_t> buf(size);
+                bench(MESSAGES, [&]() {
+                    for (size_t i = 0; i < MESSAGES; ++i) {
+                        const auto client = server.receive(buf.data(), size);
+                        server.send(client, buf.data(), size);
+                    }
+                });
+            }
+            {
+                cout << size << ", " << "many, ";
+                auto server = MulticlientTransportServer(to_string(port));
+                server.accept();
+                std::vector<uint8_t> buf(size);
+                bench(MESSAGES, [&]() {
+                    for (size_t i = 0; i < MESSAGES; ++i) {
+                        server.receive([&](auto sender, auto begin, auto end) -> void {
+                            server.send(sender, [&](auto writeBegin) -> size_t {
                                 std::copy(begin, end, writeBegin);
                                 return std::distance(begin, end);
                             });

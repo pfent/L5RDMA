@@ -4,8 +4,6 @@
 #include <emmintrin.h>
 #include "MulticlientTransport.h"
 
-static constexpr char validity = '\4'; // ASCII EOT char
-
 MulticlientTransportServer::MulticlientTransportServer(std::string_view port)
         : listenSock(tcp_socket()),
           net(rdma::Network()),
@@ -67,18 +65,6 @@ MulticlientTransportServer::~MulticlientTransportServer() {
 }
 
 __always_inline
-static size_t poll(char *doorBells, size_t count) {
-    for (;;) {
-        for (size_t i = 0; i < count; ++i) {
-            if (*reinterpret_cast<volatile char *>(&doorBells[i]) != '\0') {
-                doorBells[i] = '\0';
-                return i;
-            }
-        }
-    }
-}
-
-__always_inline
 static size_t pollSSE(char *doorBells, size_t count) {
     assert(count % 16 == 0);
     const auto zero = _mm_set1_epi8('\0');
@@ -98,19 +84,16 @@ static size_t pollSSE(char *doorBells, size_t count) {
 }
 
 size_t MulticlientTransportServer::receive(void *whereTo, size_t maxSize) {
-    const auto sender = poll(doorBells.data(), MAX_CLIENTS);
-
-    const auto sizePtr = reinterpret_cast<uint8_t *>(receives.data()[sender]);
-    const auto size = *reinterpret_cast<size_t *>(sizePtr);
-    if (maxSize < size) {
-        throw std::runtime_error("received message > maxSize");
-    }
-
-    const auto begin = sizePtr + sizeof(size_t);
-    const auto end = begin + size;
-    std::copy(begin, end, reinterpret_cast<uint8_t *>(whereTo));
-
-    return sender;
+    size_t res;
+    receive([&](auto sender, auto begin, auto end) {
+        res = sender;
+        const auto size = static_cast<size_t>(std::distance(begin, end));
+        if (maxSize < size) {
+            throw std::runtime_error("received message > maxSize");
+        }
+        std::copy(begin, end, reinterpret_cast<uint8_t *>(whereTo));
+    });
+    return res;
 }
 
 void MulticlientTransportServer::send(size_t receiverId, const uint8_t *data, size_t size) {
@@ -122,22 +105,10 @@ void MulticlientTransportServer::send(size_t receiverId, const uint8_t *data, si
         throw std::runtime_error("no such connection");
     }
 
-    auto &con = connections[receiverId];
-
-    std::copy(&size, &size + 1, reinterpret_cast<size_t *>(sendBuffer.data()));
-    std::copy(data, data + size, sendBuffer.data() + sizeof(size_t));
-    std::copy(&validity, &validity + 1, sendBuffer.data() + sizeof(size_t) + size);
-
-    con.answerWr.setLocalAddress(sendBuffer.getSlice(0, totalLength));
-    sendCounter++;
-    if (sendCounter % 1024 == 0) { // selective signaling
-        con.answerWr.setFlags({ibv::workrequest::Flags::INLINE, ibv::workrequest::Flags::SIGNALED});
-        con.qp.postWorkRequest(con.answerWr);
-        sharedCq.pollSendCompletionQueueBlocking(ibv::workcompletion::Opcode::RDMA_WRITE);
-    } else {
-        con.answerWr.setFlags({ibv::workrequest::Flags::INLINE});
-        con.qp.postWorkRequest(con.answerWr);
-    }
+    send(receiverId, [&](auto begin) {
+        std::copy(data, data + size, begin);
+        return size;
+    });
 }
 
 MultiClientTransportClient::MultiClientTransportClient()
@@ -189,40 +160,26 @@ void MultiClientTransportClient::connect(std::string_view ip, uint16_t port) {
     rdmaConnect();
 }
 
-
 void MultiClientTransportClient::send(const uint8_t *data, size_t size) {
     const auto dataWrSize = size + sizeof(size_t);
     if (dataWrSize > MAX_MESSAGESIZE) {
         throw std::runtime_error("can't send messages > MAX_MESSAGESIZE");
     }
 
-    std::copy(&size, &size + 1, reinterpret_cast<size_t *>(sendBuffer.data()));
-    std::copy(data, data + size, sendBuffer.data() + sizeof(size_t));
-    dataWr.setLocalAddress(sendBuffer.getSlice(0, dataWrSize));
-    qp.postWorkRequest(dataWr);
-
-    doorBell.data()[0] = 'X'; // could be anything, really
-    qp.postWorkRequest(doorBellWr);
-
-    cq.pollSendCompletionQueueBlocking(ibv::workcompletion::Opcode::RDMA_WRITE);
-    cq.pollSendCompletionQueueBlocking(ibv::workcompletion::Opcode::RDMA_WRITE);
+    send([&](auto begin) {
+        std::copy(data, data + size, begin);
+        return size;
+    });
 }
 
 size_t MultiClientTransportClient::receive(void *whereTo, size_t maxSize) {
-    // wait for message being written
     size_t size;
-    while ((size = *reinterpret_cast<volatile size_t *>(receiveBuffer.data())) == 0);
-    while (*reinterpret_cast<volatile char *>(receiveBuffer.data() + sizeof(size_t) + size) != validity);
-
-    if (size > maxSize) {
-        throw std::runtime_error("received message > maxSize");
-    }
-
-    const auto begin = receiveBuffer.data() + sizeof(size_t);
-    const auto end = begin + size;
-
-    std::copy(begin, end, reinterpret_cast<uint8_t *>(whereTo));
-    *reinterpret_cast<volatile size_t *>(receiveBuffer.data()) = 0;
-
+    receive([&](auto begin, auto end) {
+        size = static_cast<size_t>(std::distance(begin, end));
+        if (size > maxSize) {
+            throw std::runtime_error("received message > maxSize");
+        }
+        std::copy(begin, end, reinterpret_cast<uint8_t *>(whereTo));
+    });
     return size;
 }
