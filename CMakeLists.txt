@@ -69,6 +69,9 @@ target_link_libraries(multiclientPollingBench ${LINK_LIBRARIES})
 add_executable(many2OneBench many2OneBench.cpp $<TARGET_OBJECTS:common>)
 target_link_libraries(many2OneBench ${LINK_LIBRARIES})
 
+add_executable(zeroCopyBench zeroCopyBench.cpp $<TARGET_OBJECTS:common>)
+target_link_libraries(zeroCopyBench ${LINK_LIBRARIES})
+
 file(GLOB tests "test/*Test.cpp")
 foreach (test ${tests})
     get_filename_component(testName ${test} NAME_WE)

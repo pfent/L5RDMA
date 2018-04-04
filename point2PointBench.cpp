@@ -81,7 +81,6 @@ int main(int argc, char **argv) {
 //            }, 1);
 //        }
         } else {
-
             {
                 cout << size << ", " << "domainsockets, ";
                 auto server = Pong(make_transportServer<DomainSocketsTransportServer>("/dev/shm/pingPong"), size);
