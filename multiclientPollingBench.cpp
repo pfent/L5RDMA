@@ -10,6 +10,7 @@
 #include "rdma/RcQueuePair.h"
 #include "rdma/UcQueuePair.h"
 #include "rdma/UdQueuePair.h"
+#include "util/Random32.h"
 #include <immintrin.h>
 #include <boost/assert.hpp>
 
@@ -19,19 +20,6 @@ constexpr uint16_t port = 1234;
 const char *ip = "127.0.0.1";
 constexpr size_t MESSAGES = 1024 * 1024;
 constexpr uint32_t BIGBADBUFFER_SIZE = 1024 * 1024 * 8; // 8MB
-
-class Random32 {
-    uint32_t state;
-public:
-    explicit Random32(uint32_t seed = 314159265) : state(seed) {}
-
-    uint32_t next() {
-        state ^= (state << 13);
-        state ^= (state >> 7);
-        state ^= (state << 5);
-        return state % BIGBADBUFFER_SIZE;
-    }
-};
 
 void connectSocket(int socket) {
     sockaddr_in addr = {};
@@ -108,7 +96,7 @@ void runImmData(bool isClient, uint32_t dataSize) {
 
         bench(MESSAGES, [&]() {
             for (size_t i = 0; i < MESSAGES; ++i) {
-                auto destPos = rand.next();
+                auto destPos = rand.next() % BIGBADBUFFER_SIZE;
                 write.setRemoteAddress(remoteMr.offset(destPos));
                 write.setImmData(destPos);
                 qp.postWorkRequest(write);
@@ -156,7 +144,7 @@ void runImmData(bool isClient, uint32_t dataSize) {
 
         bench(MESSAGES, [&]() {
             for (size_t i = 0; i < MESSAGES; ++i) {
-                auto destPos = rand.next();
+                auto destPos = rand.next() % BIGBADBUFFER_SIZE;
                 // wait for message being written
                 auto wc = cq.pollRecvWorkCompletionBlocking();
                 qp.postRecvRequest(recv);

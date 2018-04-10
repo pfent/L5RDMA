@@ -38,15 +38,20 @@ file(GLOB COMMON_HEADERS
 
 add_library(common OBJECT ${COMMON_SOURCES} ${COMMON_HEADERS})
 
+add_subdirectory(include/benchmark)
+include_directories(.
+        include
+        include/benchmark/include
+        )
+
 SET(LINK_LIBRARIES
         ibverbs
         rt
         pthread
         rdmacm
         tbb
+        benchmark
         )
-
-include_directories(. include)
 
 add_executable(point2PointBench point2PointBench.cpp $<TARGET_OBJECTS:common>)
 target_link_libraries(point2PointBench ${LINK_LIBRARIES})
@@ -71,6 +76,9 @@ target_link_libraries(many2OneBench ${LINK_LIBRARIES})
 
 add_executable(zeroCopyBench zeroCopyBench.cpp $<TARGET_OBJECTS:common>)
 target_link_libraries(zeroCopyBench ${LINK_LIBRARIES})
+
+add_executable(ycsbWorkloadCBench ycsbWorkloadCBench.cpp $<TARGET_OBJECTS:common>)
+target_link_libraries(ycsbWorkloadCBench ${LINK_LIBRARIES})
 
 file(GLOB tests "test/*Test.cpp")
 foreach (test ${tests})
