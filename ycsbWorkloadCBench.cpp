@@ -50,6 +50,10 @@ struct YcsbDataSet {
         return rows[i];
     }
 
+    const std::array<char, ycsb_field_length> &operator[](size_t i) const {
+        return rows[i];
+    }
+
     YcsbDataSet() = default;
 
     explicit YcsbDataSet(RandomString &gen) {
@@ -79,27 +83,30 @@ struct YcsbDatabase {
             database.emplace(nextKey++, YcsbDataSet(gen));
         }
     }
+
+    void lookup(YcsbKey lookupKey, size_t field, char *target) const {
+        const auto fieldPtr = database.find(lookupKey);
+        if (fieldPtr == database.end()) {
+            throw;
+        }
+        const auto begin = fieldPtr->second[field].begin();
+        const auto end = fieldPtr->second[field].end();
+        benchmark::DoNotOptimize(std::copy(begin, end, target));
+    }
 };
 
 int main(int, char **) {
     auto rand = Random32();
-    auto database = YcsbDatabase();
+    const auto database = YcsbDatabase();
 
     const auto lookupKeys = generateLookupKeys(ycsb_tx_count, ycsb_tuple_count);
     auto resultSet = YcsbDataSet();
 
     bench(lookupKeys.size(), [&] {
         for (const auto lookupKey: lookupKeys) {
-            const auto field = YcsbKey(rand.next() % ycsb_field_count);
-            const auto fieldPtr = database.database.find(lookupKeys[lookupKey]);
-            if (fieldPtr == database.database.end()) {
-                throw;
-            }
-            const auto begin = fieldPtr->second[field].begin();
-            const auto end = fieldPtr->second[field].end();
+            const auto field = rand.next() % ycsb_field_count;
             auto target = resultSet[field].begin();
-            benchmark::DoNotOptimize(std::copy(begin, end, target));
-            assert(std::equal(resultSet[field].begin(), resultSet[field].end(), fieldPtr->second[field].begin()));
+            database.lookup(lookupKey, field, target);
         }
     });
 }
