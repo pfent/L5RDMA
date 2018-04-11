@@ -11,7 +11,7 @@
 #include <benchmark/benchmark.h>
 #include <util/bench.h>
 #include <transports/RdmaTransport.h>
-
+#include <random>
 
 /// YCSB Benchmark workload, based on Alexander van Renen's version
 static constexpr size_t ycsb_tuple_count = 100000;
@@ -66,11 +66,30 @@ struct YcsbDataSet {
     }
 };
 
-std::vector<YcsbKey> generateLookupKeys(size_t count, size_t maxValue) {
+auto generateLookupKeys(size_t count, size_t maxValue) {
     auto rand = Random32(); // TODO: generate zipfian distribution with varying skew
     auto res = std::vector<YcsbKey>();
     res.reserve(count);
     std::generate_n(std::back_inserter(res), count, [&] { return rand.next() % maxValue; });
+    return res;
+}
+
+auto generateZipfLookupKeys(size_t count, size_t maxValue, double factor = 1.0) {
+    using distribution = std::discrete_distribution<size_t>;
+    std::mt19937 generator(88172645463325252ull);
+    auto zipfdist = [&] {
+        std::vector<double> buffer(maxValue + 1);
+        for (unsigned rank = 1; rank <= count; ++rank) {
+            buffer[rank] = std::pow(rank, -factor);
+        }
+
+        return distribution(buffer.begin() + 1, buffer.end());
+    }();
+    auto rand = [&] { return zipfdist(generator); };
+
+    auto res = std::vector<YcsbKey>();
+    res.reserve(count);
+    std::generate_n(std::back_inserter(res), count, [&] { return rand(); });
     return res;
 }
 
