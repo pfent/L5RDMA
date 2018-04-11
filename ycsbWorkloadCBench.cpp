@@ -10,6 +10,7 @@
 #include <x86intrin.h>
 #include <benchmark/benchmark.h>
 #include <util/bench.h>
+#include <transports/RdmaTransport.h>
 
 
 /// YCSB Benchmark workload, based on Alexander van Renen's version
@@ -17,6 +18,8 @@ static constexpr size_t ycsb_tuple_count = 100000;
 static constexpr size_t ycsb_field_count = 10;
 static constexpr size_t ycsb_field_length = 100;
 static constexpr size_t ycsb_tx_count = 1000000;
+static constexpr uint16_t port = 1234;
+static const char *ip = "127.0.0.1";
 using YcsbKey = uint32_t;
 
 struct YcsbDataSet;
@@ -64,7 +67,7 @@ struct YcsbDataSet {
 };
 
 std::vector<YcsbKey> generateLookupKeys(size_t count, size_t maxValue) {
-    auto rand = Random32();
+    auto rand = Random32(); // TODO: generate zipfian distribution with varying skew
     auto res = std::vector<YcsbKey>();
     res.reserve(count);
     std::generate_n(std::back_inserter(res), count, [&] { return rand.next() % maxValue; });
@@ -84,7 +87,8 @@ struct YcsbDatabase {
         }
     }
 
-    void lookup(YcsbKey lookupKey, size_t field, char *target) const {
+    template<typename OutputIterator>
+    void lookup(YcsbKey lookupKey, size_t field, OutputIterator target) const {
         const auto fieldPtr = database.find(lookupKey);
         if (fieldPtr == database.end()) {
             throw;
@@ -95,18 +99,54 @@ struct YcsbDatabase {
     }
 };
 
-int main(int, char **) {
-    auto rand = Random32();
-    const auto database = YcsbDatabase();
+int main(int argc, char **argv) {
+    if (argc < 2) {
+        std::cout << "Usage: " << argv[0] << " <client / server> <(IP, optional) 127.0.0.1>" << std::endl;
+        return -1;
+    }
+    const auto isClient = argv[1][0] == 'c';
+    if (argc > 2) {
+        ip = argv[2];
+    }
 
-    const auto lookupKeys = generateLookupKeys(ycsb_tx_count, ycsb_tuple_count);
-    auto resultSet = YcsbDataSet();
+    struct ReadMessage {
+        YcsbKey lookupKey;
+        size_t field;
+    };
 
-    bench(lookupKeys.size(), [&] {
+    struct ReadResponse {
+        std::array<char, ycsb_field_length> data;
+    };
+
+    if (isClient) {
+        auto rand = Random32();
+        const auto lookupKeys = generateLookupKeys(ycsb_tx_count, ycsb_tuple_count);
+        auto client = RdmaTransportClient();
+        client.connect(ip + std::string(":") + std::to_string(port));
+        auto response = ReadResponse{};
+
         for (const auto lookupKey: lookupKeys) {
             const auto field = rand.next() % ycsb_field_count;
-            auto target = resultSet[field].begin();
-            database.lookup(lookupKey, field, target);
+            const auto message = ReadMessage{lookupKey, field};
+            client.write(message);
+            client.read(response);
+            benchmark::DoNotOptimize(response);
         }
-    });
+    } else { // server
+        const auto database = YcsbDatabase();
+        auto server = RdmaTransportServer(std::to_string(port));
+        server.accept();
+
+        bench(ycsb_tx_count, [&] {
+            for (size_t i = 0; i < ycsb_tx_count; ++i) {
+                auto message = ReadMessage{};
+                server.read(message);
+                auto&[lookupKey, field] = message;
+                server.writeZC([&](auto begin) {
+                    database.lookup(lookupKey, field, begin);
+                    return ycsb_field_length;
+                });
+            }
+        });
+    }
 }

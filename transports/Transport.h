@@ -22,12 +22,24 @@ public:
     /**
      * Send data from an arbitrary memory location
      */
-    void write(uint8_t *buffer, size_t size) { static_cast<T *>(this)->write_impl(buffer, size); }
+    void write(const uint8_t *buffer, size_t size) { static_cast<T *>(this)->write_impl(buffer, size); }
+
+    template<typename TriviallyCopyable>
+    void write(const TriviallyCopyable &data) {
+        static_assert(std::is_trivially_copyable_v<TriviallyCopyable>);
+        write(reinterpret_cast<const uint8_t *>(&data), sizeof(data));
+    }
 
     /**
      * Receive data to an arbitrary memory location
      */
     void read(uint8_t *whereTo, size_t size) { static_cast<T *>(this)->read_impl(whereTo, size); }
+
+    template<typename TriviallyCopyable>
+    void read(TriviallyCopyable &data) {
+        static_assert(std::is_trivially_copyable_v<TriviallyCopyable>);
+        read(reinterpret_cast<uint8_t *>(&data), sizeof(data));
+    }
 
     virtual ~TransportServer() = default;
 };
@@ -46,7 +58,19 @@ public:
      */
     void write(const uint8_t *buffer, size_t size) { static_cast<T *>(this)->write_impl(buffer, size); }
 
+    template<typename TriviallyCopyable>
+    void write(const TriviallyCopyable &data) {
+        static_assert(std::is_trivially_copyable_v<TriviallyCopyable>);
+        write(reinterpret_cast<const uint8_t *>(&data), sizeof(data));
+    }
+
     void read(uint8_t *whereTo, size_t size) { static_cast<T *>(this)->read_impl(whereTo, size); }
+
+    template<typename TriviallyCopyable>
+    void read(TriviallyCopyable &data) {
+        static_assert(std::is_trivially_copyable_v<TriviallyCopyable>);
+        read(reinterpret_cast<uint8_t *>(&data), sizeof(data));
+    }
 
     virtual ~TransportClient() = default;
 };

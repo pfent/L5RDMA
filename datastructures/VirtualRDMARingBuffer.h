@@ -41,6 +41,7 @@ public:
     /// expected signature: [](uint8_t* begin) -> size_t
     template<typename SizeReturner>
     void send(SizeReturner &&doWork) {
+        static_assert(std::is_unsigned_v<std::result_of_t<SizeReturner(uint8_t *)>>);
         const auto startOfWrite = sendPos & bitmask;
         auto sizePtr = reinterpret_cast<volatile size_t *>(&sendBuf.get()[startOfWrite]);
         auto begin = reinterpret_cast<volatile uint8_t *>(sizePtr + 1);
@@ -83,6 +84,7 @@ public:
     /// expected signature: [](const uint8_t* begin, const uint8_t* end) -> void
     template<typename RangeConsumer>
     void receive(RangeConsumer &&callback) {
+        static_assert(std::is_void_v<std::result_of_t<RangeConsumer(const uint8_t *, const uint8_t *)>>);
         const auto lastReadPos = localReadPos.load();
         const auto startOfRead = lastReadPos & bitmask;
 
