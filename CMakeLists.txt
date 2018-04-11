@@ -8,6 +8,8 @@ IF (NOT CMAKE_BUILD_TYPE)
             FORCE)
 ENDIF (NOT CMAKE_BUILD_TYPE)
 
+add_subdirectory(include/benchmark)
+
 set(CMAKE_CXX_STANDARD 17)
 #set(CMAKE_CXX_COMPILER clang++)
 #set(WARNINGS "-Weverything -Wno-c++98-compat -Wno-shadow-field-in-constructor -Wno-documentation-unknown-command -Wno-shadow -Wno-padded")
@@ -38,8 +40,8 @@ file(GLOB COMMON_HEADERS
 
 add_library(common OBJECT ${COMMON_SOURCES} ${COMMON_HEADERS})
 
-add_subdirectory(include/benchmark)
-include_directories(.
+include_directories(.)
+include_directories(SYSTEM
         include
         include/benchmark/include
         )

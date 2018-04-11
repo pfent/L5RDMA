@@ -9,13 +9,14 @@
 #include <chrono>
 #include <x86intrin.h>
 #include <benchmark/benchmark.h>
+#include <util/bench.h>
 
 
 /// YCSB Benchmark workload, based on Alexander van Renen's version
 static constexpr size_t ycsb_tuple_count = 100000;
 static constexpr size_t ycsb_field_count = 10;
 static constexpr size_t ycsb_field_length = 100;
-static constexpr size_t ycsb_tx_count = 100000;
+static constexpr size_t ycsb_tx_count = 1000000;
 using YcsbKey = uint32_t;
 
 struct YcsbDataSet;
@@ -66,57 +67,39 @@ std::vector<YcsbKey> generateLookupKeys(size_t count, size_t maxValue) {
     return res;
 }
 
-class TimeOut {
-    static constexpr size_t check_rdtsc = 2'000'000; // Roughly every ms
-    std::chrono::high_resolution_clock::time_point begin{};
-    std::chrono::microseconds max_us;
-    uint64_t last_check = 0;
+struct YcsbDatabase {
+    std::unordered_map<YcsbKey, YcsbDataSet> database{};
 
-public:
-    template<class Unit>
-    explicit TimeOut(std::chrono::duration<int64_t, Unit> duration): max_us(duration) {}
+    YcsbDatabase() {
+        auto gen = RandomString();
+        database.reserve(ycsb_tuple_count);
 
-    void start() {
-        begin = std::chrono::high_resolution_clock::now();
-        last_check = __rdtsc();
-    }
-
-    bool shouldContinue() {
-
-        if (__rdtsc() - last_check < check_rdtsc) {
-            return true;
+        auto nextKey = uint32_t(0);
+        for (size_t i = 0; i < ycsb_tuple_count; ++i) {
+            database.emplace(nextKey++, YcsbDataSet(gen));
         }
-        last_check = __rdtsc();
-
-        auto now = std::chrono::high_resolution_clock::now();
-        return (now - begin) < max_us;
     }
 };
 
 int main(int, char **) {
     auto rand = Random32();
-    auto database = std::unordered_map<YcsbKey, YcsbDataSet>{};
-    database.reserve(ycsb_tuple_count);
-
-    auto gen = RandomString();
-    auto nextKey = uint32_t(0);
-    for (size_t i = 0; i < ycsb_tuple_count; ++i) {
-        database.emplace(nextKey++, YcsbDataSet(gen));
-    }
+    auto database = YcsbDatabase();
 
     const auto lookupKeys = generateLookupKeys(ycsb_tx_count, ycsb_tuple_count);
     auto resultSet = YcsbDataSet();
 
-    for (const auto lookupKey: lookupKeys) {
-        const auto field = YcsbKey(rand.next() % ycsb_field_count);
-        const auto fieldPtr = database.find(lookupKeys[lookupKey]);
-        if (fieldPtr == database.end()) {
-            throw;
+    bench(lookupKeys.size(), [&] {
+        for (const auto lookupKey: lookupKeys) {
+            const auto field = YcsbKey(rand.next() % ycsb_field_count);
+            const auto fieldPtr = database.database.find(lookupKeys[lookupKey]);
+            if (fieldPtr == database.database.end()) {
+                throw;
+            }
+            const auto begin = fieldPtr->second[field].begin();
+            const auto end = fieldPtr->second[field].end();
+            auto target = resultSet[field].begin();
+            benchmark::DoNotOptimize(std::copy(begin, end, target));
+            assert(std::equal(resultSet[field].begin(), resultSet[field].end(), fieldPtr->second[field].begin()));
         }
-        const auto begin = fieldPtr->second[field].begin();
-        const auto end = fieldPtr->second[field].end();
-        auto target = resultSet[field].begin();
-        benchmark::DoNotOptimize(std::copy(begin, end, target));
-        assert(std::equal(resultSet[field].begin(), resultSet[field].end(), fieldPtr->second[field].begin()));
-    }
+    });
 }
