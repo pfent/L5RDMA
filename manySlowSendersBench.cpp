@@ -36,9 +36,11 @@ void doRun(const size_t msgps, bool isClient) {
     };
 
     if (isClient) {
+        std::vector<size_t> counters(threads);
         std::vector<std::thread> clientThreads;
+
         for (size_t c = 0; c < threads; ++c) {
-            clientThreads.emplace_back([&] {
+            clientThreads.emplace_back([&, c] {
                 auto rand = Random32();
                 const auto lookupKeys = generateZipfLookupKeys(msgps * duration);
                 auto client = MultiClientTransportClient();
@@ -52,6 +54,7 @@ void doRun(const size_t msgps, bool isClient) {
                     client.write(message);
                     client.read(response);
                     benchmark::DoNotOptimize(response);
+                    ++counters[c];
 
                     using namespace std::chrono;
                     this_thread::sleep_for(duration_cast<nanoseconds>(chrono::duration<double>(1e0 / msgps)));
@@ -83,6 +86,8 @@ void doRun(const size_t msgps, bool isClient) {
 }
 
 int main(int argc, char **argv) {
+    // TODO: this sporadically doesn't finish with one thread being stuck polling the very first work completion
+    // FIXME: only *drain* the completionqueue instead of waiting for completion
     if (argc < 2) {
         cout << "Usage: " << argv[0] << " <client / server> <(optional) 127.0.0.1>" << endl;
         return -1;
