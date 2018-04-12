@@ -55,32 +55,21 @@ SET(LINK_LIBRARIES
         benchmark
         )
 
-add_executable(point2PointBench point2PointBench.cpp $<TARGET_OBJECTS:common>)
-target_link_libraries(point2PointBench ${LINK_LIBRARIES})
+SET(EXECUTABLES
+        point2PointBench
+        parallelP2PBench
+        rawCommandBench
+        indirectWriteBench
+        multiclientPollingBench
+        many2OneBench
+        zeroCopyBench
+        ycsbWorkloadCBench
+        )
 
-add_executable(kv kvbench.cpp $<TARGET_OBJECTS:common>)
-target_link_libraries(kv ${LINK_LIBRARIES})
-
-add_executable(parallelP2PBench parallelP2PBench.cpp $<TARGET_OBJECTS:common>)
-target_link_libraries(parallelP2PBench ${LINK_LIBRARIES})
-
-add_executable(rawCommandBench rawCommandBench.cpp $<TARGET_OBJECTS:common>)
-target_link_libraries(rawCommandBench ${LINK_LIBRARIES})
-
-add_executable(indirectWriteBench indirectWriteBench.cpp $<TARGET_OBJECTS:common>)
-target_link_libraries(indirectWriteBench ${LINK_LIBRARIES})
-
-add_executable(multiclientPollingBench multiclientPollingBench.cpp $<TARGET_OBJECTS:common>)
-target_link_libraries(multiclientPollingBench ${LINK_LIBRARIES})
-
-add_executable(many2OneBench many2OneBench.cpp $<TARGET_OBJECTS:common>)
-target_link_libraries(many2OneBench ${LINK_LIBRARIES})
-
-add_executable(zeroCopyBench zeroCopyBench.cpp $<TARGET_OBJECTS:common>)
-target_link_libraries(zeroCopyBench ${LINK_LIBRARIES})
-
-add_executable(ycsbWorkloadCBench ycsbWorkloadCBench.cpp $<TARGET_OBJECTS:common>)
-target_link_libraries(ycsbWorkloadCBench ${LINK_LIBRARIES})
+foreach (exe ${EXECUTABLES})
+    add_executable(${exe} ${exe}.cpp $<TARGET_OBJECTS:common>)
+    target_link_libraries(${exe} ${LINK_LIBRARIES})
+endforeach ()
 
 file(GLOB tests "test/*Test.cpp")
 foreach (test ${tests})
