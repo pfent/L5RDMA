@@ -104,6 +104,18 @@ public:
         const auto end = begin + size;
         callback(sender, begin, end);
     }
+
+    template<typename TriviallyCopyable>
+    void write(size_t receiverId, const TriviallyCopyable &data) {
+        static_assert(std::is_trivially_copyable_v<TriviallyCopyable>);
+        send(receiverId, reinterpret_cast<const uint8_t *>(&data), sizeof(data));
+    }
+
+    template<typename TriviallyCopyable>
+    size_t read(TriviallyCopyable &data) {
+        static_assert(std::is_trivially_copyable_v<TriviallyCopyable>);
+        return receive(reinterpret_cast<uint8_t *>(&data), sizeof(data));
+    }
 };
 
 class MultiClientTransportClient {
@@ -173,6 +185,18 @@ public:
 
         callback(begin, end);
         *reinterpret_cast<volatile size_t *>(receiveBuffer.data()) = 0;
+    }
+
+    template<typename TriviallyCopyable>
+    void write(const TriviallyCopyable &data) {
+        static_assert(std::is_trivially_copyable_v<TriviallyCopyable>);
+        send(reinterpret_cast<const uint8_t *>(&data), sizeof(data));
+    }
+
+    template<typename TriviallyCopyable>
+    void read(TriviallyCopyable &data) {
+        static_assert(std::is_trivially_copyable_v<TriviallyCopyable>);
+        receive(reinterpret_cast<uint8_t *>(&data), sizeof(data));
     }
 };
 

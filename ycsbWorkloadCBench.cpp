@@ -8,16 +8,7 @@
 static constexpr uint16_t port = 1234;
 static const char *ip = "127.0.0.1";
 
-int main(int argc, char **argv) {
-    if (argc < 2) {
-        std::cout << "Usage: " << argv[0] << " <client / server> <(IP, optional) 127.0.0.1>" << std::endl;
-        return -1;
-    }
-    const auto isClient = argv[1][0] == 'c';
-    if (argc > 2) {
-        ip = argv[2];
-    }
-
+void doRun(bool isClient) {
     struct ReadMessage {
         YcsbKey lookupKey;
         size_t field;
@@ -29,7 +20,7 @@ int main(int argc, char **argv) {
 
     if (isClient) {
         auto rand = Random32();
-        const auto lookupKeys = generateZipfLookupKeys(ycsb_tx_count, ycsb_tuple_count);
+        const auto lookupKeys = generateZipfLookupKeys(ycsb_tx_count);
         auto client = RdmaTransportClient();
         client.connect(ip + std::string(":") + std::to_string(port));
         auto response = ReadResponse{};
@@ -58,4 +49,16 @@ int main(int argc, char **argv) {
             }
         });
     }
+}
+
+int main(int argc, char **argv) {
+    if (argc < 2) {
+        std::cout << "Usage: " << argv[0] << " <client / server> <(IP, optional) 127.0.0.1>" << std::endl;
+        return -1;
+    }
+    const auto isClient = argv[1][0] == 'c';
+    if (argc > 2) {
+        ip = argv[2];
+    }
+    doRun(isClient);
 }

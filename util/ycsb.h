@@ -69,12 +69,12 @@ auto generateLookupKeys(size_t count, size_t maxValue) {
     return res;
 }
 
-auto generateZipfLookupKeys(size_t count, size_t maxValue, double factor = 1.0) {
+auto generateZipfLookupKeys(size_t count, double factor = 1.0) {
     using distribution = std::discrete_distribution<size_t>;
     std::mt19937 generator(88172645463325252ull);
     auto zipfdist = [&] {
-        std::vector<double> buffer(maxValue + 1);
-        for (unsigned rank = 1; rank <= maxValue; ++rank) {
+        std::vector<double> buffer(ycsb_tuple_count + 1);
+        for (unsigned rank = 1; rank <= ycsb_tuple_count; ++rank) {
             buffer[rank] = std::pow(rank, -factor);
         }
 

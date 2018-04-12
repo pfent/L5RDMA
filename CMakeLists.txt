@@ -64,6 +64,7 @@ SET(EXECUTABLES
         many2OneBench
         zeroCopyBench
         ycsbWorkloadCBench
+        manySlowSendersBench
         )
 
 foreach (exe ${EXECUTABLES})
