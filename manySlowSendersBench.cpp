@@ -37,6 +37,7 @@ void doRun(const size_t msgps, bool isClient) {
 
     if (isClient) {
         std::vector<size_t> counters(threads);
+        std::vector<std::vector<double>> latencySamples(threads);
         std::vector<std::thread> clientThreads;
 
         for (size_t c = 0; c < threads; ++c) {
@@ -49,20 +50,42 @@ void doRun(const size_t msgps, bool isClient) {
                 auto response = ReadResponse{};
 
                 for (const auto lookupKey: lookupKeys) {
+                    using namespace std::chrono;
                     const auto field = rand.next() % ycsb_field_count;
                     const auto message = ReadMessage{lookupKey, field};
+
+                    const auto start = steady_clock::now();
                     client.write(message);
                     client.read(response);
                     benchmark::DoNotOptimize(response);
+                    const auto end = std::chrono::steady_clock::now();
                     ++counters[c];
 
-                    using namespace std::chrono;
+                    const auto muSecs = chrono::duration<double, micro>(end - start).count();
+                    latencySamples[c].push_back(muSecs);
+
                     this_thread::sleep_for(duration_cast<nanoseconds>(chrono::duration<double>(1e0 / msgps)));
                 }
             });
         }
         for (auto &t : clientThreads) {
             t.join();
+        }
+
+        std::vector<double> roundedSamples;
+        for (const auto &samples : latencySamples) {
+            for (const auto sample : samples) {
+                roundedSamples.push_back(std::nearbyint(sample * 100) / 100); // round to 2 decimals
+            }
+        }
+
+        std::map<double, size_t> summed;
+        for (const auto sample : roundedSamples) {
+            ++summed[sample];
+        }
+
+        for (const auto[latency, count] : summed) {
+            std::cout << latency << ", " << count << '\n';
         }
     } else {
         const auto database = YcsbDatabase();
@@ -87,7 +110,7 @@ void doRun(const size_t msgps, bool isClient) {
 
 int main(int argc, char **argv) {
     // TODO: this sporadically doesn't finish with one thread being stuck polling the very first work completion
-    // FIXME: only *drain* the completionqueue instead of waiting for completion
+    // FIXME: maybe only *drain* the completionqueue instead of waiting for completion
     if (argc < 2) {
         cout << "Usage: " << argv[0] << " <client / server> <(optional) 127.0.0.1>" << endl;
         return -1;
