@@ -67,7 +67,7 @@ struct YcsbDataSet {
 };
 
 auto generateLookupKeys(size_t count, size_t maxValue) {
-    auto rand = Random32(); // TODO: generate zipfian distribution with varying skew
+    auto rand = Random32();
     auto res = std::vector<YcsbKey>();
     res.reserve(count);
     std::generate_n(std::back_inserter(res), count, [&] { return rand.next() % maxValue; });
@@ -79,7 +79,7 @@ auto generateZipfLookupKeys(size_t count, size_t maxValue, double factor = 1.0) 
     std::mt19937 generator(88172645463325252ull);
     auto zipfdist = [&] {
         std::vector<double> buffer(maxValue + 1);
-        for (unsigned rank = 1; rank <= count; ++rank) {
+        for (unsigned rank = 1; rank <= maxValue; ++rank) {
             buffer[rank] = std::pow(rank, -factor);
         }
 
@@ -139,7 +139,7 @@ int main(int argc, char **argv) {
 
     if (isClient) {
         auto rand = Random32();
-        const auto lookupKeys = generateLookupKeys(ycsb_tx_count, ycsb_tuple_count);
+        const auto lookupKeys = generateZipfLookupKeys(ycsb_tx_count, ycsb_tuple_count);
         auto client = RdmaTransportClient();
         client.connect(ip + std::string(":") + std::to_string(port));
         auto response = ReadResponse{};
@@ -155,7 +155,7 @@ int main(int argc, char **argv) {
         const auto database = YcsbDatabase();
         auto server = RdmaTransportServer(std::to_string(port));
         server.accept();
-
+        std::cout << "transactions, time, msgps, user, system, total\n";
         bench(ycsb_tx_count, [&] {
             for (size_t i = 0; i < ycsb_tx_count; ++i) {
                 auto message = ReadMessage{};
