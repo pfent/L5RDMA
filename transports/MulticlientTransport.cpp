@@ -4,8 +4,9 @@
 #include <emmintrin.h>
 #include "MulticlientTransport.h"
 
-MulticlientTransportServer::MulticlientTransportServer(std::string_view port)
-        : listenSock(tcp_socket()),
+MulticlientTransportServer::MulticlientTransportServer(std::string_view port, size_t maxClients)
+        : MAX_CLIENTS(maxClients),
+          listenSock(tcp_socket()),
           net(rdma::Network()),
           sharedCq(net.getSharedCompletionQueue()),
           receives(MAX_CLIENTS, net, {ibv::AccessFlag::LOCAL_WRITE, ibv::AccessFlag::REMOTE_WRITE}),

@@ -13,8 +13,8 @@ class MulticlientTransportServer {
     };
 
     static constexpr size_t MAX_MESSAGESIZE = 512;
-    static constexpr size_t MAX_CLIENTS = 256;
     static constexpr char validity = '\4'; // ASCII EOT char
+    const size_t MAX_CLIENTS;
 
     const int listenSock;
     rdma::Network net;
@@ -44,7 +44,7 @@ class MulticlientTransportServer {
     }
 
 public:
-    explicit MulticlientTransportServer(std::string_view port);
+    explicit MulticlientTransportServer(std::string_view port, size_t maxClients = 256);
 
     ~MulticlientTransportServer();
 
