@@ -48,23 +48,27 @@ void doRun(const size_t msgps, bool isClient) {
                 tryConnect(client);
 
                 auto response = ReadResponse{};
+                static constexpr size_t timedMessages = 50;
 
-                for (const auto lookupKey: lookupKeys) {
+                for (size_t i = 0; i < lookupKeys.size(); i += timedMessages) {
                     using namespace std::chrono;
-                    const auto field = rand.next() % ycsb_field_count;
-                    const auto message = ReadMessage{lookupKey, field};
+                    const auto start = high_resolution_clock::now();
 
-                    const auto start = steady_clock::now();
-                    client.write(message);
-                    client.read(response);
-                    benchmark::DoNotOptimize(response);
-                    const auto end = std::chrono::steady_clock::now();
-                    ++counters[c];
+                    for (size_t j = 0; j < timedMessages; ++j) {
+                        const auto field = rand.next() % ycsb_field_count;
+                        const auto message = ReadMessage{lookupKeys[i], field};
+                        client.write(message);
+                        client.read(response);
+                        benchmark::DoNotOptimize(response);
+                        ++counters[c];
+                    }
 
+                    const auto end = std::chrono::high_resolution_clock::now();
                     const auto muSecs = chrono::duration<double, micro>(end - start).count();
-                    latencySamples[c].push_back(muSecs);
+                    latencySamples[c].push_back(muSecs / timedMessages);
 
-                    this_thread::sleep_for(duration_cast<nanoseconds>(chrono::duration<double>(1e0 / msgps)));
+                    this_thread::sleep_for(
+                            duration_cast<nanoseconds>(chrono::duration<double>(double(timedMessages) / msgps)));
                 }
             });
         }
@@ -84,8 +88,9 @@ void doRun(const size_t msgps, bool isClient) {
             ++summed[sample];
         }
 
+        std::cout << "msgps, latency, count\n";
         for (const auto[latency, count] : summed) {
-            std::cout << latency << ", " << count << '\n';
+            cout << msgps * threads << ", " << latency << ", " << count << '\n';
         }
     } else {
         const auto database = YcsbDatabase();
@@ -102,8 +107,6 @@ void doRun(const size_t msgps, bool isClient) {
                 database.lookup(lookupKey, field, begin);
                 return ycsb_field_length;
             });
-            if (m % (msgps * threads) == 0)
-                std::cout << "completed:" << std::setw(3) << double(m * duration) / (msgps * threads) << "%\n";
         }
     }
 }
@@ -111,6 +114,13 @@ void doRun(const size_t msgps, bool isClient) {
 int main(int argc, char **argv) {
     // TODO: this sporadically doesn't finish with one thread being stuck polling the very first work completion
     // FIXME: maybe only *drain* the completionqueue instead of waiting for completion
+
+    /* It's dangerous to go alone!
+     * Take this.
+     *
+     * rm out; while [[ ! -s out ]]; do NODE=1; timeout 15 numactl --membind=$NODE --cpunodebind=$NODE ./manySlowSendersBench server; done;
+     * while [[ ! -s out ]]; do NODE=1; timeout 15 numactl --membind=$NODE --cpunodebind=$NODE ./manySlowSendersBench client | tee out; done; cp out sample.csv;
+     */
     if (argc < 2) {
         cout << "Usage: " << argv[0] << " <client / server> <(optional) 127.0.0.1>" << endl;
         return -1;
@@ -120,8 +130,7 @@ int main(int argc, char **argv) {
         ip = argv[2];
     }
 
-    //cout << "clients, messages, seconds, msgps, user, kernel, total\n";
-    for (const size_t msgps : {1000u}) {
+    for (const size_t msgps : {10000u}) {
         doRun(msgps, isClient);
     }
 }
