@@ -130,7 +130,7 @@ int main(int argc, char **argv) {
         ip = argv[2];
     }
 
-    for (const size_t msgps : {10000u}) {
+    for (const size_t msgps : {30000u, 40000u, 50000u, 60000u}) {
         doRun(msgps, isClient);
     }
 }
