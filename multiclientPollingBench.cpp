@@ -306,12 +306,12 @@ void bigBuffer(bool isClient, size_t dataSize, uint16_t pollPositions, F pollFun
 }
 
 __always_inline
-static std::tuple<size_t, int32_t> poll(int32_t *doorBells, size_t count) {
+static std::tuple<size_t, int32_t> poll(int32_t *offsets, size_t count) noexcept {
     for (;;) {
         for (size_t i = 0; i < count; ++i) {
-            int32_t writePos = *reinterpret_cast<volatile int32_t *>(&doorBells[i]);
+            int32_t writePos = *reinterpret_cast<volatile int32_t *>(&offsets[i]);
             if (writePos != -1) {
-                doorBells[i] = -1;
+                offsets[i] = -1;
                 return {i, writePos};
             }
         }
@@ -321,21 +321,21 @@ static std::tuple<size_t, int32_t> poll(int32_t *doorBells, size_t count) {
 #ifdef __AVX2__
 
 __always_inline
-static std::tuple<size_t, int32_t> SIMDPoll(int32_t *doorBells, size_t count) {
+static std::tuple<size_t, int32_t> SIMDPoll(int32_t *offsets, size_t count) noexcept {
     assert(count % 8 == 0);
     const auto invalid = _mm256_set1_epi32(-1);
 
     for (;;) {
         for (size_t i = 0; i < count; i += 8) {
-            auto data = *reinterpret_cast<volatile __m256i *>(&doorBells[i]);
+            auto data = *reinterpret_cast<volatile __m256i *>(&offsets[i]);
             auto cmp = _mm256_cmpeq_epi32(invalid, data); // sadly no neq
             uint32_t cmpMask = compl _mm256_movemask_epi8(cmp);
             if (cmpMask != 0) {
                 auto lzcnt = __builtin_clz(cmpMask);
                 // 4 bits per value, since cmpeq32, but movemask8
                 auto sender = i + ((32 - lzcnt) / 4 - 1);
-                auto writePos = doorBells[sender];
-                doorBells[sender] = -1;
+                auto writePos = offsets[sender];
+                offsets[sender] = -1;
                 return {sender, writePos};
             }
         }
@@ -345,19 +345,19 @@ static std::tuple<size_t, int32_t> SIMDPoll(int32_t *doorBells, size_t count) {
 #endif
 
 __always_inline
-static std::tuple<size_t, int32_t> SSEPoll(int32_t *doorBells, size_t count) {
+static std::tuple<size_t, int32_t> SSEPoll(int32_t *offsets, size_t count) noexcept {
     assert(count % 4 == 0);
     const auto invalid = _mm_set1_epi32(-1);
     for (;;) {
         for (size_t i = 0; i < count; i += 4) {
-            auto data = *reinterpret_cast<volatile __m128i *>(&doorBells[i]);
+            auto data = *reinterpret_cast<volatile __m128i *>(&offsets[i]);
             auto cmp = _mm_cmpeq_epi32(invalid, data);
             uint16_t cmpMask = compl _mm_movemask_epi8(cmp);
             if (cmpMask != 0) {
                 auto lzcnt = __builtin_clz(cmpMask);
                 auto sender = i + ((32 - lzcnt) / 4 - 1);
-                auto writePos = doorBells[sender];
-                doorBells[sender] = -1;
+                auto writePos = offsets[sender];
+                offsets[sender] = -1;
                 return {sender, writePos};
             }
         }
@@ -534,13 +534,9 @@ static size_t exPollPCMP(char *doorBells, size_t count) {
     for (;;) {
         for (size_t i = 0; i < count; i += 16) {
             const auto haystack = *reinterpret_cast<volatile __m128i *>(&doorBells[i]);
-            const auto mask = _mm_cmpestrm(needle, 1, haystack, 16,
-                                           _SIDD_UBYTE_OPS | _SIDD_CMP_EQUAL_ANY | _SIDD_NEGATIVE_POLARITY |
-                                           _SIDD_LEAST_SIGNIFICANT);
-            const auto res = _mm_extract_epi16(mask, 0);
-            if (res != 0) {
-                const auto lzcnt = __builtin_clz(res);
-                const size_t sender = (31 - lzcnt) + i;
+            const auto match = _mm_cmpestri(needle, 1, haystack, 16, _SIDD_NEGATIVE_POLARITY);
+            if (match != 16) {
+                const size_t sender = match + i;
                 doorBells[sender] = '\0';
                 return sender;
             }
