@@ -8,9 +8,11 @@
 
 using namespace std;
 
-static constexpr size_t threads = 100;
+static constexpr size_t threadsPerClient = 10;
+static size_t numberOfClients = 1;
 static constexpr uint16_t port = 1234;
 static constexpr size_t duration = 10; // seconds
+static constexpr size_t warmupCount = 1000;
 static const char *ip = "127.0.0.1";
 
 void tryConnect(MultiClientTransportClient &client) {
@@ -36,11 +38,11 @@ void doRun(const size_t msgps, bool isClient) {
     };
 
     if (isClient) {
-        std::vector<size_t> counters(threads);
-        std::vector<std::vector<double>> latencySamples(threads);
+        std::vector<size_t> counters(threadsPerClient);
+        std::vector<std::vector<double>> latencySamples(threadsPerClient);
         std::vector<std::thread> clientThreads;
 
-        for (size_t c = 0; c < threads; ++c) {
+        for (size_t c = 0; c < threadsPerClient; ++c) {
             clientThreads.emplace_back([&, c] {
                 auto rand = Random32();
                 const auto lookupKeys = generateZipfLookupKeys(msgps * duration);
@@ -48,6 +50,15 @@ void doRun(const size_t msgps, bool isClient) {
                 tryConnect(client);
 
                 auto response = ReadResponse{};
+                for (size_t i = 0; i < warmupCount; ++i) {
+                    const auto field = rand.next() % ycsb_field_count;
+                    const auto message = ReadMessage{lookupKeys[i], field};
+                    client.write(message);
+                    client.read(response);
+                    benchmark::DoNotOptimize(response);
+                }
+
+
                 static constexpr size_t timedMessages = 50;
 
                 for (size_t i = 0; i < lookupKeys.size(); i += timedMessages) {
@@ -90,17 +101,31 @@ void doRun(const size_t msgps, bool isClient) {
 
         std::cout << "msgps, latency, count\n";
         for (const auto[latency, count] : summed) {
-            cout << msgps * threads << ", " << latency << ", " << count << '\n';
+            cout << msgps * threadsPerClient << ", " << latency << ", " << count << '\n';
         }
-    } else {
+    } else { // server
         const auto database = YcsbDatabase();
         auto server = MulticlientTransportServer(to_string(port));
-        for (size_t i = 0; i < threads; ++i) {
+        std::cout << "Letting " << numberOfClients << " clients connect\n";
+        for (size_t i = 0; i < numberOfClients * threadsPerClient; ++i) {
+            if (i % threadsPerClient == 0) std::cout << "Waiting for client " << i / threadsPerClient << '\n';
             server.accept();
         }
 
+        std::cout << "Warming up\n";
         auto message = ReadMessage{};
-        for (size_t m = 0; m < msgps * duration * threads; ++m) {
+        // warmup
+        for (size_t i = 0; i < numberOfClients * threadsPerClient * warmupCount; ++i) {
+            auto client = server.read(message);
+            auto&[lookupKey, field] = message;
+            server.send(client, [&](auto begin) {
+                database.lookup(lookupKey, field, begin);
+                return ycsb_field_length;
+            });
+        }
+
+        std::cout << "Benchmarking...\n";
+        for (size_t m = 0; m < msgps * duration * numberOfClients * threadsPerClient; ++m) {
             auto client = server.read(message);
             auto&[lookupKey, field] = message;
             server.send(client, [&](auto begin) {
@@ -112,25 +137,17 @@ void doRun(const size_t msgps, bool isClient) {
 }
 
 int main(int argc, char **argv) {
-    // TODO: this sporadically doesn't finish with one thread being stuck polling the very first work completion
-    // FIXME: maybe only *drain* the completionqueue instead of waiting for completion
-
-    /* It's dangerous to go alone!
-     * Take this.
-     *
-     * rm out; while [[ ! -s out ]]; do NODE=1; timeout 15 numactl --membind=$NODE --cpunodebind=$NODE ./manySlowSendersBench server; done;
-     * while [[ ! -s out ]]; do NODE=1; timeout 15 numactl --membind=$NODE --cpunodebind=$NODE ./manySlowSendersBench client | tee out; done; cp out sample.csv;
-     */
-    if (argc < 2) {
-        cout << "Usage: " << argv[0] << " <client / server> <(optional) 127.0.0.1>" << endl;
+    if (argc < 3) {
+        cout << "Usage: " << argv[0] << " <client / server> #messages [#clients] [127.0.0.1]" << endl;
         return -1;
     }
     const auto isClient = argv[1][0] == 'c';
-    if (argc > 2) {
-        ip = argv[2];
+    const auto msgps = atoi(argv[2]);
+    if (argc > 3) {
+        numberOfClients = atoi(argv[3]);
     }
-
-    for (const size_t msgps : {30000u, 40000u, 50000u, 60000u}) {
-        doRun(msgps, isClient);
+    if (argc > 4) {
+        ip = argv[4];
     }
+    doRun(msgps, isClient);
 }
