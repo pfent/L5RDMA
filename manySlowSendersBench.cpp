@@ -101,7 +101,7 @@ void doRun(const size_t msgps, bool isClient) {
 
         std::cout << "msgps, latency, count\n";
         for (const auto[latency, count] : summed) {
-            cout << msgps * threadsPerClient << ", " << latency << ", " << count << '\n';
+            cout << msgps * threadsPerClient * numberOfClients << ", " << latency << ", " << count << '\n';
         }
     } else { // server
         const auto database = YcsbDatabase();
