@@ -3,6 +3,7 @@
 #include <transports/DomainSocketsTransport.h>
 #include <transports/TcpTransport.h>
 #include <transports/SharedMemoryTransport.h>
+#include <thread>
 #include "transports/RdmaTransport.h"
 #include "util/bench.h"
 #include "util/ycsb.h"
@@ -40,10 +41,20 @@ void doRun(bool isClient, std::string connection) {
 
     if (isClient) {
         sleep(1);
+        auto client = Client();
+
+        for (int i = 0;; ++i) {
+            try {
+                client.connect(connection);
+                break;
+            } catch (...) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(20));
+                if (i > 10) throw;
+            }
+        }
+
         auto rand = Random32();
         const auto lookupKeys = generateZipfLookupKeys(ycsb_tx_count);
-        auto client = Client();
-        client.connect(connection);
         auto response = ReadResponse{};
 
         for (const auto lookupKey: lookupKeys) {
@@ -54,8 +65,8 @@ void doRun(bool isClient, std::string connection) {
             benchmark::DoNotOptimize(response);
         }
     } else { // server
-        const auto database = YcsbDatabase();
         auto server = Server(connection);
+        const auto database = YcsbDatabase();
         server.accept();
         bench(ycsb_tx_count, [&] {
             for (size_t i = 0; i < ycsb_tx_count; ++i) {
@@ -69,6 +80,61 @@ void doRun(bool isClient, std::string connection) {
             }
         });
     }
+}
+
+void doRunSharedMemory(bool isClient) {
+    struct ReadMessage {
+        YcsbKey lookupKey;
+        size_t field;
+    };
+
+    struct ReadResponse {
+        std::array<char, ycsb_field_length> data;
+    };
+
+    if (isClient) {
+        sleep(1);
+        auto client = SharedMemoryTransportClient();
+
+        for (int i = 0;; ++i) {
+            try {
+                client.connect("/dev/shm/pingPong");
+                break;
+            } catch (...) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(20));
+                if (i > 10) throw;
+            }
+        }
+
+        auto rand = Random32();
+        const auto lookupKeys = generateZipfLookupKeys(ycsb_tx_count);
+        //auto response = ReadResponse{};
+
+        for (const auto lookupKey: lookupKeys) {
+            const auto field = rand.next() % ycsb_field_count;
+            auto message = ReadMessage{lookupKey, field};
+            client.write(message);
+            client.read(message); // TODO this is probably a bug in the Shared memory transport
+            benchmark::DoNotOptimize(message);
+        }
+    } else {
+        auto server = SharedMemoryTransportServer("/dev/shm/pingPong");
+        const auto database = YcsbDatabase();
+        server.accept();
+        bench(ycsb_tx_count, [&]() {
+            for (size_t i = 0; i < ycsb_tx_count; ++i) {
+                auto message = ReadMessage{};
+                server.read(message);
+
+                auto&[lookupKey, field] = message;
+                server.write([&](auto begin) {
+                    database.lookup(lookupKey, field, begin);
+                    return ycsb_field_length;
+                });
+            }
+        });
+    }
+
 }
 
 int main(int argc, char **argv) {
@@ -90,7 +156,8 @@ int main(int argc, char **argv) {
     if (!isClient) doRunNoCommunication();
     std::cout << "domainSocket, ";
     doRun<DomainSocketsTransportServer, DomainSocketsTransportClient>(isClient, "/tmp/testSocket");
-    //std::cout << "shared memory, ";
+    std::cout << "shared memory, ";
+    doRunSharedMemory(isClient);
     //doRun<SharedMemoryTransportServer, SharedMemoryTransportClient>(isClient, "/tmp/testSocket");
     std::cout << "tcp, ";
     doRun<TcpTransportServer, TcpTransportClient>(isClient, connection);
