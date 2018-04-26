@@ -228,7 +228,7 @@ void bigBuffer(bool isClient, size_t dataSize, uint16_t pollPositions, F pollFun
 
         bench(MESSAGES, [&]() {
             for (size_t i = 0; i < MESSAGES; ++i) {
-                auto destPos = rand.next();
+                auto destPos = rand.next() % BIGBADBUFFER_SIZE;
                 sendPosBuf[0] = destPos;
                 write.setRemoteAddress(remoteMr.offset(destPos));
 
@@ -281,7 +281,7 @@ void bigBuffer(bool isClient, size_t dataSize, uint16_t pollPositions, F pollFun
 
         bench(MESSAGES, [&]() {
             for (size_t i = 0; i < MESSAGES; ++i) {
-                auto destPos = rand.next();
+                auto destPos = rand.next() % BIGBADBUFFER_SIZE;
                 // wait for incoming message
                 const auto[sender, recvPos] = pollFunc(recvPosBuf.data(), pollPositions);
                 std::ignore = sender;
@@ -628,34 +628,34 @@ int main(int argc, char **argv) {
     cout << "size, connection, clients, messages, seconds, msgps, user, kernel, total" << '\n';
     const auto length = 64;
     for (const size_t clients : {1u, 2u, 4u, 8u, 16u, 32u, 64u, 128u, 192u, 256u}) {
-        cout << length << ", ImmData, " << clients << ", ";
+        cout << length << ", Write + Immediate, " << clients << ", ";
         runImmData<rdma::RcQueuePair>(isClient, length);
-        cout << length << ", scalar_poll, " << clients << ", ";
+        cout << length << ", Poll offset, " << clients << ", ";
         bigBuffer<rdma::RcQueuePair>(isClient, length, clients, poll);
 #ifdef __AVX2__
         if (clients >= 8) {
-            cout << length << ", simd_poll, " << clients << ", ";
+            cout << length << ", Poll offset + AVX2, " << clients << ", ";
             bigBuffer<rdma::RcQueuePair>(isClient, length, clients, SIMDPoll);
         }
 #endif
         if (clients >= 4) {
-            cout << length << ", sse_poll, " << clients << ", ";
+            cout << length << ", Poll offset + SSE, " << clients << ", ";
             bigBuffer<rdma::RcQueuePair>(isClient, length, clients, SSEPoll);
         }
-        cout << length << ", exclusive_buffer, " << clients << ", ";
+        cout << length << ", Poll flag, " << clients << ", ";
         exclusiveBuffer<rdma::RcQueuePair>(isClient, length, clients, exPoll);
 #ifdef __AVX2__
         if (clients >= 32) {
-            cout << length << ", exclusive_simd, " << clients << ", ";
+            cout << length << ", Poll flag + AVX2, " << clients << ", ";
             exclusiveBuffer<rdma::RcQueuePair>(isClient, length, clients, exPollSIMD);
         }
 #endif
         if (clients >= 16) {
-            cout << length << ", exclusive_pcmp, " << clients << ", ";
+            cout << length << ", Poll flag + PCMP, " << clients << ", ";
             exclusiveBuffer<rdma::RcQueuePair>(isClient, length, clients, exPollPCMP);
         }
         if (clients >= 16) {
-            cout << length << ", exclusive_sse, " << clients << ", ";
+            cout << length << ", Poll flag + SSE, " << clients << ", ";
             exclusiveBuffer<rdma::RcQueuePair>(isClient, length, clients, exPollSSE);
         }
     }
