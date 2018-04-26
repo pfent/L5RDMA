@@ -4,6 +4,7 @@
 #include <rdma/RcQueuePair.h>
 #include "rdma/Network.hpp"
 #include "rdma/MemoryRegion.h"
+#include <emmintrin.h>
 
 class MulticlientTransportServer {
     struct Connection {
@@ -38,6 +39,24 @@ class MulticlientTransportServer {
                 if (*reinterpret_cast<volatile char *>(&doorBells[i]) != '\0') {
                     doorBells[i] = '\0';
                     return i;
+                }
+            }
+        }
+    }
+
+    __always_inline
+    static size_t pollSSE(char *doorBells, size_t count) noexcept {
+        const auto zero = _mm_set1_epi8('\0');
+        for (;;) {
+            for (size_t i = 0; i < count; i += 16) {
+                auto data = *reinterpret_cast<volatile __m128i *>(&doorBells[i]);
+                auto cmp = _mm_cmpeq_epi8(zero, data);
+                uint16_t cmpMask = compl _mm_movemask_epi8(cmp);
+                if (cmpMask != 0) {
+                    auto lzcnt = __builtin_clz(cmpMask);
+                    auto sender = 32 - (lzcnt + 1) + i;
+                    doorBells[sender] = '\0';
+                    return sender;
                 }
             }
         }
@@ -95,7 +114,7 @@ public:
     /// expected signature: [](size_t sender, const uint8_t* begin, const uint8_t* end) -> void
     template<typename RangeConsumer>
     void receive(RangeConsumer &&callback) {
-        const auto sender = poll(doorBells.data(), MAX_CLIENTS);
+        const auto sender = pollSSE(doorBells.data(), MAX_CLIENTS);
 
         const auto sizePtr = reinterpret_cast<uint8_t *>(receives.data()[sender]);
         const auto size = *reinterpret_cast<size_t *>(sizePtr);

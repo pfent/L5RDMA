@@ -3,6 +3,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <transports/MulticlientTransport.h>
+#include <util/ycsb.h>
 #include "libibverbscpp/libibverbscpp.h"
 #include "rdma/Network.hpp"
 #include "rdma/QueuePair.hpp"
@@ -20,7 +21,9 @@ static constexpr auto MESSAGES = 1024 * 1024;
 
 void doRun(size_t clients, bool isClient) {
     if (isClient) {
-        const char *testdata = "asdfghjkl";
+        RandomString rand;
+        char testdata[64];
+        rand.fill(64, testdata);
 
         std::vector<std::thread> clientThreads;
         for (size_t c = 0; c < clients; ++c) {
@@ -36,13 +39,13 @@ void doRun(size_t clients, bool isClient) {
                     }
                 }
 
-                std::vector<char> buf(10);
+                std::vector<char> buf(64);
 
                 for (size_t m = 0; m < MESSAGES; ++m) {
-                    client.send(reinterpret_cast<const uint8_t *>(testdata), 10);
-                    client.receive(buf.data(), 10);
+                    client.send(reinterpret_cast<const uint8_t *>(testdata), 64);
+                    client.receive(buf.data(), 64);
 
-                    for (size_t i = 0; i < 10; ++i) {
+                    for (size_t i = 0; i < 64; ++i) {
                         if (testdata[i] != buf[i]) throw runtime_error("NEQ");
                     }
                 }
@@ -57,11 +60,11 @@ void doRun(size_t clients, bool isClient) {
             server.accept();
         }
 
-        std::vector<uint8_t> buf(10);
+        std::vector<uint8_t> buf(64);
         bench(MESSAGES * clients, [&] {
             for (size_t m = 0; m < MESSAGES * clients; ++m) {
-                auto client = server.receive(buf.data(), 10);
-                server.send(client, buf.data(), 10);
+                auto client = server.receive(buf.data(), 64);
+                server.send(client, buf.data(), 64);
             }
         });
     }

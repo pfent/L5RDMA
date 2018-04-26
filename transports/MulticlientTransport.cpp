@@ -1,7 +1,6 @@
 #include <util/tcpWrapper.h>
 #include <netinet/in.h>
 #include <boost/assert.hpp>
-#include <emmintrin.h>
 #include "MulticlientTransport.h"
 
 MulticlientTransportServer::MulticlientTransportServer(std::string_view port, size_t maxClients)
@@ -12,6 +11,7 @@ MulticlientTransportServer::MulticlientTransportServer(std::string_view port, si
           receives(MAX_CLIENTS, net, {ibv::AccessFlag::LOCAL_WRITE, ibv::AccessFlag::REMOTE_WRITE}),
           doorBells(MAX_CLIENTS, net, {ibv::AccessFlag::LOCAL_WRITE, ibv::AccessFlag::REMOTE_WRITE}),
           sendBuffer(MAX_MESSAGESIZE, net, {}) {
+    assert(maxClients % 16 == 0);
     std::fill(doorBells.begin(), doorBells.end(), '\0');
     listen(std::stoi(std::string(port.data(), port.size())));
 }
@@ -63,25 +63,6 @@ MulticlientTransportServer::~MulticlientTransportServer() {
         }
     }
     tcp_close(listenSock);
-}
-
-__always_inline
-static size_t pollSSE(char *doorBells, size_t count) {
-    assert(count % 16 == 0);
-    const auto zero = _mm_set1_epi8('\0');
-    for (;;) {
-        for (size_t i = 0; i < count; i += 16) {
-            auto data = *reinterpret_cast<volatile __m128i *>(&doorBells[i]);
-            auto cmp = _mm_cmpeq_epi8(zero, data);
-            uint16_t cmpMask = compl _mm_movemask_epi8(cmp);
-            if (cmpMask != 0) {
-                auto lzcnt = __builtin_clz(cmpMask);
-                auto sender = 32 - (lzcnt + 1) + i;
-                doorBells[sender] = '\0';
-                return sender;
-            }
-        }
-    }
 }
 
 size_t MulticlientTransportServer::receive(void *whereTo, size_t maxSize) {
