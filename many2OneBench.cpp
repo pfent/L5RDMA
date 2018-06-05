@@ -75,20 +75,19 @@ void doRun(size_t clients, bool isClient) {
 }
 
 int main(int argc, char **argv) {
-    if (argc < 2) {
-        cout << "Usage: " << argv[0] << " <client / server> <(optional) 127.0.0.1>" << endl;
+    if (argc < 3) {
+        cout << "Usage: " << argv[0] << " <client / server> <#clients> <(optional) 127.0.0.1>" << endl;
         return -1;
     }
     const auto isClient = argv[1][0] == 'c';
-    if (argc > 2) {
-        ip = argv[2];
+    const auto clients = atoi(argv[2]);
+    if (argc > 3) {
+        ip = argv[3];
     }
 
     cout << "clients, messages, seconds, msgps, user, kernel, total\n";
-    for (const size_t clients : {1u, 2u, 3u, 4u, 5u, 6u, 7u, 8u, 9u, 10u, 11u, 12u, 13u, 14u, 15u, 16u}) {
-        if (!isClient) {
-            cout << clients << ", ";
-        }
-        doRun<MulticlientTCPTransportClient, MulticlientTCPTransportServer>(clients, isClient);
+    if (!isClient) {
+        cout << clients << ", ";
     }
+    doRun<MulticlientTCPTransportClient, MulticlientTCPTransportServer>(clients, isClient);
 }
