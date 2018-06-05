@@ -47,14 +47,23 @@ void MulticlientTCPTransportServer::send(size_t receiverId, const uint8_t *data,
 }
 
 size_t MulticlientTCPTransportServer::receive(void *whereTo, size_t maxSize) {
-    const auto ret = ::poll(pollFds.data(), pollFds.size(), 5 * 1000); // 5 seconds timeout
-    if (ret < 0) {
-        throw std::runtime_error("Could not poll sockets: "s + ::strerror(errno));
-    }
-    const auto &readable = std::find_if(pollFds.begin(), pollFds.end(), [](const pollfd &pollFd) {
-        return (pollFd.revents & POLLIN) != 0;
-    });
+    const auto readable = [&] {
+        for (;;) {
+            const auto ret = ::poll(pollFds.data(), pollFds.size(), 5 * 1000); // 5 seconds timeout
+            if (ret < 0) {
+                throw std::runtime_error("Could not poll sockets: "s + ::strerror(errno));
+            }
+            const auto &res = std::find_if(pollFds.begin(), pollFds.end(), [](const pollfd &pollFd) {
+                // check, that only POLLIN flag is set
+                return ((pollFd.revents & ~POLLIN) == 0 &&
+                        pollFd.revents & POLLIN) != 0;
+            });
 
+            if (res != pollFds.end()) {
+                return res;
+            }
+        }
+    }();
     tcp_read(readable->fd, whereTo, maxSize);
 
     return static_cast<size_t>(std::distance(pollFds.begin(), readable));
