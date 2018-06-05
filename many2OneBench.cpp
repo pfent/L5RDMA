@@ -4,6 +4,7 @@
 #include <arpa/inet.h>
 #include <transports/MulticlientRDMATransport.h>
 #include <util/ycsb.h>
+#include <transports/MulticlientTCPTransport.h>
 #include "libibverbscpp/libibverbscpp.h"
 #include "rdma/Network.hpp"
 #include "rdma/QueuePair.hpp"
@@ -12,6 +13,7 @@
 #include "rdma/RcQueuePair.h"
 #include "rdma/UcQueuePair.h"
 #include "rdma/UdQueuePair.h"
+#include <unistd.h>
 
 using namespace std;
 
@@ -26,6 +28,7 @@ void doRun(size_t clients, bool isClient) {
         char testdata[64];
         rand.fill(64, testdata);
 
+        sleep(1);
         std::vector<std::thread> clientThreads;
         for (size_t c = 0; c < clients; ++c) {
             clientThreads.emplace_back([&] {
@@ -86,6 +89,6 @@ int main(int argc, char **argv) {
         if (!isClient) {
             cout << clients << ", ";
         }
-        doRun<MultiClientRDMATransportClient, MulticlientRDMATransportServer>(clients, isClient);
+        doRun<MulticlientTCPTransportClient, MulticlientTCPTransportServer>(clients, isClient);
     }
 }
