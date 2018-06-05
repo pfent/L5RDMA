@@ -1,9 +1,9 @@
 #include <util/tcpWrapper.h>
 #include <netinet/in.h>
 #include <boost/assert.hpp>
-#include "MulticlientTransport.h"
+#include "MulticlientRDMATransport.h"
 
-MulticlientTransportServer::MulticlientTransportServer(std::string_view port, size_t maxClients)
+MulticlientRDMATransportServer::MulticlientRDMATransportServer(std::string_view port, size_t maxClients)
         : MAX_CLIENTS(maxClients),
           listenSock(tcp_socket()),
           net(rdma::Network()),
@@ -16,7 +16,7 @@ MulticlientTransportServer::MulticlientTransportServer(std::string_view port, si
     listen(std::stoi(std::string(port.data(), port.size())));
 }
 
-void MulticlientTransportServer::listen(uint16_t port) {
+void MulticlientRDMATransportServer::listen(uint16_t port) {
     sockaddr_in addr = {};
     addr.sin_family = AF_INET;
     addr.sin_port = htons(port);
@@ -26,7 +26,7 @@ void MulticlientTransportServer::listen(uint16_t port) {
     tcp_listen(listenSock);
 }
 
-void MulticlientTransportServer::accept() {
+void MulticlientRDMATransportServer::accept() {
     const auto clientId = connections.size();
 
     auto ignored = sockaddr_in{};
@@ -56,7 +56,7 @@ void MulticlientTransportServer::accept() {
     connections.push_back(Connection{acced, std::move(qp), answer});
 }
 
-MulticlientTransportServer::~MulticlientTransportServer() {
+MulticlientRDMATransportServer::~MulticlientRDMATransportServer() {
     for (const auto &conn : connections) {
         if (conn.socket != -1) {
             tcp_close(conn.socket);
@@ -65,7 +65,7 @@ MulticlientTransportServer::~MulticlientTransportServer() {
     tcp_close(listenSock);
 }
 
-size_t MulticlientTransportServer::receive(void *whereTo, size_t maxSize) {
+size_t MulticlientRDMATransportServer::receive(void *whereTo, size_t maxSize) {
     size_t res;
     receive([&](auto sender, auto begin, auto end) {
         res = sender;
@@ -78,7 +78,7 @@ size_t MulticlientTransportServer::receive(void *whereTo, size_t maxSize) {
     return res;
 }
 
-void MulticlientTransportServer::send(size_t receiverId, const uint8_t *data, size_t size) {
+void MulticlientRDMATransportServer::send(size_t receiverId, const uint8_t *data, size_t size) {
     const auto totalLength = size + sizeof(size_t) + sizeof(validity);
     if (totalLength > MAX_MESSAGESIZE) {
         throw std::runtime_error("can't send messages > MAX_MESSAGESIZE");
@@ -93,7 +93,7 @@ void MulticlientTransportServer::send(size_t receiverId, const uint8_t *data, si
     });
 }
 
-MultiClientTransportClient::MultiClientTransportClient()
+MultiClientRDMATransportClient::MultiClientRDMATransportClient()
         : sock(tcp_socket()),
           net(rdma::Network()),
           cq(net.getSharedCompletionQueue()),
@@ -112,7 +112,7 @@ MultiClientTransportClient::MultiClientTransportClient()
     doorBellWr.setInline();
 }
 
-void MultiClientTransportClient::rdmaConnect() {
+void MultiClientRDMATransportClient::rdmaConnect() {
     auto address = rdma::Address{qp.getQPN(), net.getLID()};
     tcp_write(sock, address);
     tcp_read(sock, address);
@@ -130,19 +130,19 @@ void MultiClientTransportClient::rdmaConnect() {
     doorBellWr.setRemoteAddress(doorBellAddr);
 }
 
-void MultiClientTransportClient::connect(std::string_view whereTo) {
+void MultiClientRDMATransportClient::connect(std::string_view whereTo) {
     tcp_connect(sock, whereTo);
 
     rdmaConnect();
 }
 
-void MultiClientTransportClient::connect(std::string_view ip, uint16_t port) {
+void MultiClientRDMATransportClient::connect(std::string_view ip, uint16_t port) {
     tcp_connect(sock, std::string(ip), port);
 
     rdmaConnect();
 }
 
-void MultiClientTransportClient::send(const uint8_t *data, size_t size) {
+void MultiClientRDMATransportClient::send(const uint8_t *data, size_t size) {
     const auto dataWrSize = size + sizeof(size_t);
     if (dataWrSize > MAX_MESSAGESIZE) {
         throw std::runtime_error("can't send messages > MAX_MESSAGESIZE");
@@ -154,7 +154,7 @@ void MultiClientTransportClient::send(const uint8_t *data, size_t size) {
     });
 }
 
-size_t MultiClientTransportClient::receive(void *whereTo, size_t maxSize) {
+size_t MultiClientRDMATransportClient::receive(void *whereTo, size_t maxSize) {
     size_t size;
     receive([&](auto begin, auto end) {
         size = static_cast<size_t>(std::distance(begin, end));

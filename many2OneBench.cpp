@@ -2,7 +2,7 @@
 #include <thread>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-#include <transports/MulticlientTransport.h>
+#include <transports/MulticlientRDMATransport.h>
 #include <util/ycsb.h>
 #include "libibverbscpp/libibverbscpp.h"
 #include "rdma/Network.hpp"
@@ -19,6 +19,7 @@ static constexpr uint16_t port = 1234;
 static const char *ip = "127.0.0.1";
 static constexpr auto MESSAGES = 1024 * 1024;
 
+template<class Client, class Server>
 void doRun(size_t clients, bool isClient) {
     if (isClient) {
         RandomString rand;
@@ -28,7 +29,7 @@ void doRun(size_t clients, bool isClient) {
         std::vector<std::thread> clientThreads;
         for (size_t c = 0; c < clients; ++c) {
             clientThreads.emplace_back([&] {
-                auto client = MultiClientTransportClient();
+                auto client = Client();
                 for (int i = 0;; ++i) {
                     try {
                         client.connect(ip, port);
@@ -55,7 +56,7 @@ void doRun(size_t clients, bool isClient) {
             t.join();
         }
     } else {
-        auto server = MulticlientTransportServer(to_string(port));
+        auto server = Server(to_string(port));
         for (size_t i = 0; i < clients; ++i) {
             server.accept();
         }
@@ -85,6 +86,6 @@ int main(int argc, char **argv) {
         if (!isClient) {
             cout << clients << ", ";
         }
-        doRun(clients, isClient);
+        doRun<MultiClientRDMATransportClient, MulticlientRDMATransportServer>(clients, isClient);
     }
 }

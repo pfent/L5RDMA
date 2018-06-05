@@ -1,7 +1,7 @@
 #include <iostream>
 #include <thread>
 #include <iomanip>
-#include "transports/MulticlientTransport.h"
+#include "transports/MulticlientRDMATransport.h"
 #include "util/bench.h"
 #include "util/ycsb.h"
 #include "util/Random32.h"
@@ -15,7 +15,7 @@ static constexpr size_t duration = 10; // seconds
 static constexpr size_t warmupCount = 1000;
 static const char *ip = "127.0.0.1";
 
-void tryConnect(MultiClientTransportClient &client) {
+void tryConnect(MultiClientRDMATransportClient &client) {
     for (int i = 0;; ++i) {
         try {
             client.connect(ip, port);
@@ -46,7 +46,7 @@ void doRun(const size_t msgps, bool isClient) {
             clientThreads.emplace_back([&, c] {
                 auto rand = Random32();
                 const auto lookupKeys = generateZipfLookupKeys(msgps * duration);
-                auto client = MultiClientTransportClient();
+                auto client = MultiClientRDMATransportClient();
                 tryConnect(client);
 
                 auto response = ReadResponse{};
@@ -105,7 +105,7 @@ void doRun(const size_t msgps, bool isClient) {
         }
     } else { // server
         const auto database = YcsbDatabase();
-        auto server = MulticlientTransportServer(to_string(port));
+        auto server = MulticlientRDMATransportServer(to_string(port));
         std::cout << "Letting " << numberOfClients << " clients connect\n";
         for (size_t i = 0; i < numberOfClients * threadsPerClient; ++i) {
             if (i % threadsPerClient == 0) std::cout << "Waiting for client " << i / threadsPerClient << '\n';

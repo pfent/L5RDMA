@@ -6,7 +6,7 @@
 #include "rdma/MemoryRegion.h"
 #include <emmintrin.h>
 
-class MulticlientTransportServer {
+class MulticlientRDMATransportServer {
     struct Connection {
         int socket;
         rdma::RcQueuePair qp;
@@ -63,9 +63,9 @@ class MulticlientTransportServer {
     }
 
 public:
-    explicit MulticlientTransportServer(std::string_view port, size_t maxClients = 256);
+    explicit MulticlientRDMATransportServer(std::string_view port, size_t maxClients = 256);
 
-    ~MulticlientTransportServer();
+    ~MulticlientRDMATransportServer();
 
     void accept();
 
@@ -137,7 +137,7 @@ public:
     }
 };
 
-class MultiClientTransportClient {
+class MultiClientRDMATransportClient {
     static constexpr size_t MAX_MESSAGESIZE = 512;
     static constexpr char validity = '\4'; // ASCII EOT char
 
@@ -156,7 +156,7 @@ class MultiClientTransportClient {
     void rdmaConnect();
 
 public:
-    MultiClientTransportClient();
+    MultiClientRDMATransportClient();
 
     void connect(std::string_view whereTo);
 

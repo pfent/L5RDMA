@@ -1,5 +1,5 @@
 #include <iostream>
-#include <transports/MulticlientTransport.h>
+#include <transports/MulticlientRDMATransport.h>
 #include "transports/Transport.h"
 #include "transports/TcpTransport.h"
 #include "transports/DomainSocketsTransport.h"
@@ -71,7 +71,7 @@ int main(int argc, char **argv) {
             sleep(1);
             {
                 cout << size << ", " << "many, ";
-                auto client = MultiClientTransportClient();
+                auto client = MultiClientRDMATransportClient();
                 client.connect(ip + string(":") + to_string(port));
                 std::vector<uint8_t> buf(size);
                 bench(MESSAGES, [&]() {
@@ -88,7 +88,7 @@ int main(int argc, char **argv) {
             sleep(1);
             {
                 cout << size << ", " << "many_zerocopy, ";
-                auto client = MultiClientTransportClient();
+                auto client = MultiClientRDMATransportClient();
                 client.connect(ip + string(":") + to_string(port));
                 bench(MESSAGES, [&]() {
                     for (size_t i = 0; i < MESSAGES; ++i) {
@@ -132,7 +132,7 @@ int main(int argc, char **argv) {
             }
             {
                 cout << size << ", " << "many, ";
-                auto server = MulticlientTransportServer(to_string(port));
+                auto server = MulticlientRDMATransportServer(to_string(port));
                 server.accept();
                 std::vector<uint8_t> buf(size);
                 bench(MESSAGES, [&]() {
@@ -144,7 +144,7 @@ int main(int argc, char **argv) {
             }
             {
                 cout << size << ", " << "many, ";
-                auto server = MulticlientTransportServer(to_string(port));
+                auto server = MulticlientRDMATransportServer(to_string(port));
                 server.accept();
                 std::vector<uint8_t> buf(size);
                 bench(MESSAGES, [&]() {
