@@ -1,5 +1,5 @@
-#ifndef EXCHANGABLETRANSPORTS_RDMANETWORKING_H
-#define EXCHANGABLETRANSPORTS_RDMANETWORKING_H
+#ifndef L5RDMA_RDMANETWORKING_H
+#define L5RDMA_RDMANETWORKING_H
 
 #include "rdma/RcQueuePair.h"
 #include "rdma/Network.hpp"
@@ -27,4 +27,4 @@ void receiveAndSetupRmr(int sock, ibv::memoryregion::RemoteAddress &buffer, ibv:
 void
 sendRmrInfo(int sock, const ibv::memoryregion::MemoryRegion &buffer, const ibv::memoryregion::MemoryRegion &readPos);
 
-#endif //EXCHANGABLETRANSPORTS_RDMANETWORKING_H
+#endif //L5RDMA_RDMANETWORKING_H

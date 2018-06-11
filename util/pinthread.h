@@ -1,5 +1,5 @@
-#ifndef EXCHANGABLETRANSPORTS_PINTHREAD_H
-#define EXCHANGABLETRANSPORTS_PINTHREAD_H
+#ifndef L5RDMA_PINTHREAD_H
+#define L5RDMA_PINTHREAD_H
 
 #include <pthread.h>
 #include <stdexcept>
@@ -24,4 +24,4 @@ void pinThread(size_t cpu) {
     }
 }
 
-#endif //EXCHANGABLETRANSPORTS_PINTHREAD_H
+#endif //L5RDMA_PINTHREAD_H

@@ -1,5 +1,5 @@
-#ifndef EXCHANGABLETRANSPORTS_BENCH_H
-#define EXCHANGABLETRANSPORTS_BENCH_H
+#ifndef L5RDMA_BENCH_H
+#define L5RDMA_BENCH_H
 
 #include <tuple>
 #include <iostream>
@@ -96,4 +96,4 @@ auto bench(size_t workSize, T &&fun, size_t repetitions = 1) {
               << totalPercent << '\n';
 }
 
-#endif //EXCHANGABLETRANSPORTS_BENCH_H
+#endif //L5RDMA_BENCH_H

@@ -1,5 +1,5 @@
-#ifndef EXCHANGABLETRANSPORTS_TRANSPORT_H
-#define EXCHANGABLETRANSPORTS_TRANSPORT_H
+#ifndef L5RDMA_TRANSPORT_H
+#define L5RDMA_TRANSPORT_H
 
 #include <string_view>
 #include <memory>
@@ -85,4 +85,4 @@ std::unique_ptr<TransportClient<Derived>> make_transportClient(Args &&... args) 
     return std::move(std::make_unique<Derived>(std::forward<Args>(args)...));
 }
 
-#endif //EXCHANGABLETRANSPORTS_TRANSPORT_H
+#endif //L5RDMA_TRANSPORT_H

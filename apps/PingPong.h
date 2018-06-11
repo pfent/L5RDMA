@@ -1,5 +1,5 @@
-#ifndef EXCHANGABLETRANSPORTS_PINGPONG_H
-#define EXCHANGABLETRANSPORTS_PINGPONG_H
+#ifndef L5RDMA_PINGPONG_H
+#define L5RDMA_PINGPONG_H
 
 #include <cstdint>
 #include <vector>
@@ -60,4 +60,4 @@ public:
     }
 };
 
-#endif //EXCHANGABLETRANSPORTS_PINGPONG_H
+#endif //L5RDMA_PINGPONG_H

@@ -1,5 +1,5 @@
-#ifndef EXCHANGABLETRANSPORTS_DOMAINSOCKETSWRAPPER_H
-#define EXCHANGABLETRANSPORTS_DOMAINSOCKETSWRAPPER_H
+#ifndef L5RDMA_DOMAINSOCKETSWRAPPER_H
+#define L5RDMA_DOMAINSOCKETSWRAPPER_H
 
 #include <cstddef>
 #include <string_view>
@@ -26,4 +26,4 @@ void domain_close(int sock);
 
 void domain_unlink(std::string_view pathToFile);
 
-#endif //EXCHANGABLETRANSPORTS_DOMAINSOCKETSWRAPPER_H
+#endif //L5RDMA_DOMAINSOCKETSWRAPPER_H

@@ -1,5 +1,5 @@
-#ifndef EXCHANGABLETRANSPORTS_VIRTUALMEMORY_H
-#define EXCHANGABLETRANSPORTS_VIRTUALMEMORY_H
+#ifndef L5RDMA_VIRTUALMEMORY_H
+#define L5RDMA_VIRTUALMEMORY_H
 
 #include <cstdint>
 #include <cstddef>
@@ -55,4 +55,4 @@ WraparoundBuffer mmapRingBuffer(int fd, size_t size, bool init);
 
 WraparoundBuffer mmapSharedRingBuffer(const std::string &name, size_t size, bool init = false);
 
-#endif //EXCHANGABLETRANSPORTS_VIRTUALMEMORY_H
+#endif //L5RDMA_VIRTUALMEMORY_H

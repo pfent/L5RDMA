@@ -1,5 +1,5 @@
-#ifndef EXCHANGABLETRANSPORTS_KVSTORE_H
-#define EXCHANGABLETRANSPORTS_KVSTORE_H
+#ifndef L5RDMA_KVSTORE_H
+#define L5RDMA_KVSTORE_H
 
 #include <cstdint>
 #include <unordered_map>
@@ -75,4 +75,4 @@ struct KVStore {
     }
 };
 
-#endif //EXCHANGABLETRANSPORTS_KVSTORE_H
+#endif //L5RDMA_KVSTORE_H

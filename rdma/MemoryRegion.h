@@ -1,5 +1,5 @@
-#ifndef EXCHANGABLETRANSPORTS_MEMORYREGION_H
-#define EXCHANGABLETRANSPORTS_MEMORYREGION_H
+#ifndef L5RDMA_MEMORYREGION_H
+#define L5RDMA_MEMORYREGION_H
 
 #include <memory>
 #include "libibverbscpp/libibverbscpp.h"
@@ -58,4 +58,4 @@ namespace rdma {
     };
 }
 
-#endif //EXCHANGABLETRANSPORTS_MEMORYREGION_H
+#endif //L5RDMA_MEMORYREGION_H

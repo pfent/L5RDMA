@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.0)
 enable_testing()
-project(exchangableTransports) # TODO: rename to L5RDMA: Low level, low latency library for RDMA
+project(L5RDMA)
 
 IF (NOT CMAKE_BUILD_TYPE)
     SET(CMAKE_BUILD_TYPE Release

@@ -1,5 +1,5 @@
-#ifndef EXCHANGABLETRANSPORTS_BUSYWAIT_H
-#define EXCHANGABLETRANSPORTS_BUSYWAIT_H
+#ifndef L5RDMA_BUSYWAIT_H
+#define L5RDMA_BUSYWAIT_H
 
 #include <unistd.h>
 #include <xmmintrin.h>
@@ -41,4 +41,4 @@ void loop_while(Args &&... args) {
     return niceWait(std::forward<Args>(args)...);
 }
 
-#endif //EXCHANGABLETRANSPORTS_BUSYWAIT_H
+#endif //L5RDMA_BUSYWAIT_H

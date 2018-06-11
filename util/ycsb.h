@@ -1,5 +1,5 @@
-#ifndef EXCHANGABLETRANSPORTS_YCSB_H
-#define EXCHANGABLETRANSPORTS_YCSB_H
+#ifndef L5RDMA_YCSB_H
+#define L5RDMA_YCSB_H
 
 #include <algorithm>
 #include <array>
@@ -113,4 +113,4 @@ struct YcsbDatabase {
     }
 };
 
-#endif //EXCHANGABLETRANSPORTS_YCSB_H
+#endif //L5RDMA_YCSB_H
