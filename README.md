@@ -1,5 +1,5 @@
-# Networking / Interprocess communication library for low latency communication
-
+# L5RDMA: A low level, low latency library for RDMA
+L5RDMA enables adaptive choosing of best available connection type between processes or machines.
 ## Building
 Needs a reasonably modern compiler (C++17), Ubuntu 17.10 or newer works.
 ```bash
