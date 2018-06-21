@@ -38,9 +38,9 @@ file(GLOB COMMON_HEADERS
         util/socket/*.h
         )
 
-add_library(common STATIC ${COMMON_SOURCES} ${COMMON_HEADERS})
-target_include_directories(common PRIVATE .)
-target_include_directories(common SYSTEM PUBLIC ext)
+add_library(l5rdma-common STATIC ${COMMON_SOURCES} ${COMMON_HEADERS})
+target_include_directories(l5rdma-common PRIVATE .)
+target_include_directories(l5rdma-common SYSTEM PUBLIC ext)
 
 SET(LINK_LIBRARIES
         ibverbs
@@ -65,7 +65,7 @@ SET(EXECUTABLES
 
 foreach (exe ${EXECUTABLES})
     add_executable(${exe} ${exe}.cpp)
-    target_link_libraries(${exe} ${LINK_LIBRARIES} common)
+    target_link_libraries(${exe} ${LINK_LIBRARIES} l5rdma-common)
     target_include_directories(${exe} PRIVATE .)
 endforeach ()
 
@@ -73,7 +73,7 @@ file(GLOB tests "test/*Test.cpp")
 foreach (test ${tests})
     get_filename_component(testName ${test} NAME_WE)
     add_executable(${testName} ${test})
-    target_link_libraries(${testName} ${LINK_LIBRARIES} common)
+    target_link_libraries(${testName} ${LINK_LIBRARIES} l5rdma-common)
     target_include_directories(${testName} PRIVATE .)
     add_test(${testName} ${testName})
 endforeach ()
