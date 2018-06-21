@@ -24,7 +24,6 @@ set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} ${CMAKE_CX
 set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} -g -fno-omit-frame-pointer")
 
 file(GLOB COMMON_SOURCES
-        apps/*.cpp
         datastructures/*.cpp
         rdma/*.cpp
         transports/*.cpp
@@ -32,7 +31,6 @@ file(GLOB COMMON_SOURCES
         util/socket/*.cpp
         )
 file(GLOB COMMON_HEADERS
-        apps/*.h
         datastructures/*.h
         rdma/*.h
         transports/*.h
@@ -40,13 +38,9 @@ file(GLOB COMMON_HEADERS
         util/socket/*.h
         )
 
-add_library(common OBJECT ${COMMON_SOURCES} ${COMMON_HEADERS})
-
-include_directories(.)
-include_directories(SYSTEM
-        ext
-        ext/benchmark/include
-        )
+add_library(common STATIC ${COMMON_SOURCES} ${COMMON_HEADERS})
+target_include_directories(common PRIVATE .)
+target_include_directories(common SYSTEM PUBLIC ext)
 
 SET(LINK_LIBRARIES
         ibverbs
@@ -70,14 +64,16 @@ SET(EXECUTABLES
         )
 
 foreach (exe ${EXECUTABLES})
-    add_executable(${exe} ${exe}.cpp $<TARGET_OBJECTS:common>)
-    target_link_libraries(${exe} ${LINK_LIBRARIES})
+    add_executable(${exe} ${exe}.cpp)
+    target_link_libraries(${exe} ${LINK_LIBRARIES} common)
+    target_include_directories(${exe} PRIVATE .)
 endforeach ()
 
 file(GLOB tests "test/*Test.cpp")
 foreach (test ${tests})
     get_filename_component(testName ${test} NAME_WE)
-    add_executable(${testName} ${test} $<TARGET_OBJECTS:common>)
-    target_link_libraries(${testName} ${LINK_LIBRARIES})
+    add_executable(${testName} ${test})
+    target_link_libraries(${testName} ${LINK_LIBRARIES} common)
+    target_include_directories(${testName} PRIVATE .)
     add_test(${testName} ${testName})
 endforeach ()
