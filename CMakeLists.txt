@@ -37,7 +37,7 @@ file(GLOB COMMON_HEADERS
         )
 
 add_library(l5rdma-common STATIC ${COMMON_SOURCES} ${COMMON_HEADERS})
-target_include_directories(l5rdma-common PRIVATE .)
+target_include_directories(l5rdma-common PUBLIC .)
 target_include_directories(l5rdma-common SYSTEM PUBLIC ext)
 
 SET(LINK_LIBRARIES
