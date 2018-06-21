@@ -9,6 +9,8 @@
 #include "util/ycsb.h"
 #include "util/Random32.h"
 
+using namespace l5::transport;
+
 static constexpr uint16_t port = 1234;
 static const char *ip = "127.0.0.1";
 

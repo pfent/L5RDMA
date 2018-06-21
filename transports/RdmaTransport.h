@@ -1,26 +1,24 @@
-#ifndef EXCHANGABLE_TRANSPORTS_MPITRANSPORT_H
-#define EXCHANGABLE_TRANSPORTS_MPITRANSPORT_H
+#pragma once
 
 #include <cstdint>
 #include <cstddef>
-#include <string_view>
 #include <memory>
-#include "datastructures/RDMAMessageBuffer.h"
-#include "datastructures/VirtualRDMARingBuffer.h"
+#include <util/socket/Socket.h>
+#include <datastructures/VirtualRDMARingBuffer.h>
 #include "Transport.h"
 
-using RdmaMemoryDatastructure = VirtualRDMARingBuffer; // TODO: make this a template and benchmark the difference
-
+namespace l5 {
+namespace transport {
 class RdmaTransportServer : public TransportServer<RdmaTransportServer> {
-    static constexpr size_t BUFFER_SIZE = 16 * 1024 * 1024;
-    const int sock;
-    std::unique_ptr<RdmaMemoryDatastructure> rdma = nullptr;
+    const size_t BUFFER_SIZE = 16 * 1024 * 1024;
+    const util::Socket sock;
+    std::unique_ptr<datastructure::VirtualRDMARingBuffer> rdma = nullptr;
 
     void listen(uint16_t port);
 
 public:
 
-    explicit RdmaTransportServer(std::string_view port);
+    explicit RdmaTransportServer(const std::string &port);
 
     ~RdmaTransportServer() override;
 
@@ -42,16 +40,16 @@ public:
 };
 
 class RdmaTransportClient : public TransportClient<RdmaTransportClient> {
-    static constexpr size_t BUFFER_SIZE = 16 * 1024 * 1024;
-    const int sock;
-    std::unique_ptr<RdmaMemoryDatastructure> rdma = nullptr;
+    const size_t BUFFER_SIZE = 16 * 1024 * 1024;
+    const util::Socket sock;
+    std::unique_ptr<datastructure::VirtualRDMARingBuffer> rdma = nullptr;
 
 public:
     RdmaTransportClient();
 
     ~RdmaTransportClient() override;
 
-    void connect_impl(std::string_view port);
+    void connect_impl(const std::string &port);
 
     void write_impl(const uint8_t *data, size_t size);
 
@@ -67,5 +65,5 @@ public:
         rdma->send(std::forward<SizeReturner>(doWork));
     }
 };
-
-#endif //EXCHANGABLE_TRANSPORTS_MPITRANSPORT_H
+} // namespace transport
+} // namespace l5

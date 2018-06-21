@@ -1,49 +1,47 @@
-#include <util/tcpWrapper.h>
 #include <netinet/in.h>
 #include <boost/assert.hpp>
 #include "MulticlientRDMATransport.h"
+#include "util/socket/tcp.h"
 
-MulticlientRDMATransportServer::MulticlientRDMATransportServer(std::string_view port, size_t maxClients)
+namespace l5 {
+namespace transport {
+using namespace util;
+
+MulticlientRDMATransportServer::MulticlientRDMATransportServer(const std::string &port, size_t maxClients)
         : MAX_CLIENTS(maxClients),
-          listenSock(tcp_socket()),
-          net(rdma::Network()),
-          sharedCq(net.getSharedCompletionQueue()),
+          listenSock(Socket::create()),
+          net(),
+          sharedCq(&net.getSharedCompletionQueue()),
           receives(MAX_CLIENTS, net, {ibv::AccessFlag::LOCAL_WRITE, ibv::AccessFlag::REMOTE_WRITE}),
           doorBells(MAX_CLIENTS, net, {ibv::AccessFlag::LOCAL_WRITE, ibv::AccessFlag::REMOTE_WRITE}),
           sendBuffer(MAX_MESSAGESIZE, net, {}) {
     assert(maxClients % 16 == 0);
     std::fill(doorBells.begin(), doorBells.end(), '\0');
-    listen(std::stoi(std::string(port.data(), port.size())));
+    listen(std::stoi(port));
 }
 
 void MulticlientRDMATransportServer::listen(uint16_t port) {
-    sockaddr_in addr = {};
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons(port);
-    addr.sin_addr.s_addr = INADDR_ANY;
-
-    tcp_bind(listenSock, addr);
-    tcp_listen(listenSock);
+    tcp::bind(listenSock, port);
+    tcp::listen(listenSock);
 }
 
 void MulticlientRDMATransportServer::accept() {
     const auto clientId = connections.size();
 
-    auto ignored = sockaddr_in{};
-    auto acced = tcp_accept(listenSock, ignored);
+    auto acced = tcp::accept(listenSock);
 
     auto qp = rdma::RcQueuePair(net);
 
     auto address = rdma::Address{qp.getQPN(), net.getLID()};
-    tcp_write(acced, address);
-    tcp_read(acced, address);
+    tcp::write(acced, address);
+    tcp::read(acced, address);
 
     auto receiveAddr = receives.getAddr().offset(sizeof(uint8_t[MAX_MESSAGESIZE]) * clientId);
-    tcp_write(acced, receiveAddr);
-    tcp_read(acced, receiveAddr);
+    tcp::write(acced, receiveAddr);
+    tcp::read(acced, receiveAddr);
 
     auto doorBellAddr = doorBells.getAddr().offset(sizeof(char) * clientId);
-    tcp_write(acced, doorBellAddr);
+    tcp::write(acced, doorBellAddr);
 
     qp.connect(address);
 
@@ -53,17 +51,10 @@ void MulticlientRDMATransportServer::accept() {
     answer.setInline();
     answer.setSignaled();
 
-    connections.push_back(Connection{acced, std::move(qp), answer});
+    connections.push_back(Connection{std::move(acced), std::move(qp), answer});
 }
 
-MulticlientRDMATransportServer::~MulticlientRDMATransportServer() {
-    for (const auto &conn : connections) {
-        if (conn.socket != -1) {
-            tcp_close(conn.socket);
-        }
-    }
-    tcp_close(listenSock);
-}
+MulticlientRDMATransportServer::~MulticlientRDMATransportServer() = default;
 
 size_t MulticlientRDMATransportServer::receive(void *whereTo, size_t maxSize) {
     size_t res;
@@ -93,9 +84,13 @@ void MulticlientRDMATransportServer::send(size_t receiverId, const uint8_t *data
     });
 }
 
+void MulticlientRDMATransportServer::finishListen() {
+    listenSock.close();
+}
+
 MultiClientRDMATransportClient::MultiClientRDMATransportClient()
-        : sock(tcp_socket()),
-          net(rdma::Network()),
+        : sock(Socket::create()),
+          net(),
           cq(net.getSharedCompletionQueue()),
           qp(rdma::RcQueuePair(net)),
           sendBuffer(MAX_MESSAGESIZE, net, {}),
@@ -114,15 +109,15 @@ MultiClientRDMATransportClient::MultiClientRDMATransportClient()
 
 void MultiClientRDMATransportClient::rdmaConnect() {
     auto address = rdma::Address{qp.getQPN(), net.getLID()};
-    tcp_write(sock, address);
-    tcp_read(sock, address);
+    tcp::write(sock, address);
+    tcp::read(sock, address);
 
     auto receiveAddr = receiveBuffer.getAddr();
-    tcp_write(sock, receiveAddr);
-    tcp_read(sock, receiveAddr);
+    tcp::write(sock, receiveAddr);
+    tcp::read(sock, receiveAddr);
 
     auto doorBellAddr = ibv::memoryregion::RemoteAddress();
-    tcp_read(sock, doorBellAddr);
+    tcp::read(sock, doorBellAddr);
 
     qp.connect(address);
 
@@ -130,14 +125,8 @@ void MultiClientRDMATransportClient::rdmaConnect() {
     doorBellWr.setRemoteAddress(doorBellAddr);
 }
 
-void MultiClientRDMATransportClient::connect(std::string_view whereTo) {
-    tcp_connect(sock, whereTo);
-
-    rdmaConnect();
-}
-
-void MultiClientRDMATransportClient::connect(std::string_view ip, uint16_t port) {
-    tcp_connect(sock, std::string(ip), port);
+void MultiClientRDMATransportClient::connect(const std::string &ip, uint16_t port) {
+    tcp::connect(sock, ip, port);
 
     rdmaConnect();
 }
@@ -165,3 +154,5 @@ size_t MultiClientRDMATransportClient::receive(void *whereTo, size_t maxSize) {
     });
     return size;
 }
+} // namespace transport
+} // namespace l5

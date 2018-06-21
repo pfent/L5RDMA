@@ -1,14 +1,18 @@
-#ifndef L5RDMA_MULTICLIENTTRANSPORT_H
-#define L5RDMA_MULTICLIENTTRANSPORT_H
+#pragma once
 
-#include <rdma/RcQueuePair.h>
-#include "rdma/Network.hpp"
-#include "rdma/MemoryRegion.h"
 #include <emmintrin.h>
+#include <util/socket/Socket.h>
+#include <include/libibverbscpp/libibverbscpp.h>
+#include <rdma/CompletionQueuePair.hpp>
+#include <rdma/Network.hpp>
+#include <rdma/MemoryRegion.h>
+#include <rdma/RcQueuePair.h>
 
+namespace l5 {
+namespace transport {
 class MulticlientRDMATransportServer {
     struct Connection {
-        int socket;
+        util::Socket socket;
         rdma::RcQueuePair qp;
         ibv::workrequest::Simple<ibv::workrequest::Write> answerWr;
     };
@@ -17,9 +21,9 @@ class MulticlientRDMATransportServer {
     static constexpr char validity = '\4'; // ASCII EOT char
     const size_t MAX_CLIENTS;
 
-    const int listenSock;
+    util::Socket listenSock;
     rdma::Network net;
-    rdma::CompletionQueuePair &sharedCq;
+    rdma::CompletionQueuePair *sharedCq;
 
     rdma::RegisteredMemoryRegion<uint8_t[MAX_MESSAGESIZE]> receives;
 
@@ -63,11 +67,17 @@ class MulticlientRDMATransportServer {
     }
 
 public:
-    explicit MulticlientRDMATransportServer(std::string_view port, size_t maxClients = 256);
+    explicit MulticlientRDMATransportServer(const std::string &port, size_t maxClients = 256);
 
     ~MulticlientRDMATransportServer();
 
+    MulticlientRDMATransportServer(MulticlientRDMATransportServer &&) = default;
+
+    MulticlientRDMATransportServer &operator=(MulticlientRDMATransportServer &&) = default;
+
     void accept();
+
+    void finishListen();
 
     /// polls all possible clients for incoming messages and copys the first one it finds to "whereTo"
     size_t receive(void *whereTo, size_t maxSize);
@@ -103,7 +113,7 @@ public:
         if (sendCounter % 1024 == 0) { // selective signaling
             con.answerWr.setFlags({ibv::workrequest::Flags::INLINE, ibv::workrequest::Flags::SIGNALED});
             con.qp.postWorkRequest(con.answerWr);
-            sharedCq.pollSendCompletionQueueBlocking(ibv::workcompletion::Opcode::RDMA_WRITE);
+            sharedCq->pollSendCompletionQueueBlocking(ibv::workcompletion::Opcode::RDMA_WRITE);
         } else {
             con.answerWr.setFlags({ibv::workrequest::Flags::INLINE});
             con.qp.postWorkRequest(con.answerWr);
@@ -126,13 +136,13 @@ public:
 
     template<typename TriviallyCopyable>
     void write(size_t receiverId, const TriviallyCopyable &data) {
-        static_assert(std::is_trivially_copyable_v<TriviallyCopyable>);
+        static_assert(std::is_trivially_copyable<TriviallyCopyable>::value, "");
         send(receiverId, reinterpret_cast<const uint8_t *>(&data), sizeof(data));
     }
 
     template<typename TriviallyCopyable>
     size_t read(TriviallyCopyable &data) {
-        static_assert(std::is_trivially_copyable_v<TriviallyCopyable>);
+        static_assert(std::is_trivially_copyable<TriviallyCopyable>::value, "");
         return receive(reinterpret_cast<uint8_t *>(&data), sizeof(data));
     }
 };
@@ -141,7 +151,7 @@ class MultiClientRDMATransportClient {
     static constexpr size_t MAX_MESSAGESIZE = 512;
     static constexpr char validity = '\4'; // ASCII EOT char
 
-    const int sock;
+    const util::Socket sock;
     rdma::Network net;
     rdma::CompletionQueuePair &cq;
     rdma::RcQueuePair qp;
@@ -158,9 +168,7 @@ class MultiClientRDMATransportClient {
 public:
     MultiClientRDMATransportClient();
 
-    void connect(std::string_view whereTo);
-
-    void connect(std::string_view ip, uint16_t port);
+    void connect(const std::string &ip, uint16_t port);
 
     void send(const uint8_t *data, size_t size);
 
@@ -208,15 +216,15 @@ public:
 
     template<typename TriviallyCopyable>
     void write(const TriviallyCopyable &data) {
-        static_assert(std::is_trivially_copyable_v<TriviallyCopyable>);
+        static_assert(std::is_trivially_copyable<TriviallyCopyable>::value, "");
         send(reinterpret_cast<const uint8_t *>(&data), sizeof(data));
     }
 
     template<typename TriviallyCopyable>
     void read(TriviallyCopyable &data) {
-        static_assert(std::is_trivially_copyable_v<TriviallyCopyable>);
+        static_assert(std::is_trivially_copyable<TriviallyCopyable>::value, "");
         receive(reinterpret_cast<uint8_t *>(&data), sizeof(data));
     }
 };
-
-#endif //L5RDMA_MULTICLIENTTRANSPORT_H
+} // namespace transport
+} // namespace l5

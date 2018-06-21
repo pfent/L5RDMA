@@ -5,9 +5,12 @@
 
 using Perm = ibv::AccessFlag;
 
+namespace l5 {
+namespace datastructure {
 static auto uuidGenerator = boost::uuids::random_generator{};
+using namespace util;
 
-VirtualRDMARingBuffer::VirtualRDMARingBuffer(size_t size, int sock) :
+VirtualRDMARingBuffer::VirtualRDMARingBuffer(size_t size, const Socket &sock) :
         size(size), bitmask(size - 1), net(sock),
         sendBuf(mmapSharedRingBuffer(to_string(uuidGenerator()), size, true)),
         // Since we mapped twice the virtual memory, we can create memory regions of twice the size of the actual buffer
@@ -65,3 +68,5 @@ void VirtualRDMARingBuffer::waitUntilSendFree(size_t sizeToWrite) {
         safeToWrite = size - (sendPos - remoteReadPos.load());
     }
 }
+} // namespace datastructure
+} // namespace l5

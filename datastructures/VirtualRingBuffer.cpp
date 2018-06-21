@@ -3,7 +3,11 @@
 #include "util/virtualMemory.h"
 #include "util/busywait.h"
 
-VirtualRingBuffer::VirtualRingBuffer(size_t size, int sock) : size(size), bitmask(size - 1) {
+namespace l5 {
+namespace datastructure {
+using namespace util;
+
+VirtualRingBuffer::VirtualRingBuffer(size_t size, const Socket &sock) : size(size), bitmask(size - 1) {
     const bool powerOfTwo = (size != 0) && !(size & (size - 1));
     if (not powerOfTwo) {
         throw std::runtime_error{"size should be a power of 2"};
@@ -12,9 +16,9 @@ VirtualRingBuffer::VirtualRingBuffer(size_t size, int sock) : size(size), bitmas
     localRw = malloc_shared<RingBufferInfo>(infoName + pid, sizeof(RingBufferInfo), true);
     local = mmapSharedRingBuffer(bufferName + pid, size, true);
 
-    domain_write(sock, pid.c_str(), pid.size());
+    domain::write(sock, pid.c_str(), pid.size());
     uint8_t buffer[255];
-    size_t readCount = domain_read(sock, buffer, 255);
+    size_t readCount = domain::read(sock, buffer, 255);
     const auto remotePid = std::string(buffer, buffer + readCount);
 
     remoteRw = malloc_shared<RingBufferInfo>(infoName + remotePid, sizeof(RingBufferInfo), false);
@@ -59,3 +63,5 @@ void VirtualRingBuffer::waitUntilReceiveAvailable(size_t maxSize, size_t localRe
         remoteWritten = remoteRw->written; // probably buffer this in class, so we don't have as much remote reads
     }, [&]() { return (remoteWritten - localRead) < maxSize; }); // block until maxSize is available
 }
+} // namespace datastructure
+} // namespace l5

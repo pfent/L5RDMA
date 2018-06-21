@@ -6,6 +6,7 @@
 #include <zconf.h>
 
 using namespace std;
+using namespace l5::transport;
 
 static size_t MESSAGES = 4 * 1024; // ~ 1s
 static size_t TIMEOUT_IN_SECONDS = 5;

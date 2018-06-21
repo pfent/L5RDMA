@@ -1,5 +1,7 @@
 #include "virtualMemory.h"
 
+namespace l5 {
+namespace util {
 WraparoundBuffer mmapSharedRingBuffer(const std::string &name, size_t size, bool init) {
     // create a new mapping in /dev/shm
     auto pos = name.rfind('/');
@@ -44,3 +46,5 @@ WraparoundBuffer mmapRingBuffer(int fd, size_t size, bool init) {
     };
     return {ptr, deleter};
 }
+} // namespace util
+} // namespace l5

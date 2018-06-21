@@ -5,11 +5,11 @@
 #include "transports/SharedMemoryTransport.h"
 #include "apps/PingPong.h"
 #include "util/bench.h"
-#include "util/pinthread.h"
 #include "transports/RdmaTransport.h"
 #include "transports/LibRdmacmTransport.h"
 
 using namespace std;
+using namespace l5::transport;
 
 static const size_t MESSAGES = 256 * 1024;  //~ 1s
 static const size_t SHAREDMEM_MESSAGES = 1024 * 1024;

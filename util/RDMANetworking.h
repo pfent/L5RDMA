@@ -4,15 +4,17 @@
 #include "rdma/RcQueuePair.h"
 #include "rdma/Network.hpp"
 #include "rdma/CompletionQueuePair.hpp"
-#include "tcpWrapper.h"
+#include "util/socket/Socket.h"
 
+namespace l5 {
+namespace util {
 struct RDMANetworking {
     rdma::Network network;
     rdma::CompletionQueuePair completionQueue;
     rdma::RcQueuePair queuePair;
 
     /// Exchange the basic RDMA connection info for the network and queues
-    explicit RDMANetworking(int sock);
+    explicit RDMANetworking(const Socket &sock);
 };
 
 struct RmrInfo {
@@ -22,9 +24,13 @@ struct RmrInfo {
     uintptr_t readPosAddress;
 };
 
-void receiveAndSetupRmr(int sock, ibv::memoryregion::RemoteAddress &buffer, ibv::memoryregion::RemoteAddress &readPos);
+void
+receiveAndSetupRmr(const Socket &sock, ibv::memoryregion::RemoteAddress &buffer,
+                   ibv::memoryregion::RemoteAddress &readPos);
 
 void
-sendRmrInfo(int sock, const ibv::memoryregion::MemoryRegion &buffer, const ibv::memoryregion::MemoryRegion &readPos);
-
+sendRmrInfo(const Socket &sock, const ibv::memoryregion::MemoryRegion &buffer,
+            const ibv::memoryregion::MemoryRegion &readPos);
+} // namespace util
+} // namespace l5
 #endif //L5RDMA_RDMANETWORKING_H

@@ -9,10 +9,10 @@
 template<class T>
 class Ping {
     std::vector<uint8_t> data;
-    std::unique_ptr<TransportClient<T>> transport;
+    std::unique_ptr<l5::transport::TransportClient<T>> transport;
     std::vector<uint8_t> buffer;
 public:
-    Ping(std::unique_ptr<TransportClient<T>> t, std::string_view whereTo, size_t dataSize = 64)
+    Ping(std::unique_ptr<l5::transport::TransportClient<T>> t, std::string whereTo, size_t dataSize = 64)
             : transport(std::move(t)),
               buffer(dataSize) {
         for (int i = 0;; ++i) {
@@ -43,10 +43,10 @@ public:
 
 template<class T>
 class Pong {
-    std::unique_ptr<TransportServer<T>> transport;
+    std::unique_ptr<l5::transport::TransportServer<T>> transport;
     std::vector<uint8_t> buffer;
 public:
-    explicit Pong(std::unique_ptr<TransportServer<T>> transport, size_t dataSize = 64)
+    explicit Pong(std::unique_ptr<l5::transport::TransportServer<T>> transport, size_t dataSize = 64)
             : transport(std::move(transport)),
               buffer(dataSize) {}
 

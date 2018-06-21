@@ -4,9 +4,12 @@
 #include <atomic>
 #include <vector>
 #include <memory>
+#include <util/socket/Socket.h>
 #include "util/RDMANetworking.h"
 #include "rdma/Network.hpp"
 
+namespace l5 {
+namespace datastructure {
 class RDMAMessageBuffer {
 public:
 
@@ -23,14 +26,14 @@ public:
 
     /// Construct a message buffer of the given size, exchanging RDMA networking information over the given socket
     /// size _must_ be a power of 2.
-    RDMAMessageBuffer(size_t size, int sock);
+    RDMAMessageBuffer(size_t size, util::Socket &sock);
 
     /// whether there is data to be read non-blockingly
     bool hasData() const;
 
 private:
     const size_t size;
-    RDMANetworking net;
+    util::RDMANetworking net;
     std::unique_ptr<volatile uint8_t[]> receiveBuffer;
     std::atomic<size_t> readPos{0};
     std::unique_ptr<uint8_t[]> sendBuffer;
@@ -50,5 +53,7 @@ private:
 
     void zeroReceiveBuffer(size_t beginReceiveCount, size_t sizeToZero);
 };
+} // namespace datastructure
+} // namespace l5
 
 #endif //RDMA_HASH_MAP_RDMAMESSAGEBUFFER_H

@@ -4,6 +4,7 @@
 #include <iostream>
 
 using namespace std;
+using namespace l5::transport;
 
 const size_t MESSAGES = 256 * 1024; // ~ 1s
 const size_t TIMEOUT_IN_SECONDS = 5;
@@ -18,7 +19,7 @@ int main() {
         return MESSAGES;
     });
 
-    auto ping = Ping(make_transportClient<TcpTransportClient>(), "127.0.0.1:1234");
+    auto ping = Ping(make_transportClient<l5::transport::TcpTransportClient>(), "127.0.0.1:1234");
     const auto client = std::async(std::launch::async, [&]() {
         for (size_t i = 0; i < MESSAGES; ++i) {
             ping.ping();

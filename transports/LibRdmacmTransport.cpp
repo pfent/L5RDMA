@@ -2,6 +2,8 @@
 
 #include <netdb.h>
 
+namespace l5 {
+namespace transport {
 LibRdmacmTransportClient::LibRdmacmTransportClient() = default;
 
 LibRdmacmTransportClient::~LibRdmacmTransportClient() {
@@ -94,3 +96,5 @@ void LibRdmacmTransportServer::write_impl(const uint8_t *data, size_t size) {
 void LibRdmacmTransportServer::read_impl(uint8_t *buffer, size_t size) {
     rread(commSocket, buffer, size);
 }
+} // namespace l5
+} // namespace transport

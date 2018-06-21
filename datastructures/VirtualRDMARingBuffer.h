@@ -9,21 +9,24 @@
 #include "util/RDMANetworking.h"
 #include "util/virtualMemory.h"
 
+namespace l5 {
+namespace datastructure {
+
 class VirtualRDMARingBuffer {
     static constexpr size_t validity = 0xDEADDEADBEEFBEEF;
     const size_t size;
     const size_t bitmask;
-    RDMANetworking net;
+    util::RDMANetworking net;
 
     size_t messageCounter = 0;
     size_t sendPos = 0;
     std::atomic<size_t> localReadPos = 0;
-    WraparoundBuffer sendBuf;
+    util::WraparoundBuffer sendBuf;
     rdma::MemoryRegion localSendMr;
     rdma::MemoryRegion localReadPosMr;
 
     std::atomic<size_t> remoteReadPos = 0;
-    WraparoundBuffer receiveBuf;
+    util::WraparoundBuffer receiveBuf;
     rdma::MemoryRegion localReceiveMr;
     rdma::MemoryRegion remoteReadPosMr;
 
@@ -31,7 +34,7 @@ class VirtualRDMARingBuffer {
     ibv::memoryregion::RemoteAddress remoteReadPosRmr{};
 public:
     /// Establish a shared memory region of size with the remote side of sock
-    VirtualRDMARingBuffer(size_t size, int sock);
+    VirtualRDMARingBuffer(size_t size, const util::Socket &sock);
 
     void send(const uint8_t *data, size_t length);
 
@@ -93,7 +96,7 @@ public:
         do {
             receiveSize = *reinterpret_cast<volatile size_t *>(&receiveBuf.get()[startOfRead]);
             checkMe = *reinterpret_cast<volatile size_t *>(&receiveBuf.get()[startOfRead + sizeof(size_t) +
-                                                                             receiveSize]);
+                    receiveSize]);
         } while (checkMe != validity);
 
         const auto begin = &receiveBuf.get()[startOfRead + sizeof(receiveSize)];
@@ -111,5 +114,7 @@ public:
 private:
     void waitUntilSendFree(size_t sizeToWrite);
 };
+} // namespace datastructure
+} // namespace l5
 
 #endif //L5RDMA_VIRTUALRDMARINGBUFFER_H

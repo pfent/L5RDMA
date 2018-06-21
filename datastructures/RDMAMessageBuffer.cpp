@@ -1,13 +1,16 @@
 #include "RDMAMessageBuffer.h"
 #include <iostream>
 #include <infiniband/verbs.h>
-#include "util/tcpWrapper.h"
+#include <util/socket/tcp.h>
 
 using namespace std;
 using namespace rdma;
 
 static const size_t validity = 0xDEADDEADBEEFBEEF;
 
+namespace l5 {
+namespace datastructure {
+using namespace util;
 vector<uint8_t> RDMAMessageBuffer::receive() {
     size_t receiveSize = 0;
     auto receiveValidity = static_cast<std::remove_const_t<decltype(validity)>>(0);
@@ -47,7 +50,7 @@ size_t RDMAMessageBuffer::receive(void *whereTo, size_t maxSize) {
     return receiveSize;
 }
 
-RDMAMessageBuffer::RDMAMessageBuffer(size_t size, int sock) :
+RDMAMessageBuffer::RDMAMessageBuffer(size_t size, Socket &sock) :
         size(size),
         net(sock),
         receiveBuffer(make_unique<volatile uint8_t[]>(size)),
@@ -64,7 +67,7 @@ RDMAMessageBuffer::RDMAMessageBuffer(size_t size, int sock) :
         throw runtime_error{"size should be a power of 2"};
     }
 
-    tcp_setBlocking(sock); // just set the socket to block for our setup.
+    tcp::setBlocking(sock); // just set the socket to block for our setup.
 
     sendRmrInfo(sock, *localReceive, *localReadPos);
     receiveAndSetupRmr(sock, remoteReceive, remoteReadPos);
@@ -175,3 +178,5 @@ bool RDMAMessageBuffer::hasData() const {
                           sizeof(receiveValidity));
     return (receiveValidity == validity);
 }
+} // namespace datastructure
+} // namespace l5

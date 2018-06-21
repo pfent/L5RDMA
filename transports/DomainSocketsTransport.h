@@ -1,19 +1,20 @@
-#ifndef EXCHANGABLE_TRANSPORTS_DOMAINSOCKETSTRANSPORT_H
-#define EXCHANGABLE_TRANSPORTS_DOMAINSOCKETSTRANSPORT_H
+#pragma once
 
 #include <cstdint>
 #include <cstddef>
-#include <string_view>
 #include <string>
+#include <util/socket/Socket.h>
 #include "Transport.h"
 
+namespace l5 {
+namespace transport {
 class DomainSocketsTransportServer : public TransportServer<DomainSocketsTransportServer> {
-    const int initialSocket;
+    const util::Socket initialSocket;
     const std::string file;
-    int communicationSocket = -1;
+    util::Socket communicationSocket;
 
 public:
-    explicit DomainSocketsTransportServer(std::string_view file);
+    explicit DomainSocketsTransportServer(std::string file);
 
     ~DomainSocketsTransportServer() override;
 
@@ -25,18 +26,18 @@ public:
 };
 
 class DomainSocketsTransportClient : public TransportClient<DomainSocketsTransportClient> {
-    const int socket;
+    const util::Socket socket;
 
 public:
     DomainSocketsTransportClient();
 
     ~DomainSocketsTransportClient() override;
 
-    void connect_impl(std::string_view file);
+    void connect_impl(std::string file);
 
     void write_impl(const uint8_t *data, size_t size);
 
     void read_impl(uint8_t *buffer, size_t size);
 };
-
-#endif //EXCHANGABLE_TRANSPORTS_DOMAINSOCKETSTRANSPORT_H
+} // namespace transport
+} // namespace l5

@@ -1,26 +1,25 @@
-#ifndef L5RDMA_SHAREDMEMORYTRANSPORT_H
-#define L5RDMA_SHAREDMEMORYTRANSPORT_H
+#pragma once
 
-#include "../datastructures/VirtualRingBuffer.h"
+#include <datastructures/VirtualRingBuffer.h>
 #include "Transport.h"
 
-using SharedMemoryDatastructure = VirtualRingBuffer;
-
+namespace l5 {
+namespace transport {
 class SharedMemoryTransportServer : public TransportServer<SharedMemoryTransportServer> {
-    static constexpr size_t BUFFER_SIZE = 16 * 1024 * 1024;
-    const int initialSocket;
+    const size_t BUFFER_SIZE = 16 * 1024 * 1024;
+    const util::Socket initialSocket;
     const std::string file;
     const std::string remoteBufferName;
     const std::string remoteReadPosName;
-    int communicationSocket = -1;
-    std::unique_ptr<SharedMemoryDatastructure> messageBuffer;
+    util::Socket communicationSocket;
+    std::unique_ptr<datastructure::VirtualRingBuffer> messageBuffer;
 
 public:
     /**
      * Exchange information about the shared memory via the given domain socket
      * @param domainSocket filename of the domain socket
      */
-    explicit SharedMemoryTransportServer(std::string_view domainSocket);
+    explicit SharedMemoryTransportServer(const std::string &domainSocket);
 
     ~SharedMemoryTransportServer() override;
 
@@ -32,21 +31,20 @@ public:
 };
 
 class SharedMemoryTransportClient : public TransportClient<SharedMemoryTransportClient> {
-    static constexpr size_t BUFFER_SIZE = 16 * 1024 * 1024;
-    const int socket;
-    std::unique_ptr<SharedMemoryDatastructure> messageBuffer;
+    const size_t BUFFER_SIZE = 16 * 1024 * 1024;
+    const util::Socket socket;
+    std::unique_ptr<datastructure::VirtualRingBuffer> messageBuffer;
 
 public:
     SharedMemoryTransportClient();
 
     ~SharedMemoryTransportClient() override;
 
-    void connect_impl(std::string_view file);
+    void connect_impl(const std::string &file);
 
     void write_impl(const uint8_t *data, size_t size);
 
     void read_impl(uint8_t *buffer, size_t size);
 };
-
-
-#endif //L5RDMA_SHAREDMEMORYTRANSPORT_H
+} // namespace transport
+} // namespace l5

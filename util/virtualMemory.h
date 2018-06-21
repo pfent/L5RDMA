@@ -8,16 +8,19 @@
 #include <sys/mman.h>
 #include <cstring>
 #include <sys/file.h>
-#include "domainSocketsWrapper.h"
+#include "util/socket/Socket.h"
+#include "socket/domain.h"
 
+namespace l5 {
+namespace util {
 struct SharedMemoryInfo {
     std::string remoteBufferName;
 
     /// Exchange shared memory information with the remote side of the socket
-    SharedMemoryInfo(int sock, const std::string &bufferName) {
-        domain_write(sock, bufferName.c_str(), bufferName.size());
+    SharedMemoryInfo(Socket &sock, const std::string &bufferName) {
+        domain::write(sock, bufferName.c_str(), bufferName.size());
         uint8_t buffer[255];
-        size_t readCount = domain_read(sock, buffer, 255);
+        size_t readCount = domain::read(sock, buffer, 255);
         this->remoteBufferName = std::string(buffer, buffer + readCount);
     }
 };
@@ -48,11 +51,13 @@ std::shared_ptr<T> malloc_shared(const std::string &name, size_t size, bool init
         memset(ptr, 0, size);
     }
 
-    return std::shared_ptr < T > (reinterpret_cast<T *>(ptr), deleter);
+    return std::shared_ptr<T>(reinterpret_cast<T *>(ptr), deleter);
 }
 
 WraparoundBuffer mmapRingBuffer(int fd, size_t size, bool init);
 
 WraparoundBuffer mmapSharedRingBuffer(const std::string &name, size_t size, bool init = false);
+} // namespace util
+} // namespace l5
 
 #endif //L5RDMA_VIRTUALMEMORY_H

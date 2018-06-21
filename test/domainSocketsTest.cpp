@@ -4,6 +4,7 @@
 #include <iostream>
 
 using namespace std;
+using namespace l5::transport;
 
 const size_t MESSAGES = 256 * 1024; // ~ 1s
 const size_t TIMEOUT_IN_SECONDS = 5;

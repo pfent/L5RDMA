@@ -1,16 +1,20 @@
 #include <string>
-#include <util/tcpWrapper.h>
 #include <arpa/inet.h>
 #include <cassert>
 #include <stdexcept>
 #include <cstring>
 #include <algorithm>
+#include <util/socket/Socket.h>
+#include <util/socket/tcp.h>
 #include "MulticlientTCPTransport.h"
 
+namespace l5 {
+namespace transport {
 using namespace std::string_literals;
+using namespace util;
 
 MulticlientTCPTransportServer::MulticlientTCPTransportServer(std::string_view port) :
-        serverSocket(tcp_socket()) {
+        serverSocket(Socket::create()) {
     auto p = std::stoi(std::string(port.data(), port.size()));
     listen(p);
 }
@@ -21,29 +25,24 @@ void MulticlientTCPTransportServer::listen(uint16_t port) {
     addr.sin_port = htons(port);
     addr.sin_addr.s_addr = INADDR_ANY;
 
-    tcp_bind(serverSocket, addr);
-    tcp_listen(serverSocket);
+    tcp::bind(serverSocket, addr);
+    tcp::listen(serverSocket);
 }
 
-MulticlientTCPTransportServer::~MulticlientTCPTransportServer() {
-    tcp_close(serverSocket);
-    for (auto connection : connections) {
-        tcp_close(connection);
-    }
-}
+MulticlientTCPTransportServer::~MulticlientTCPTransportServer() = default;
 
 void MulticlientTCPTransportServer::accept() {
     sockaddr_in ignored{};
-    connections.push_back(tcp_accept(serverSocket, ignored));
+    connections.push_back(tcp::accept(serverSocket, ignored));
     pollfd p{};
-    p.fd = connections.back();
+    p.fd = connections.back().get();
     p.events = POLLIN;
     pollFds.push_back(p);
 }
 
 void MulticlientTCPTransportServer::send(size_t receiverId, const uint8_t *data, size_t size) {
     assert(receiverId < connections.size());
-    tcp_write(connections[receiverId], data, size);
+    tcp::write(connections[receiverId], data, size);
 }
 
 size_t MulticlientTCPTransportServer::receive(void *whereTo, size_t maxSize) {
@@ -64,18 +63,15 @@ size_t MulticlientTCPTransportServer::receive(void *whereTo, size_t maxSize) {
             }
         }
     }();
-    tcp_read(readable->fd, whereTo, maxSize);
-
+    ::recv(readable->fd, whereTo, maxSize, 0);
     return static_cast<size_t>(std::distance(pollFds.begin(), readable));
 }
 
-MulticlientTCPTransportClient::MulticlientTCPTransportClient() : socket(tcp_socket()) {
+MulticlientTCPTransportClient::MulticlientTCPTransportClient() : socket(Socket::create()) {
 
 }
 
-MulticlientTCPTransportClient::~MulticlientTCPTransportClient() {
-    tcp_close(socket);
-}
+MulticlientTCPTransportClient::~MulticlientTCPTransportClient() = default;
 
 void MulticlientTCPTransportClient::connect(const std::string &ip, uint16_t port) {
     sockaddr_in addr = {};
@@ -83,7 +79,7 @@ void MulticlientTCPTransportClient::connect(const std::string &ip, uint16_t port
     addr.sin_port = htons(port);
     inet_pton(AF_INET, ip.c_str(), &addr.sin_addr);
 
-    tcp_connect(socket, addr);
+    tcp::connect(socket, addr);
 }
 
 void MulticlientTCPTransportClient::connect(std::string_view whereTo) {
@@ -97,9 +93,11 @@ void MulticlientTCPTransportClient::connect(std::string_view whereTo) {
 }
 
 void MulticlientTCPTransportClient::send(const uint8_t *data, size_t size) {
-    tcp_write(socket, data, size);
+    tcp::write(socket, data, size);
 }
 
 void MulticlientTCPTransportClient::receive(void *whereTo, size_t maxSize) {
-    return tcp_read(socket, whereTo, maxSize);
+    return tcp::read(socket, whereTo, maxSize);
 }
+} // namespace transport
+} // namespace l5

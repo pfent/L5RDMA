@@ -8,6 +8,8 @@
 #include <unistd.h>
 #include "util/virtualMemory.h"
 
+namespace l5 {
+namespace datastructure {
 struct RingBufferInfo {
     std::atomic<size_t> read;
     std::atomic<size_t> written;
@@ -22,13 +24,13 @@ struct VirtualRingBuffer {
     const size_t bitmask;
 
     std::shared_ptr<RingBufferInfo> localRw;
-    WraparoundBuffer local;
+    util::WraparoundBuffer local;
 
     std::shared_ptr<RingBufferInfo> remoteRw;
-    WraparoundBuffer remote;
+    util::WraparoundBuffer remote;
 
     /// Establish a shared memory region of size with the remote side of sock
-    VirtualRingBuffer(size_t size, int sock);
+    VirtualRingBuffer(size_t size, const util::Socket &sock);
 
     void send(const uint8_t *data, size_t length);
 
@@ -39,5 +41,7 @@ private:
 
     void waitUntilReceiveAvailable(size_t maxSize, size_t localRead) const;
 };
+} // namespace datastructure
+} // namespace l5
 
 #endif //EXCHANGABLE_TRANSPORTS_VIRTUALRINGBUFFER_H

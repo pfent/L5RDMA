@@ -6,11 +6,11 @@
 #include "transports/SharedMemoryTransport.h"
 #include "apps/PingPong.h"
 #include "util/bench.h"
-#include "util/pinthread.h"
 #include "transports/RdmaTransport.h"
 #include "transports/LibRdmacmTransport.h"
 
 using namespace std;
+using namespace l5::transport;
 
 static const size_t MESSAGES = 1024 * 1024;
 static const char *ip = "127.0.0.1";
@@ -72,7 +72,7 @@ int main(int argc, char **argv) {
             {
                 cout << size << ", " << "many, ";
                 auto client = MultiClientRDMATransportClient();
-                client.connect(ip + string(":") + to_string(port));
+                client.connect(ip, port);
                 std::vector<uint8_t> buf(size);
                 bench(MESSAGES, [&]() {
                     for (size_t i = 0; i < MESSAGES; ++i) {
@@ -89,7 +89,7 @@ int main(int argc, char **argv) {
             {
                 cout << size << ", " << "many_zerocopy, ";
                 auto client = MultiClientRDMATransportClient();
-                client.connect(ip + string(":") + to_string(port));
+                client.connect(ip, port);
                 bench(MESSAGES, [&]() {
                     for (size_t i = 0; i < MESSAGES; ++i) {
                         client.send([&](auto begin) {

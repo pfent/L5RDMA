@@ -1,17 +1,18 @@
-#ifndef EXCHANGABLE_TRANSPORTS_TCPTRANSPORT_H
-#define EXCHANGABLE_TRANSPORTS_TCPTRANSPORT_H
+#pragma once
 
 #include <cstdint>
 #include <cstddef>
-#include <string_view>
+#include <util/socket/Socket.h>
 #include "Transport.h"
 
+namespace l5 {
+namespace transport {
 class TcpTransportServer : public TransportServer<TcpTransportServer> {
-    const int initialSocket;
-    int communicationSocket = -1;
+    const util::Socket initialSocket;
+    util::Socket communicationSocket;
 
 public:
-    explicit TcpTransportServer(std::string_view port);
+    explicit TcpTransportServer(const std::string &port);
 
     ~TcpTransportServer() override;
 
@@ -26,18 +27,18 @@ private:
 };
 
 class TcpTransportClient : public TransportClient<TcpTransportClient> {
-    const int socket;
+    const util::Socket socket;
 
 public:
     TcpTransportClient();
 
     ~ TcpTransportClient() override;
 
-    void connect_impl(std::string_view file);
+    void connect_impl(const std::string &file);
 
     void write_impl(const uint8_t *data, size_t size);
 
     void read_impl(uint8_t *buffer, size_t size);
 };
-
-#endif //EXCHANGABLE_TRANSPORTS_TCPTRANSPORT_H
+} // namespace transport
+} // namespace l5

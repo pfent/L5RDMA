@@ -5,26 +5,27 @@
 #include "libibverbscpp/libibverbscpp.h"
 #include "rdma/Network.hpp"
 #include "rdma/QueuePair.hpp"
-#include "util/tcpWrapper.h"
 #include "util/bench.h"
 #include "rdma/RcQueuePair.h"
 #include "rdma/UcQueuePair.h"
 #include "rdma/UdQueuePair.h"
+#include <util/socket/tcp.h>
 
 using namespace std;
+using namespace l5::util;
 
 constexpr uint16_t port = 1234;
 const char *ip = "127.0.0.1";
 const size_t MESSAGES = 1024 * 1024;
 
-void connectSocket(int socket) {
+void connectSocket(const Socket &socket) {
     sockaddr_in addr = {};
     addr.sin_family = AF_INET;
     addr.sin_port = htons(port);
     inet_pton(AF_INET, ip, &addr.sin_addr);
     for (int i = 0;; ++i) {
         try {
-            tcp_connect(socket, addr);
+            tcp::connect(socket, addr);
             break;
         } catch (...) {
             std::this_thread::sleep_for(20ms);
@@ -33,14 +34,14 @@ void connectSocket(int socket) {
     }
 }
 
-void setUpListenSocket(int socket) {
+void setUpListenSocket(const Socket &socket) {
     sockaddr_in addr{};
     addr.sin_family = AF_INET;
     addr.sin_port = htons(port);
     addr.sin_addr.s_addr = INADDR_ANY;
 
-    tcp_bind(socket, addr);
-    tcp_listen(socket);
+    tcp::bind(socket, addr);
+    tcp::listen(socket);
 }
 
 auto createSendWrConnected(const ibv::memoryregion::Slice &slice) {
@@ -63,7 +64,7 @@ void runConnected(bool isClient, size_t dataSize) {
     auto sendbuf = std::vector<char>(data.size());
     auto sendmr = net.registerMr(sendbuf.data(), sendbuf.size(), {});
 
-    auto socket = tcp_socket();
+    auto socket = Socket::create();
     if (isClient) {
         connectSocket(socket);
 
@@ -80,8 +81,8 @@ void runConnected(bool isClient, size_t dataSize) {
         qp.postRecvRequest(recv);
 
         auto remoteAddr = rdma::Address{qp.getQPN(), net.getLID()};
-        tcp_write(socket, &remoteAddr, sizeof(remoteAddr));
-        tcp_read(socket, &remoteAddr, sizeof(remoteAddr));
+        tcp::write(socket, &remoteAddr, sizeof(remoteAddr));
+        tcp::read(socket, &remoteAddr, sizeof(remoteAddr));
         qp.connect(remoteAddr);
 
         bench(MESSAGES, [&]() {
@@ -108,7 +109,7 @@ void runConnected(bool isClient, size_t dataSize) {
 
         const auto acced = [&] {
             sockaddr_in ignored{};
-            return tcp_accept(socket, ignored);
+            return tcp::accept(socket, ignored);
         }();
 
         auto send = createSendWrConnected(sendmr->getSlice());
@@ -122,8 +123,8 @@ void runConnected(bool isClient, size_t dataSize) {
         qp.postRecvRequest(recv);
 
         auto remoteAddr = rdma::Address{qp.getQPN(), net.getLID()};
-        tcp_write(acced, &remoteAddr, sizeof(remoteAddr));
-        tcp_read(acced, &remoteAddr, sizeof(remoteAddr));
+        tcp::write(acced, &remoteAddr, sizeof(remoteAddr));
+        tcp::read(acced, &remoteAddr, sizeof(remoteAddr));
         qp.connect(remoteAddr);
 
         bench(MESSAGES, [&]() {
@@ -139,11 +140,7 @@ void runConnected(bool isClient, size_t dataSize) {
                 cq.pollSendCompletionQueueBlocking(ibv::workcompletion::Opcode::SEND);
             }
         }, 1);
-
-        tcp_close(acced);
     }
-
-    tcp_close(socket);
 }
 
 auto createAddressHandleUnconnected(rdma::Network &net, uint16_t lid) {
@@ -180,7 +177,7 @@ void runUnconnected(bool isClient, size_t dataSize) {
     auto sendbuf = std::vector<char>(data.size());
     auto sendmr = net.registerMr(sendbuf.data(), sendbuf.size(), {});
 
-    auto socket = tcp_socket();
+    auto socket = Socket::create();
     if (isClient) {
         connectSocket(socket);
 
@@ -193,8 +190,8 @@ void runUnconnected(bool isClient, size_t dataSize) {
         qp.postRecvRequest(recv);
 
         auto remoteAddr = rdma::Address{qp.getQPN(), net.getLID()};
-        tcp_write(socket, &remoteAddr, sizeof(remoteAddr));
-        tcp_read(socket, &remoteAddr, sizeof(remoteAddr));
+        tcp::write(socket, &remoteAddr, sizeof(remoteAddr));
+        tcp::read(socket, &remoteAddr, sizeof(remoteAddr));
         qp.connect(remoteAddr);
 
         auto ah = createAddressHandleUnconnected(net, remoteAddr.lid);
@@ -226,7 +223,7 @@ void runUnconnected(bool isClient, size_t dataSize) {
 
         const auto acced = [&] {
             sockaddr_in ignored{};
-            return tcp_accept(socket, ignored);
+            return tcp::accept(socket, ignored);
         }();
 
         auto recv = ibv::workrequest::Recv{};
@@ -238,8 +235,8 @@ void runUnconnected(bool isClient, size_t dataSize) {
         qp.postRecvRequest(recv);
 
         auto remoteAddr = rdma::Address{qp.getQPN(), net.getLID()};
-        tcp_write(acced, &remoteAddr, sizeof(remoteAddr));
-        tcp_read(acced, &remoteAddr, sizeof(remoteAddr));
+        tcp::write(acced, &remoteAddr, sizeof(remoteAddr));
+        tcp::read(acced, &remoteAddr, sizeof(remoteAddr));
         qp.connect(remoteAddr);
 
         auto ah = createAddressHandleUnconnected(net, remoteAddr.lid);
@@ -259,11 +256,7 @@ void runUnconnected(bool isClient, size_t dataSize) {
                 cq.pollSendCompletionQueueBlocking(ibv::workcompletion::Opcode::SEND);
             }
         }, 1);
-
-        tcp_close(acced);
     }
-
-    tcp_close(socket);
 }
 
 auto createWriteWrNoImm(const ibv::memoryregion::Slice &slice, const ibv::memoryregion::RemoteAddress &rmr) {
@@ -288,19 +281,19 @@ void runWriteMemPolling(bool isClient, size_t dataSize) {
     auto sendbuf = std::vector<char>(data.size());
     auto sendmr = net.registerMr(sendbuf.data(), sendbuf.size(), {});
 
-    auto socket = tcp_socket();
+    auto socket = Socket::create();
     if (isClient) {
         connectSocket(socket);
 
         std::copy(data.begin(), data.end(), sendbuf.begin());
 
         auto remoteAddr = rdma::Address{qp.getQPN(), net.getLID()};
-        tcp_write(socket, &remoteAddr, sizeof(remoteAddr));
-        tcp_read(socket, &remoteAddr, sizeof(remoteAddr));
+        tcp::write(socket, &remoteAddr, sizeof(remoteAddr));
+        tcp::read(socket, &remoteAddr, sizeof(remoteAddr));
         auto remoteMr = ibv::memoryregion::RemoteAddress{reinterpret_cast<uintptr_t>(recvbuf.data()),
                                                          recvmr->getRkey()};
-        tcp_write(socket, &remoteMr, sizeof(remoteMr));
-        tcp_read(socket, &remoteMr, sizeof(remoteMr));
+        tcp::write(socket, &remoteMr, sizeof(remoteMr));
+        tcp::read(socket, &remoteMr, sizeof(remoteMr));
 
         qp.connect(remoteAddr);
 
@@ -329,16 +322,16 @@ void runWriteMemPolling(bool isClient, size_t dataSize) {
 
         const auto acced = [&] {
             sockaddr_in ignored{};
-            return tcp_accept(socket, ignored);
+            return tcp::accept(socket, ignored);
         }();
 
         auto remoteAddr = rdma::Address{qp.getQPN(), net.getLID()};
-        tcp_write(acced, &remoteAddr, sizeof(remoteAddr));
-        tcp_read(acced, &remoteAddr, sizeof(remoteAddr));
+        tcp::write(acced, &remoteAddr, sizeof(remoteAddr));
+        tcp::read(acced, &remoteAddr, sizeof(remoteAddr));
         auto remoteMr = ibv::memoryregion::RemoteAddress{reinterpret_cast<uintptr_t>(recvbuf.data()),
                                                          recvmr->getRkey()};
-        tcp_write(acced, &remoteMr, sizeof(remoteMr));
-        tcp_read(acced, &remoteMr, sizeof(remoteMr));
+        tcp::write(acced, &remoteMr, sizeof(remoteMr));
+        tcp::read(acced, &remoteMr, sizeof(remoteMr));
 
         qp.connect(remoteAddr);
 
@@ -357,11 +350,7 @@ void runWriteMemPolling(bool isClient, size_t dataSize) {
                 cq.pollSendCompletionQueueBlocking(ibv::workcompletion::Opcode::RDMA_WRITE);
             }
         }, 1);
-
-        tcp_close(acced);
     }
-
-    tcp_close(socket);
 }
 
 auto createWriteWrWithImm(const ibv::memoryregion::Slice &slice, const ibv::memoryregion::RemoteAddress &rmr) {
@@ -386,7 +375,7 @@ void runWriteWithImm(bool isClient, size_t dataSize) {
     auto sendbuf = std::vector<char>(data.size());
     auto sendmr = net.registerMr(sendbuf.data(), sendbuf.size(), {});
 
-    auto socket = tcp_socket();
+    auto socket = Socket::create();
     if (isClient) {
         {
             sockaddr_in addr = {};
@@ -395,7 +384,7 @@ void runWriteWithImm(bool isClient, size_t dataSize) {
             inet_pton(AF_INET, ip, &addr.sin_addr);
             for (int i = 0;; ++i) {
                 try {
-                    tcp_connect(socket, addr);
+                    tcp::connect(socket, addr);
                     break;
                 } catch (...) {
                     std::this_thread::sleep_for(20ms);
@@ -412,12 +401,12 @@ void runWriteWithImm(bool isClient, size_t dataSize) {
         qp.postRecvRequest(recv);
 
         auto remoteAddr = rdma::Address{qp.getQPN(), net.getLID()};
-        tcp_write(socket, &remoteAddr, sizeof(remoteAddr));
-        tcp_read(socket, &remoteAddr, sizeof(remoteAddr));
+        tcp::write(socket, &remoteAddr, sizeof(remoteAddr));
+        tcp::read(socket, &remoteAddr, sizeof(remoteAddr));
         auto remoteMr = ibv::memoryregion::RemoteAddress{reinterpret_cast<uintptr_t>(recvbuf.data()),
                                                          recvmr->getRkey()};
-        tcp_write(socket, &remoteMr, sizeof(remoteMr));
-        tcp_read(socket, &remoteMr, sizeof(remoteMr));
+        tcp::write(socket, &remoteMr, sizeof(remoteMr));
+        tcp::read(socket, &remoteMr, sizeof(remoteMr));
 
         qp.connect(remoteAddr);
 
@@ -449,13 +438,13 @@ void runWriteWithImm(bool isClient, size_t dataSize) {
             addr.sin_port = htons(port);
             addr.sin_addr.s_addr = INADDR_ANY;
 
-            tcp_bind(socket, addr);
-            tcp_listen(socket);
+            tcp::bind(socket, addr);
+            tcp::listen(socket);
         }
 
         const auto acced = [&] {
             sockaddr_in ignored{};
-            return tcp_accept(socket, ignored);
+            return tcp::accept(socket, ignored);
         }();
 
         auto recv = ibv::workrequest::Recv{};
@@ -465,12 +454,12 @@ void runWriteWithImm(bool isClient, size_t dataSize) {
         qp.postRecvRequest(recv);
 
         auto remoteAddr = rdma::Address{qp.getQPN(), net.getLID()};
-        tcp_write(acced, &remoteAddr, sizeof(remoteAddr));
-        tcp_read(acced, &remoteAddr, sizeof(remoteAddr));
+        tcp::write(acced, &remoteAddr, sizeof(remoteAddr));
+        tcp::read(acced, &remoteAddr, sizeof(remoteAddr));
         auto remoteMr = ibv::memoryregion::RemoteAddress{reinterpret_cast<uintptr_t>(recvbuf.data()),
                                                          recvmr->getRkey()};
-        tcp_write(acced, &remoteMr, sizeof(remoteMr));
-        tcp_read(acced, &remoteMr, sizeof(remoteMr));
+        tcp::write(acced, &remoteMr, sizeof(remoteMr));
+        tcp::read(acced, &remoteMr, sizeof(remoteMr));
 
         qp.connect(remoteAddr);
 
@@ -491,11 +480,7 @@ void runWriteWithImm(bool isClient, size_t dataSize) {
                 cq.pollSendCompletionQueueBlocking(ibv::workcompletion::Opcode::RDMA_WRITE);
             }
         }, 1);
-
-        tcp_close(acced);
     }
-
-    tcp_close(socket);
 }
 
 auto createRead(const ibv::memoryregion::Slice &slice, const ibv::memoryregion::RemoteAddress &rmr) {
@@ -519,19 +504,19 @@ void runRead(bool isClient, size_t dataSize) {
     auto sendbuf = std::vector<char>(data.size());
     auto sendmr = net.registerMr(sendbuf.data(), sendbuf.size(), {});
 
-    auto socket = tcp_socket();
+    auto socket = Socket::create();
     if (isClient) { // client writes to server, then reads the written data back
         connectSocket(socket);
 
         std::copy(data.begin(), data.end(), sendbuf.begin());
 
         auto remoteAddr = rdma::Address{qp.getQPN(), net.getLID()};
-        tcp_write(socket, &remoteAddr, sizeof(remoteAddr));
-        tcp_read(socket, &remoteAddr, sizeof(remoteAddr));
+        tcp::write(socket, &remoteAddr, sizeof(remoteAddr));
+        tcp::read(socket, &remoteAddr, sizeof(remoteAddr));
         auto remoteMr = ibv::memoryregion::RemoteAddress{reinterpret_cast<uintptr_t>(recvbuf.data()),
                                                          recvmr->getRkey()};
-        tcp_write(socket, &remoteMr, sizeof(remoteMr));
-        tcp_read(socket, &remoteMr, sizeof(remoteMr));
+        tcp::write(socket, &remoteMr, sizeof(remoteMr));
+        tcp::read(socket, &remoteMr, sizeof(remoteMr));
 
         qp.connect(remoteAddr);
 
@@ -555,35 +540,31 @@ void runRead(bool isClient, size_t dataSize) {
             }
         }, 1);
 
-        tcp_write(socket, "EOF", 4);
+        tcp::write(socket, "EOF", 4);
     } else {
         setUpListenSocket(socket);
 
         const auto acced = [&] {
             sockaddr_in ignored{};
-            return tcp_accept(socket, ignored);
+            return tcp::accept(socket, ignored);
         }();
 
         auto remoteAddr = rdma::Address{qp.getQPN(), net.getLID()};
-        tcp_write(acced, &remoteAddr, sizeof(remoteAddr));
-        tcp_read(acced, &remoteAddr, sizeof(remoteAddr));
+        tcp::write(acced, &remoteAddr, sizeof(remoteAddr));
+        tcp::read(acced, &remoteAddr, sizeof(remoteAddr));
         auto remoteMr = ibv::memoryregion::RemoteAddress{reinterpret_cast<uintptr_t>(recvbuf.data()),
                                                          recvmr->getRkey()};
-        tcp_write(acced, &remoteMr, sizeof(remoteMr));
-        tcp_read(acced, &remoteMr, sizeof(remoteMr));
+        tcp::write(acced, &remoteMr, sizeof(remoteMr));
+        tcp::read(acced, &remoteMr, sizeof(remoteMr));
 
         qp.connect(remoteAddr);
 
         char eof[4];
-        tcp_read(acced, &eof, 4);
+        tcp::read(acced, &eof, 4);
         if (std::string("EOF") != eof) {
             throw;
         }
-
-        tcp_close(acced);
     }
-
-    tcp_close(socket);
 }
 
 auto createReadUnsignaled(const ibv::memoryregion::Slice &slice, const ibv::memoryregion::RemoteAddress &rmr) {
@@ -606,19 +587,19 @@ void runReadPolling(bool isClient, size_t dataSize) {
     auto sendbuf = std::vector<char>(data.size());
     auto sendmr = net.registerMr(sendbuf.data(), sendbuf.size(), {});
 
-    auto socket = tcp_socket();
+    auto socket = Socket::create();
     if (isClient) { // client writes to server, then reads the written data back
         connectSocket(socket);
 
         std::copy(data.begin(), data.end(), sendbuf.begin());
 
         auto remoteAddr = rdma::Address{qp.getQPN(), net.getLID()};
-        tcp_write(socket, &remoteAddr, sizeof(remoteAddr));
-        tcp_read(socket, &remoteAddr, sizeof(remoteAddr));
+        tcp::write(socket, &remoteAddr, sizeof(remoteAddr));
+        tcp::read(socket, &remoteAddr, sizeof(remoteAddr));
         auto remoteMr = ibv::memoryregion::RemoteAddress{reinterpret_cast<uintptr_t>(recvbuf.data()),
                                                          recvmr->getRkey()};
-        tcp_write(socket, &remoteMr, sizeof(remoteMr));
-        tcp_read(socket, &remoteMr, sizeof(remoteMr));
+        tcp::write(socket, &remoteMr, sizeof(remoteMr));
+        tcp::read(socket, &remoteMr, sizeof(remoteMr));
 
         qp.connect(remoteAddr);
 
@@ -643,35 +624,31 @@ void runReadPolling(bool isClient, size_t dataSize) {
             }
         }, 1);
 
-        tcp_write(socket, "EOF", 4);
+        tcp::write(socket, "EOF", 4);
     } else {
         setUpListenSocket(socket);
 
         const auto acced = [&] {
             sockaddr_in ignored{};
-            return tcp_accept(socket, ignored);
+            return tcp::accept(socket, ignored);
         }();
 
         auto remoteAddr = rdma::Address{qp.getQPN(), net.getLID()};
-        tcp_write(acced, &remoteAddr, sizeof(remoteAddr));
-        tcp_read(acced, &remoteAddr, sizeof(remoteAddr));
+        tcp::write(acced, &remoteAddr, sizeof(remoteAddr));
+        tcp::read(acced, &remoteAddr, sizeof(remoteAddr));
         auto remoteMr = ibv::memoryregion::RemoteAddress{reinterpret_cast<uintptr_t>(recvbuf.data()),
                                                          recvmr->getRkey()};
-        tcp_write(acced, &remoteMr, sizeof(remoteMr));
-        tcp_read(acced, &remoteMr, sizeof(remoteMr));
+        tcp::write(acced, &remoteMr, sizeof(remoteMr));
+        tcp::read(acced, &remoteMr, sizeof(remoteMr));
 
         qp.connect(remoteAddr);
 
         char eof[4];
-        tcp_read(acced, &eof, 4);
+        tcp::read(acced, &eof, 4);
         if (std::string("EOF") != eof) {
             throw;
         }
-
-        tcp_close(acced);
     }
-
-    tcp_close(socket);
 }
 
 int main(int argc, char **argv) {

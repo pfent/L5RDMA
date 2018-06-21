@@ -4,10 +4,13 @@
 #include <string_view>
 #include <vector>
 #include <poll.h>
+#include <util/socket/Socket.h>
 
+namespace l5 {
+namespace transport {
 class MulticlientTCPTransportServer {
-    const int serverSocket;
-    std::vector<int> connections;
+    const util::Socket serverSocket;
+    std::vector<util::Socket> connections;
     std::vector<pollfd> pollFds;
 
     void listen(uint16_t port);
@@ -37,7 +40,7 @@ public:
 };
 
 class MulticlientTCPTransportClient {
-    const int socket;
+    const util::Socket socket;
 public:
     MulticlientTCPTransportClient();
 
@@ -63,6 +66,7 @@ public:
         receive(reinterpret_cast<uint8_t *>(&data), sizeof(data));
     }
 };
-
+} // namespace transport
+} // namespace l5
 
 #endif //L5RDMA_MULTICLIENTTCPTRANSPORT_H

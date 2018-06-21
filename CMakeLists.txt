@@ -29,6 +29,7 @@ file(GLOB COMMON_SOURCES
         rdma/*.cpp
         transports/*.cpp
         util/*.cpp
+        util/socket/*.cpp
         )
 file(GLOB COMMON_HEADERS
         apps/*.h
@@ -36,6 +37,7 @@ file(GLOB COMMON_HEADERS
         rdma/*.h
         transports/*.h
         util/*.h
+        util/socket/*.h
         )
 
 add_library(common OBJECT ${COMMON_SOURCES} ${COMMON_HEADERS})

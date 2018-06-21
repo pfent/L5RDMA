@@ -1,70 +1,58 @@
 #include <string>
 #include <arpa/inet.h>
-#include "util/tcpWrapper.h"
 #include "TcpTransport.h"
+#include "util/socket/tcp.h"
 
-TcpTransportServer::TcpTransportServer(std::string_view port) :
-        initialSocket(tcp_socket()) {
+namespace l5 {
+namespace transport {
+using namespace util;
+
+TcpTransportServer::TcpTransportServer(const std::string &port) :
+        initialSocket(Socket::create()) {
     auto p = std::stoi(std::string(port.data(), port.size()));
     listen(p);
 }
 
-TcpTransportServer::~TcpTransportServer() {
-    tcp_close(initialSocket);
-
-    if (communicationSocket != -1) {
-        tcp_close(communicationSocket);
-    }
-}
+TcpTransportServer::~TcpTransportServer() = default;
 
 void TcpTransportServer::listen(uint16_t port) {
-    sockaddr_in addr = {};
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons(port);
-    addr.sin_addr.s_addr = INADDR_ANY;
-
-    tcp_bind(initialSocket, addr);
-    tcp_listen(initialSocket);
+    tcp::bind(initialSocket, port);
+    tcp::listen(initialSocket);
 }
 
 void TcpTransportServer::write_impl(const uint8_t *data, size_t size) {
-    tcp_write(communicationSocket, data, size);
+    tcp::write(communicationSocket, data, size);
 }
 
 void TcpTransportServer::read_impl(uint8_t *buffer, size_t size) {
-    tcp_read(communicationSocket, buffer, size);
+    tcp::read(communicationSocket, buffer, size);
 }
 
 void TcpTransportServer::accept_impl() {
-    sockaddr_in ignored{};
-    communicationSocket = tcp_accept(initialSocket, ignored);
+    communicationSocket = tcp::accept(initialSocket);
 }
 
-TcpTransportClient::TcpTransportClient() : socket(tcp_socket()) {}
+TcpTransportClient::TcpTransportClient() : socket(Socket::create()) {}
 
-TcpTransportClient::~TcpTransportClient() {
-    tcp_close(socket);
-}
+TcpTransportClient::~TcpTransportClient() = default;
 
-void TcpTransportClient::connect_impl(std::string_view connection) {
+void TcpTransportClient::connect_impl(const std::string &connection) {
     const auto pos = connection.find(':');
     if (pos == std::string::npos) {
         throw std::runtime_error("usage: <0.0.0.0:port>");
     }
     const auto ip = std::string(connection.data(), pos);
     const auto port = std::stoi(std::string(connection.begin() + pos + 1, connection.end()));
-    sockaddr_in addr = {};
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons(port);
-    inet_pton(AF_INET, ip.c_str(), &addr.sin_addr);
 
-    tcp_connect(socket, addr);
+    tcp::connect(socket, ip, port);
 }
 
 void TcpTransportClient::write_impl(const uint8_t *data, size_t size) {
-    tcp_write(socket, data, size);
+    tcp::write(socket, data, size);
 }
 
 void TcpTransportClient::read_impl(uint8_t *buffer, size_t size) {
-    tcp_read(socket, buffer, size);
+    tcp::read(socket, buffer, size);
 }
+} // namespace transport
+} // namespace l5

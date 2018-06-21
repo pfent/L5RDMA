@@ -7,6 +7,7 @@
 #include "util/Random32.h"
 
 using namespace std;
+using namespace l5::transport;
 
 static constexpr size_t threadsPerClient = 10;
 static size_t numberOfClients = 1;

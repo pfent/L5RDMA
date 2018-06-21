@@ -4,10 +4,10 @@
 #include "transports/Transport.h"
 #include "apps/PingPong.h"
 #include "util/bench.h"
-#include "util/pinthread.h"
 #include "transports/RdmaTransport.h"
 
 using namespace std;
+using namespace l5::transport;
 
 static constexpr uint16_t port = 1234;
 static const char *ip = "127.0.0.1";

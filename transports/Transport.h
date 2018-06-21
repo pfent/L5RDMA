@@ -1,9 +1,10 @@
-#ifndef L5RDMA_TRANSPORT_H
-#define L5RDMA_TRANSPORT_H
+#pragma once
 
-#include <string_view>
 #include <memory>
+#include <string>
 
+namespace l5 {
+namespace transport {
 /**
  * CRTP class used to specify the Transport interface via static polymorphism
  * Transports abstract from sockets as data communication to also provide mechanisms, that are useful to send data via
@@ -26,7 +27,7 @@ public:
 
     template<typename TriviallyCopyable>
     void write(const TriviallyCopyable &data) {
-        static_assert(std::is_trivially_copyable_v<TriviallyCopyable>);
+        static_assert(std::is_trivially_copyable<TriviallyCopyable>::value, "");
         write(reinterpret_cast<const uint8_t *>(&data), sizeof(data));
     }
 
@@ -37,8 +38,16 @@ public:
 
     template<typename TriviallyCopyable>
     void read(TriviallyCopyable &data) {
-        static_assert(std::is_trivially_copyable_v<TriviallyCopyable>);
+        static_assert(std::is_trivially_copyable<TriviallyCopyable>::value, "");
         read(reinterpret_cast<uint8_t *>(&data), sizeof(data));
+    }
+
+    template<typename TriviallyCopyable>
+    TriviallyCopyable read() {
+        static_assert(std::is_trivially_copyable<TriviallyCopyable>::value, "");
+        TriviallyCopyable data;
+        read(reinterpret_cast<uint8_t *>(&data), sizeof(data));
+        return data;
     }
 
     virtual ~TransportServer() = default;
@@ -51,7 +60,7 @@ public:
     /**
      * Connect to a remote TransportServer, as specified in whereTo
      */
-    void connect(std::string_view whereTo) { static_cast<T *>(this)->connect_impl(whereTo); }
+    void connect(const std::string &whereTo) { static_cast<T *>(this)->connect_impl(whereTo); }
 
     /**
      * Similar interface to TransportServer
@@ -60,7 +69,7 @@ public:
 
     template<typename TriviallyCopyable>
     void write(const TriviallyCopyable &data) {
-        static_assert(std::is_trivially_copyable_v<TriviallyCopyable>);
+        static_assert(std::is_trivially_copyable<TriviallyCopyable>::value, "");
         write(reinterpret_cast<const uint8_t *>(&data), sizeof(data));
     }
 
@@ -68,7 +77,7 @@ public:
 
     template<typename TriviallyCopyable>
     void read(TriviallyCopyable &data) {
-        static_assert(std::is_trivially_copyable_v<TriviallyCopyable>);
+        static_assert(std::is_trivially_copyable<TriviallyCopyable>::value, "");
         read(reinterpret_cast<uint8_t *>(&data), sizeof(data));
     }
 
@@ -84,5 +93,5 @@ template<typename Derived, typename... Args>
 std::unique_ptr<TransportClient<Derived>> make_transportClient(Args &&... args) {
     return std::move(std::make_unique<Derived>(std::forward<Args>(args)...));
 }
-
-#endif //L5RDMA_TRANSPORT_H
+} // namespace transport
+} // namespace l5

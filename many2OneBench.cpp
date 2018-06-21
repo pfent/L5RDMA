@@ -8,7 +8,6 @@
 #include "libibverbscpp/libibverbscpp.h"
 #include "rdma/Network.hpp"
 #include "rdma/QueuePair.hpp"
-#include "util/tcpWrapper.h"
 #include "util/bench.h"
 #include "rdma/RcQueuePair.h"
 #include "rdma/UcQueuePair.h"
@@ -16,6 +15,7 @@
 #include <unistd.h>
 
 using namespace std;
+using namespace l5::transport;
 
 static constexpr uint16_t port = 1234;
 static const char *ip = "127.0.0.1";

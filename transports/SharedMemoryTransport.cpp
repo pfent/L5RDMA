@@ -1,29 +1,25 @@
 #include "SharedMemoryTransport.h"
 
 #include <sys/un.h>
-#include "util/domainSocketsWrapper.h"
+#include "util/socket/domain.h"
 
-SharedMemoryTransportServer::SharedMemoryTransportServer(std::string_view domainSocket) :
-        initialSocket(domain_socket()),
+namespace l5 {
+namespace transport {
+using namespace util;
+
+SharedMemoryTransportServer::SharedMemoryTransportServer(const std::string &domainSocket) :
+        initialSocket(domain::socket()),
         file(domainSocket) {
-    domain_bind(initialSocket, file);
-    domain_listen(initialSocket);
+    domain::bind(initialSocket, file);
+    domain::listen(initialSocket);
 }
 
-SharedMemoryTransportServer::~SharedMemoryTransportServer() {
-    // close socket
-    domain_close(initialSocket);
-
-    if (communicationSocket != -1) {
-        domain_close(communicationSocket);
-    }
-}
+SharedMemoryTransportServer::~SharedMemoryTransportServer() = default;
 
 void SharedMemoryTransportServer::accept_impl() {
-    sockaddr_un remote{};
-    communicationSocket = domain_accept(initialSocket, remote);
+    communicationSocket = domain::accept(initialSocket);
 
-    messageBuffer = std::make_unique<SharedMemoryDatastructure>(BUFFER_SIZE, communicationSocket);
+    messageBuffer = std::make_unique<datastructure::VirtualRingBuffer>(BUFFER_SIZE, communicationSocket);
 }
 
 void SharedMemoryTransportServer::write_impl(const uint8_t *data, size_t size) {
@@ -34,17 +30,17 @@ void SharedMemoryTransportServer::read_impl(uint8_t *buffer, size_t size) {
     messageBuffer->receive(buffer, size);
 }
 
-SharedMemoryTransportClient::SharedMemoryTransportClient() : socket(domain_socket()) {}
+SharedMemoryTransportClient::SharedMemoryTransportClient() : socket(domain::socket()) {}
 
-SharedMemoryTransportClient::~SharedMemoryTransportClient() {
-    domain_close(socket);
-}
+SharedMemoryTransportClient::~SharedMemoryTransportClient() = default;
 
-void SharedMemoryTransportClient::connect_impl(std::string_view file) {
-    domain_connect(socket, file);
-    domain_unlink(file);
+void SharedMemoryTransportClient::connect_impl(const std::string &file) {
+    const auto pos = file.find(':');
+    const auto whereTo = std::string(file.begin() + pos + 1, file.end());
+    domain::connect(socket, whereTo);
+    domain::unlink(whereTo);
 
-    messageBuffer = std::make_unique<SharedMemoryDatastructure>(BUFFER_SIZE, socket);
+    messageBuffer = std::make_unique<datastructure::VirtualRingBuffer>(BUFFER_SIZE, socket);
 }
 
 void SharedMemoryTransportClient::write_impl(const uint8_t *data, size_t size) {
@@ -54,3 +50,5 @@ void SharedMemoryTransportClient::write_impl(const uint8_t *data, size_t size) {
 void SharedMemoryTransportClient::read_impl(uint8_t *buffer, size_t size) {
     messageBuffer->receive(buffer, size);
 }
+} // namespace transport
+} // namespace l5

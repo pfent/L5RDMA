@@ -1,50 +1,49 @@
 #include "DomainSocketsTransport.h"
 #include <sys/un.h>
-#include "util/domainSocketsWrapper.h"
+#include <util/socket/domain.h>
 
-DomainSocketsTransportServer::DomainSocketsTransportServer(std::string_view file) :
-        initialSocket(domain_socket()),
-        file(file) {
-    domain_bind(initialSocket, file);
-    domain_listen(initialSocket);
+namespace l5 {
+namespace transport {
+using namespace util;
+
+DomainSocketsTransportServer::DomainSocketsTransportServer(std::string file) :
+        initialSocket(domain::socket()),
+        file(std::move(file)) {
+    domain::bind(initialSocket, this->file);
+    domain::listen(initialSocket);
 }
 
-DomainSocketsTransportServer::~DomainSocketsTransportServer() {
-    domain_close(initialSocket);
-
-    if (communicationSocket != -1) {
-        domain_close(communicationSocket);
-    }
-}
+DomainSocketsTransportServer::~DomainSocketsTransportServer() = default;
 
 void DomainSocketsTransportServer::accept_impl() {
-    sockaddr_un remote{};
-    communicationSocket = domain_accept(initialSocket, remote);
+    communicationSocket = domain::accept(initialSocket);
 }
 
 void DomainSocketsTransportServer::write_impl(const uint8_t *data, size_t size) {
-    domain_write(communicationSocket, data, size);
+    domain::write(communicationSocket, data, size);
 }
 
 void DomainSocketsTransportServer::read_impl(uint8_t *buffer, size_t size) {
-    domain_read(communicationSocket, buffer, size);
+    domain::read(communicationSocket, buffer, size);
 }
 
-DomainSocketsTransportClient::DomainSocketsTransportClient() : socket(domain_socket()) {}
+DomainSocketsTransportClient::DomainSocketsTransportClient() : socket(domain::socket()) {}
 
-DomainSocketsTransportClient::~DomainSocketsTransportClient() {
-    domain_close(socket);
-}
+DomainSocketsTransportClient::~DomainSocketsTransportClient() = default;
 
-void DomainSocketsTransportClient::connect_impl(std::string_view file) {
-    domain_connect(socket, file);
-    domain_unlink(file);
+void DomainSocketsTransportClient::connect_impl(std::string file) {
+    const auto pos = file.find(':');
+    const auto whereTo = std::string(file.begin() + pos + 1, file.end());
+    domain::connect(socket, whereTo);
+    domain::unlink(whereTo);
 }
 
 void DomainSocketsTransportClient::write_impl(const uint8_t *data, size_t size) {
-    domain_write(socket, data, size);
+    domain::write(socket, data, size);
 }
 
 void DomainSocketsTransportClient::read_impl(uint8_t *buffer, size_t size) {
-    domain_read(socket, buffer, size);
+    domain::read(socket, buffer, size);
 }
+} // namespace transport
+} // namespace l5
