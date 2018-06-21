@@ -10,7 +10,7 @@ static const size_t validity = 0xDEADDEADBEEFBEEF;
 
 vector<uint8_t> RDMAMessageBuffer::receive() {
     size_t receiveSize = 0;
-    auto receiveValidity = static_cast<decltype(validity)>(0);
+    auto receiveValidity = static_cast<std::remove_const_t<decltype(validity)>>(0);
     do {
         readFromReceiveBuffer(readPos, reinterpret_cast<uint8_t *>(&receiveSize), sizeof(receiveSize));
         readFromReceiveBuffer(readPos + sizeof(receiveSize) + receiveSize,
@@ -28,7 +28,7 @@ vector<uint8_t> RDMAMessageBuffer::receive() {
 
 size_t RDMAMessageBuffer::receive(void *whereTo, size_t maxSize) {
     size_t receiveSize = 0;
-    auto receiveValidity = static_cast<decltype(validity)>(0);
+    auto receiveValidity = static_cast<std::remove_const_t<decltype(validity)>>(0);
     do {
         readFromReceiveBuffer(readPos, reinterpret_cast<uint8_t *>(&receiveSize), sizeof(receiveSize));
         readFromReceiveBuffer(readPos + sizeof(receiveSize) + receiveSize,
@@ -169,7 +169,7 @@ void RDMAMessageBuffer::zeroReceiveBuffer(size_t beginReceiveCount, size_t sizeT
 
 bool RDMAMessageBuffer::hasData() const {
     size_t receiveSize;
-    auto receiveValidity = static_cast<decltype(validity)>(0);
+    auto receiveValidity = static_cast<std::remove_const_t<decltype(validity)>>(0);
     readFromReceiveBuffer(readPos, reinterpret_cast<uint8_t *>(&receiveSize), sizeof(receiveSize));
     readFromReceiveBuffer(readPos + sizeof(receiveSize) + receiveSize, reinterpret_cast<uint8_t *>(&receiveValidity),
                           sizeof(receiveValidity));
