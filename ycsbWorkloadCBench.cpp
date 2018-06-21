@@ -8,6 +8,7 @@
 #include "util/bench.h"
 #include "util/ycsb.h"
 #include "util/Random32.h"
+#include "util/doNotOptimize.h"
 
 using namespace l5::transport;
 
@@ -25,7 +26,7 @@ void doRunNoCommunication() {
         for (auto lookupKey : lookupKeys) {
             const auto field = rand.next() % ycsb_field_count;
             database.lookup(lookupKey, field, data.begin());
-            benchmark::DoNotOptimize(data);
+            DoNotOptimize(data);
         }
     });
 }
@@ -64,7 +65,7 @@ void doRun(bool isClient, std::string connection) {
             const auto message = ReadMessage{lookupKey, field};
             client.write(message);
             client.read(response);
-            benchmark::DoNotOptimize(response);
+            DoNotOptimize(response);
         }
     } else { // server
         auto server = Server(connection);
@@ -117,7 +118,7 @@ void doRunSharedMemory(bool isClient) {
             auto message = ReadMessage{lookupKey, field};
             client.write(message);
             client.read(message); // TODO this is probably a bug in the Shared memory transport
-            benchmark::DoNotOptimize(message);
+            DoNotOptimize(message);
         }
     } else {
         auto server = SharedMemoryTransportServer("/dev/shm/pingPong");

@@ -8,8 +8,6 @@ IF (NOT CMAKE_BUILD_TYPE)
             FORCE)
 ENDIF (NOT CMAKE_BUILD_TYPE)
 
-add_subdirectory(ext/benchmark)
-
 set(CMAKE_CXX_STANDARD 17)
 #set(CMAKE_CXX_COMPILER clang++)
 #set(WARNINGS "-Weverything -Wno-c++98-compat -Wno-shadow-field-in-constructor -Wno-documentation-unknown-command -Wno-shadow -Wno-padded")
@@ -48,7 +46,6 @@ SET(LINK_LIBRARIES
         pthread
         rdmacm
         tbb
-        benchmark
         )
 
 SET(EXECUTABLES

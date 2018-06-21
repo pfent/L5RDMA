@@ -1,10 +1,12 @@
 #include <iostream>
 #include <thread>
 #include <iomanip>
+#include <map>
 #include "include/MulticlientRDMATransport.h"
 #include "util/bench.h"
 #include "util/ycsb.h"
 #include "util/Random32.h"
+#include "util/doNotOptimize.h"
 
 using namespace std;
 using namespace l5::transport;
@@ -56,7 +58,7 @@ void doRun(const size_t msgps, bool isClient) {
                     const auto message = ReadMessage{lookupKeys[i], field};
                     client.write(message);
                     client.read(response);
-                    benchmark::DoNotOptimize(response);
+                    DoNotOptimize(response);
                 }
 
 
@@ -71,7 +73,7 @@ void doRun(const size_t msgps, bool isClient) {
                         const auto message = ReadMessage{lookupKeys[i], field};
                         client.write(message);
                         client.read(response);
-                        benchmark::DoNotOptimize(response);
+                        DoNotOptimize(response);
                         ++counters[c];
                     }
 

@@ -7,8 +7,8 @@
 #include <random>
 #include <string_view>
 #include <unordered_map>
-#include <benchmark/benchmark.h>
 #include "util/Random32.h"
+#include "util/doNotOptimize.h"
 
 /// YCSB Benchmark workload, based on Alexander van Renen's version
 static constexpr size_t ycsb_tuple_count = 100000;
@@ -109,7 +109,7 @@ struct YcsbDatabase {
         }
         const auto begin = fieldPtr->second[field].begin();
         const auto end = fieldPtr->second[field].end();
-        benchmark::DoNotOptimize(std::copy(begin, end, target));
+        DoNotOptimize(std::copy(begin, end, target));
     }
 };
 
