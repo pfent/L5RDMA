@@ -1,6 +1,6 @@
-[submodule "include/libibverbscpp"]
-	path = include/libibverbscpp
-	url = https://github.com/pfent/libibverbscpp.git
-[submodule "include/benchmark"]
-	path = include/benchmark
+[submodule "ext/benchmark"]
+	path = ext/benchmark
 	url = https://github.com/google/benchmark.git
+[submodule "ext/libibverbscpp"]
+	path = ext/libibverbscpp
+	url = https://github.com/pfent/libibverbscpp.git

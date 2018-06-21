@@ -8,7 +8,7 @@ IF (NOT CMAKE_BUILD_TYPE)
             FORCE)
 ENDIF (NOT CMAKE_BUILD_TYPE)
 
-add_subdirectory(include/benchmark)
+add_subdirectory(ext/benchmark)
 
 set(CMAKE_CXX_STANDARD 17)
 #set(CMAKE_CXX_COMPILER clang++)
@@ -44,8 +44,8 @@ add_library(common OBJECT ${COMMON_SOURCES} ${COMMON_HEADERS})
 
 include_directories(.)
 include_directories(SYSTEM
-        include
-        include/benchmark/include
+        ext
+        ext/benchmark/include
         )
 
 SET(LINK_LIBRARIES
