@@ -3,7 +3,7 @@
 #include <sys/wait.h>
 #include <zconf.h>
 #include "apps/PingPong.h"
-#include "transports/RdmaTransport.h"
+#include "include/RdmaTransport.h"
 
 using namespace std;
 using namespace l5::transport;

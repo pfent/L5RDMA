@@ -2,9 +2,9 @@
 #include <thread>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-#include <transports/MulticlientRDMATransport.h>
+#include <include/MulticlientRDMATransport.h>
+#include <include/MulticlientTCPTransport.h>
 #include <util/ycsb.h>
-#include <transports/MulticlientTCPTransport.h>
 #include "libibverbscpp/libibverbscpp.h"
 #include "rdma/Network.hpp"
 #include "rdma/QueuePair.hpp"

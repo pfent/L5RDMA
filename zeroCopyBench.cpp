@@ -1,13 +1,13 @@
 #include <iostream>
-#include <transports/MulticlientRDMATransport.h>
-#include "transports/Transport.h"
-#include "transports/TcpTransport.h"
-#include "transports/DomainSocketsTransport.h"
-#include "transports/SharedMemoryTransport.h"
+#include <include/MulticlientRDMATransport.h>
+#include "include/Transport.h"
+#include "include/TcpTransport.h"
+#include "include/DomainSocketsTransport.h"
+#include "include/SharedMemoryTransport.h"
 #include "apps/PingPong.h"
 #include "util/bench.h"
-#include "transports/RdmaTransport.h"
-#include "transports/LibRdmacmTransport.h"
+#include "include/RdmaTransport.h"
+#include "include/LibRdmacmTransport.h"
 
 using namespace std;
 using namespace l5::transport;
