@@ -49,6 +49,7 @@ SET(LINK_LIBRARIES
         )
 
 SET(EXECUTABLES
+        p2pBench
         point2PointBench
         parallelP2PBench
         rawCommandBench
