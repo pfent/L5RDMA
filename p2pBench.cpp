@@ -1,19 +1,11 @@
 #include <iostream>
 #include <thread>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <include/MulticlientRDMATransport.h>
-#include <include/MulticlientTCPTransport.h>
 #include <util/ycsb.h>
 #include "libibverbscpp/libibverbscpp.h"
 #include "rdma/Network.hpp"
-#include "rdma/QueuePair.hpp"
 #include "util/bench.h"
-#include "rdma/RcQueuePair.h"
-#include "rdma/UcQueuePair.h"
-#include "rdma/UdQueuePair.h"
 #include <unistd.h>
-#include <include/TcpTransport.h>
+#include <include/RdmaTransport.h>
 
 using namespace std;
 using namespace l5::transport;
@@ -80,5 +72,5 @@ int main(int argc, char **argv) {
     if (!isClient) {
         cout << size << ", ";
     }
-    doRun<TcpTransportClient, TcpTransportServer>(isClient, size);
+    doRun<RdmaTransportClient, RdmaTransportServer>(isClient, size);
 }
