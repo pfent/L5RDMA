@@ -56,3 +56,20 @@ For output, you'll get CSV data, which is much more pleasurable to read using `c
 NODE=1; numactl --membind=$NODE --cpunodebind=$NODE ./point2PointBench client > output.csv
 cat output.csv | column -s, -t
 ```
+
+## Including the library into your own projects
+The recommended way to use this library is with a git submodule:
+```bash
+mkdir ext
+cd ext
+git submodule add https://github.com/pfent/L5RDMA.git
+git submodule update --init --recursive
+cd ..
+```
+Now in your `CMakeLists.txt`, add
+```cmake
+add_subdirectory(ext/L5RDMA)
+
+add_executable(helloworld main.cpp)
+target_link_libraries(helloworld l5rdma-common)
+```
