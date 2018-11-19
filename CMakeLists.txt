@@ -59,6 +59,7 @@ SET(EXECUTABLES
         zeroCopyBench
         ycsbWorkloadCBench
         manySlowSendersBench
+        ycsbBandwidthBench
         )
 
 foreach (exe ${EXECUTABLES})

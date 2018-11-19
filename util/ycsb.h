@@ -52,6 +52,22 @@ struct YcsbDataSet {
         return rows[i];
     }
 
+    auto begin() {
+        return rows.begin()->begin();
+    }
+
+    auto begin() const {
+        return rows.begin()->begin();
+    }
+
+    auto end() {
+        return rows.begin()->begin() + sizeof(rows);
+    }
+
+    auto end() const {
+        return rows.begin()->begin() + sizeof(rows);
+    }
+
     YcsbDataSet() = default;
 
     explicit YcsbDataSet(RandomString &gen) {
@@ -109,6 +125,17 @@ struct YcsbDatabase {
         }
         const auto begin = fieldPtr->second[field].begin();
         const auto end = fieldPtr->second[field].end();
+        DoNotOptimize(std::copy(begin, end, target));
+    }
+
+    template<typename OutputIterator>
+    void lookup(YcsbKey lookupKey, OutputIterator target) const {
+        const auto fieldPtr = database.find(lookupKey);
+        if (fieldPtr == database.end()) {
+            throw;
+        }
+        const auto begin = fieldPtr->second.begin();
+        const auto end = fieldPtr->second.end();
         DoNotOptimize(std::copy(begin, end, target));
     }
 };
