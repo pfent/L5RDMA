@@ -7,7 +7,6 @@
 #include "rdma/QueuePair.hpp"
 #include "util/bench.h"
 #include "rdma/RcQueuePair.h"
-#include "rdma/UcQueuePair.h"
 #include "rdma/UdQueuePair.h"
 #include <util/socket/tcp.h>
 
@@ -102,7 +101,7 @@ void runConnected(bool isClient, size_t dataSize) {
                     throw;
                 }
             }
-        }, 1);
+        });
 
     } else {
         setUpListenSocket(socket);
@@ -139,7 +138,7 @@ void runConnected(bool isClient, size_t dataSize) {
                 qp.postWorkRequest(send);
                 cq.pollSendCompletionQueueBlocking(ibv::workcompletion::Opcode::SEND);
             }
-        }, 1);
+        });
     }
 }
 
@@ -217,7 +216,7 @@ void runUnconnected(bool isClient, size_t dataSize) {
                     throw;
                 }
             }
-        }, 1);
+        });
     } else {
         setUpListenSocket(socket);
 
@@ -255,7 +254,7 @@ void runUnconnected(bool isClient, size_t dataSize) {
                 qp.postWorkRequest(send);
                 cq.pollSendCompletionQueueBlocking(ibv::workcompletion::Opcode::SEND);
             }
-        }, 1);
+        });
     }
 }
 
@@ -315,7 +314,7 @@ void runWriteMemPolling(bool isClient, size_t dataSize) {
                     throw;
                 }
             }
-        }, 1);
+        });
 
     } else {
         setUpListenSocket(socket);
@@ -349,7 +348,7 @@ void runWriteMemPolling(bool isClient, size_t dataSize) {
                 qp.postWorkRequest(write);
                 cq.pollSendCompletionQueueBlocking(ibv::workcompletion::Opcode::RDMA_WRITE);
             }
-        }, 1);
+        });
     }
 }
 
@@ -429,7 +428,7 @@ void runWriteWithImm(bool isClient, size_t dataSize) {
                     throw;
                 }
             }
-        }, 1);
+        });
 
     } else {
         {   // setup tcp socket
@@ -479,7 +478,7 @@ void runWriteWithImm(bool isClient, size_t dataSize) {
                 qp.postWorkRequest(write);
                 cq.pollSendCompletionQueueBlocking(ibv::workcompletion::Opcode::RDMA_WRITE);
             }
-        }, 1);
+        });
     }
 }
 
@@ -538,7 +537,7 @@ void runRead(bool isClient, size_t dataSize) {
                     throw;
                 }
             }
-        }, 1);
+        });
 
         tcp::write(socket, "EOF", 4);
     } else {
@@ -622,7 +621,7 @@ void runReadPolling(bool isClient, size_t dataSize) {
                     throw;
                 }
             }
-        }, 1);
+        });
 
         tcp::write(socket, "EOF", 4);
     } else {

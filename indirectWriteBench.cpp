@@ -6,11 +6,9 @@
 #include "util/socket/tcp.h"
 #include "rdma/Network.hpp"
 #include "rdma/QueuePair.hpp"
-#include "util/bench.h"
 #include "rdma/RcQueuePair.h"
-#include "rdma/UcQueuePair.h"
-#include "rdma/UdQueuePair.h"
 #include <random>
+#include "util/bench.h"
 
 using namespace std;
 using namespace l5::util;
@@ -113,7 +111,7 @@ void runImmData(bool isClient, uint32_t dataSize) {
                     throw;
                 }
             }
-        }, 1);
+        });
 
     } else {
         setUpListenSocket(socket);
@@ -159,7 +157,7 @@ void runImmData(bool isClient, uint32_t dataSize) {
                 qp.postWorkRequest(write);
                 cq.pollSendCompletionQueueBlocking(ibv::workcompletion::Opcode::RDMA_WRITE);
             }
-        }, 1);
+        });
     }
 }
 
@@ -245,7 +243,7 @@ void runChainedWrs(bool isClient, size_t dataSize) {
                     throw;
                 }
             }
-        }, 1);
+        });
 
     } else {
         setUpListenSocket(socket);
@@ -295,7 +293,7 @@ void runChainedWrs(bool isClient, size_t dataSize) {
                 cq.pollSendCompletionQueueBlocking(ibv::workcompletion::Opcode::RDMA_WRITE);
                 cq.pollSendCompletionQueueBlocking(ibv::workcompletion::Opcode::RDMA_WRITE);
             }
-        }, 1);
+        });
     }
 }
 
@@ -373,7 +371,7 @@ void runPostedWrs(bool isClient, size_t dataSize) {
                     throw;
                 }
             }
-        }, 1);
+        });
 
     } else {
         setUpListenSocket(socket);
@@ -423,7 +421,7 @@ void runPostedWrs(bool isClient, size_t dataSize) {
                 cq.pollSendCompletionQueueBlocking(ibv::workcompletion::Opcode::RDMA_WRITE);
                 cq.pollSendCompletionQueueBlocking(ibv::workcompletion::Opcode::RDMA_WRITE);
             }
-        }, 1);
+        });
     }
 }
 
@@ -504,7 +502,7 @@ void runDoublePollingWrs(bool isClient, size_t dataSize) {
                 }
                 std::fill(begin, end, '\0');
             }
-        }, 1);
+        });
 
     } else {
         setUpListenSocket(socket);
@@ -557,7 +555,7 @@ void runDoublePollingWrs(bool isClient, size_t dataSize) {
                 cq.pollSendCompletionQueueBlocking(ibv::workcompletion::Opcode::RDMA_WRITE);
                 cq.pollSendCompletionQueueBlocking(ibv::workcompletion::Opcode::RDMA_WRITE);
             }
-        }, 1);
+        });
     }
 }
 

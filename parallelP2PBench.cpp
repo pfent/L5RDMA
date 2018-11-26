@@ -1,5 +1,4 @@
 #include "include/RdmaTransport.h"
-#include <iostream>
 #include <tbb/tbb.h>
 #include <thread>
 #include "apps/PingPong.h"
@@ -48,7 +47,7 @@ void doRun(size_t clients, bool isClient) {
             }
 
             for (auto &t: serverThreads) t.join();
-        }, 1);
+        });
     }
 
 }

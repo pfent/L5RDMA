@@ -5,14 +5,12 @@
 #include "libibverbscpp/libibverbscpp.h"
 #include "rdma/Network.hpp"
 #include "rdma/QueuePair.hpp"
-#include "util/bench.h"
 #include "rdma/RcQueuePair.h"
-#include "rdma/UcQueuePair.h"
-#include "rdma/UdQueuePair.h"
-#include "util/Random32.h"
 #include <immintrin.h>
-#include <boost/assert.hpp>
 #include <util/socket/tcp.h>
+#include "util/bench.h"
+#include "util/Random32.h"
+#include "cassert"
 
 using namespace std;
 using namespace l5::util;
@@ -115,7 +113,7 @@ void runImmData(bool isClient, uint32_t dataSize) {
                     throw std::runtime_error("received string not equal");
                 }
             }
-        }, 1);
+        });
 
     } else {
         setUpListenSocket(socket);
@@ -161,7 +159,7 @@ void runImmData(bool isClient, uint32_t dataSize) {
                 qp.postWorkRequest(write);
                 cq.pollSendCompletionQueueBlocking(ibv::workcompletion::Opcode::RDMA_WRITE);
             }
-        }, 1);
+        });
     }
 }
 
@@ -245,7 +243,7 @@ void bigBuffer(bool isClient, size_t dataSize, uint16_t pollPositions, F pollFun
                     throw std::runtime_error("received string not equal");
                 }
             }
-        }, 1);
+        });
 
     } else {
         setUpListenSocket(socket);
@@ -294,7 +292,7 @@ void bigBuffer(bool isClient, size_t dataSize, uint16_t pollPositions, F pollFun
                 cq.pollSendCompletionQueueBlocking(ibv::workcompletion::Opcode::RDMA_WRITE);
                 cq.pollSendCompletionQueueBlocking(ibv::workcompletion::Opcode::RDMA_WRITE);
             }
-        }, 1);
+        });
     }
 }
 
@@ -440,7 +438,7 @@ void exclusiveBuffer(bool isClient, size_t dataSize, uint16_t pollPositions, F p
                     throw std::runtime_error("received string not equal");
                 }
             }
-        }, 1);
+        });
 
     } else {
         bench(MESSAGES, [&]() {
@@ -457,7 +455,7 @@ void exclusiveBuffer(bool isClient, size_t dataSize, uint16_t pollPositions, F p
                 cq.pollSendCompletionQueueBlocking(ibv::workcompletion::Opcode::RDMA_WRITE);
                 cq.pollSendCompletionQueueBlocking(ibv::workcompletion::Opcode::RDMA_WRITE);
             }
-        }, 1);
+        });
     }
 }
 
