@@ -23,28 +23,29 @@ static constexpr auto printResults = []
 
 void doRunNoCommunication() {
    const auto database = YcsbDatabase();
-   const auto lookupKeys = generateZipfLookupKeys(ycsb_tx_count * 10);
    YcsbDataSet data{};
 
    // measure bytes / seconds
    std::cout << "none, ";
-   bench(ycsb_tx_count * 10 * sizeof(data), [&] {
-      for (auto lookupKey : lookupKeys) {
-         DoNotOptimize(data);
-         database.lookup(lookupKey, data.begin());
-         ClobberMemory();
-      }
+   bench(database.database.size() * 10 * sizeof(data), [&] {
+      for (int i = 0; i < 10; ++i)
+         for (auto &lookup : database.database) {
+            DoNotOptimize(data);
+            std::copy(lookup.second.begin(), lookup.second.end(), data.begin());
+            ClobberMemory();
+         }
    }, printResults);
 }
 
 template<class Server, class Client>
 void doRun(bool isClient, std::string connection) {
    struct ReadMessage {
-      YcsbKey lookupKey;
+      char next = '\0';
    };
 
    struct ReadResponse {
-      YcsbDataSet data;
+      // 4KB response size -> similar to how MSSQL cursors work
+      std::array<YcsbDataSet, 4> data;
    };
 
    if (isClient) {
@@ -63,29 +64,35 @@ void doRun(bool isClient, std::string connection) {
 
       std::cout << "connected to " << connection << '\n';
 
-      const auto lookupKeys = generateZipfLookupKeys(ycsb_tx_count);
-      auto response = ReadResponse{};
-
-      for (const auto lookupKey: lookupKeys) {
-         const auto message = ReadMessage{lookupKey};
+      auto message = ReadMessage{};
+      auto responses = ReadResponse{};
+      auto data = YcsbDataSet{};
+      for (size_t i = 0; i < ycsb_tuple_count;) {
          client.write(message);
-         DoNotOptimize(response);
-         client.read(response);
-         ClobberMemory();
+         client.read(responses);
+         for (auto &response : responses.data) {
+            ++i;
+            DoNotOptimize(data);
+            std::copy(response.begin(), response.end(), data.begin());
+            ClobberMemory();
+         }
       }
    } else { // server
       auto server = Server(connection);
       const auto database = YcsbDatabase();
       server.accept();
       // measure bytes / s
-      bench(ycsb_tx_count * sizeof(ReadResponse), [&] {
-         for (size_t i = 0; i < ycsb_tx_count; ++i) {
-            auto message = ReadMessage{};
+      bench(ycsb_tuple_count * sizeof(YcsbDataSet), [&] {
+         auto message = ReadMessage{};
+         auto responses = ReadResponse{};
+         for (auto lookupIt = database.database.begin(); lookupIt != database.database.end();) {
             server.read(message);
-            server.write([&](auto begin) {
-               database.lookup(message.lookupKey, begin);
-               return sizeof(ReadResponse);
-            });
+
+            for (auto &response : responses.data) {
+               std::copy(lookupIt->second.begin(), lookupIt->second.end(), response.begin());
+               ++lookupIt;
+            }
+            server.write(responses);
          }
       }, printResults);
    }
@@ -97,7 +104,7 @@ void doRunSharedMemory(bool isClient) {
    };
 
    struct ReadResponse {
-      YcsbDataSet data;
+      std::array<YcsbDataSet, 4> data;
    };
 
    if (isClient) {
@@ -116,29 +123,35 @@ void doRunSharedMemory(bool isClient) {
 
       std::cout << "connected to /dev/shm/pingPong\n";
 
-      const auto lookupKeys = generateZipfLookupKeys(ycsb_tx_count);
-
-      for (const auto lookupKey : lookupKeys) {
-         auto message = ReadMessage{lookupKey};
-         auto response = ReadResponse();
+      auto message = ReadMessage{};
+      auto responses = ReadResponse{};
+      auto data = YcsbDataSet{};
+      for (size_t i = 0; i < ycsb_tuple_count;) {
          client.write(message);
-         DoNotOptimize(response);
-         client.read(response); // TODO this is probably a bug in the Shared memory transport
-         ClobberMemory();
+         client.read(responses);
+         for (auto &response : responses.data) {
+            ++i;
+            DoNotOptimize(data);
+            std::copy(response.begin(), response.end(), data.begin());
+            ClobberMemory();
+         }
       }
    } else {
       auto server = SharedMemoryTransportServer("/dev/shm/pingPong");
       const auto database = YcsbDatabase();
       server.accept();
       // measure bytes / s
-      bench(ycsb_tx_count * sizeof(ReadResponse), [&]() {
-         for (size_t i = 0; i < ycsb_tx_count; ++i) {
-            auto message = ReadMessage{};
+      bench(ycsb_tuple_count * sizeof(YcsbDataSet), [&] {
+         auto message = ReadMessage{};
+         auto responses = ReadResponse{};
+         for (auto lookupIt = database.database.begin(); lookupIt != database.database.end();) {
             server.read(message);
-            auto response = ReadResponse();
-            database.lookup(message.lookupKey, response.data.begin());
 
-            server.write(response);
+            for (auto &response : responses.data) {
+               std::copy(lookupIt->second.begin(), lookupIt->second.end(), response.begin());
+               ++lookupIt;
+            }
+            server.write(responses);
          }
       }, printResults);
    }
@@ -168,11 +181,11 @@ int main(int argc, char** argv) {
    if (!isClient) std::cout << "connection, MB, time, MB/s, user, system, total\n";
    if (!isClient) doRunNoCommunication();
    std::cout << "domainSocket, ";
-   //doRun<DomainSocketsTransportServer, DomainSocketsTransportClient>(isClient, "/tmp/testSocket");
-   //std::cout << "shared memory, ";
-   //doRunSharedMemory(isClient);
-   //std::cout << "tcp, ";
-   //doRun<TcpTransportServer, TcpTransportClient>(isClient, connection);
+   doRun<DomainSocketsTransportServer, DomainSocketsTransportClient>(isClient, "/tmp/testSocket");
+   std::cout << "shared memory, ";
+   doRunSharedMemory(isClient);
+   std::cout << "tcp, ";
+   doRun<TcpTransportServer, TcpTransportClient>(isClient, connection);
    //std::cout << "rdma, ";
    //doRun<RdmaTransportServer, RdmaTransportClient>(isClient, connection);
 }
