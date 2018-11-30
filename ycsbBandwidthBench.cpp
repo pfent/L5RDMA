@@ -30,8 +30,9 @@ void doRunNoCommunication() {
    std::cout << "none, ";
    bench(ycsb_tx_count * 10 * sizeof(data), [&] {
       for (auto lookupKey : lookupKeys) {
-         database.lookup(lookupKey, data.begin());
          DoNotOptimize(data);
+         database.lookup(lookupKey, data.begin());
+         ClobberMemory();
       }
    }, printResults);
 }
@@ -68,8 +69,9 @@ void doRun(bool isClient, std::string connection) {
       for (const auto lookupKey: lookupKeys) {
          const auto message = ReadMessage{lookupKey};
          client.write(message);
-         client.read(response);
          DoNotOptimize(response);
+         client.read(response);
+         ClobberMemory();
       }
    } else { // server
       auto server = Server(connection);
@@ -120,8 +122,9 @@ void doRunSharedMemory(bool isClient) {
          auto message = ReadMessage{lookupKey};
          auto response = ReadResponse();
          client.write(message);
-         client.read(response); // TODO this is probably a bug in the Shared memory transport
          DoNotOptimize(response);
+         client.read(response); // TODO this is probably a bug in the Shared memory transport
+         ClobberMemory();
       }
    } else {
       auto server = SharedMemoryTransportServer("/dev/shm/pingPong");
@@ -141,6 +144,12 @@ void doRunSharedMemory(bool isClient) {
    }
 }
 
+/**
+ * TODO: Bandwidth benchmark should do pagination
+ * i.e. request batching
+ * only do a actual new request every X bytes of data
+ * probably try to keep the value as close possible to MSSQL -> 4096B per TDS packet
+ */
 int main(int argc, char** argv) {
    if (argc < 2) {
       std::cout << "Usage: " << argv[0] << " <client / server> <(IP, optional) 127.0.0.1>" << std::endl;
@@ -159,11 +168,11 @@ int main(int argc, char** argv) {
    if (!isClient) std::cout << "connection, MB, time, MB/s, user, system, total\n";
    if (!isClient) doRunNoCommunication();
    std::cout << "domainSocket, ";
-   doRun<DomainSocketsTransportServer, DomainSocketsTransportClient>(isClient, "/tmp/testSocket");
-   std::cout << "shared memory, ";
-   doRunSharedMemory(isClient);
-   std::cout << "tcp, ";
-   doRun<TcpTransportServer, TcpTransportClient>(isClient, connection);
+   //doRun<DomainSocketsTransportServer, DomainSocketsTransportClient>(isClient, "/tmp/testSocket");
+   //std::cout << "shared memory, ";
+   //doRunSharedMemory(isClient);
+   //std::cout << "tcp, ";
+   //doRun<TcpTransportServer, TcpTransportClient>(isClient, connection);
    //std::cout << "rdma, ";
    //doRun<RdmaTransportServer, RdmaTransportClient>(isClient, connection);
 }
