@@ -64,11 +64,9 @@ void doRun(bool isClient, std::string connection) {
 
       std::cout << "connected to " << connection << '\n';
 
-      auto message = ReadMessage{};
       auto responses = ReadResponse{};
       auto data = YcsbDataSet{};
       for (size_t i = 0; i < ycsb_tuple_count;) {
-         client.write(message);
          client.read(responses);
          for (auto &response : responses.data) {
             ++i;
@@ -83,11 +81,8 @@ void doRun(bool isClient, std::string connection) {
       server.accept();
       // measure bytes / s
       bench(ycsb_tuple_count * sizeof(YcsbDataSet), [&] {
-         auto message = ReadMessage{};
          auto responses = ReadResponse{};
          for (auto lookupIt = database.database.begin(); lookupIt != database.database.end();) {
-            server.read(message);
-
             for (auto &response : responses.data) {
                std::copy(lookupIt->second.begin(), lookupIt->second.end(), response.begin());
                ++lookupIt;
@@ -110,23 +105,32 @@ int main(int argc, char** argv) {
       return -1;
    }
    const auto isClient = argv[1][0] == 'c';
-   std::string connection;
-   if (isClient) {
-      connection = ip + std::string(":") + std::to_string(port);
-   } else {
-      connection = std::to_string(port);
-   }
-   if (argc > 2) {
+   const auto isLocal = [&] {
+      if (argc <= 2) {
+         return true;
+      }
       ip = argv[2];
-   }
+      return strcmp("127.0.0.1", ip) == 0;
+   }();
+   const auto connection = [&] {
+      if (isClient) {
+         return ip + std::string(":") + std::to_string(port);
+      } else {
+         return std::to_string(port);
+      }
+   }();
    if (!isClient) std::cout << "connection, MB, time, MB/s, user, system, total\n";
    if (!isClient) doRunNoCommunication();
-   std::cout << "domainSocket, ";
-   doRun<DomainSocketsTransportServer, DomainSocketsTransportClient>(isClient, "/tmp/testSocket");
-   std::cout << "shared memory, ";
-   doRun<SharedMemoryTransportServer, SharedMemoryTransportClient>(isClient, "/tmp/testSocket");
+   if (isLocal) {
+      std::cout << "domainSocket, ";
+      doRun<DomainSocketsTransportServer, DomainSocketsTransportClient>(isClient, "/tmp/testSocket");
+      std::cout << "shared memory, ";
+      doRun<SharedMemoryTransportServer, SharedMemoryTransportClient>(isClient, "/tmp/testSocket");
+   }
    std::cout << "tcp, ";
    doRun<TcpTransportServer, TcpTransportClient>(isClient, connection);
-   //std::cout << "rdma, ";
-   //doRun<RdmaTransportServer, RdmaTransportClient>(isClient, connection);
+   if (not isLocal) {
+      std::cout << "rdma, ";
+      doRun<RdmaTransportServer, RdmaTransportClient>(isClient, connection);
+   }
 }
