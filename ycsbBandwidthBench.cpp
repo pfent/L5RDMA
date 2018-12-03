@@ -119,9 +119,9 @@ int main(int argc, char** argv) {
          return std::to_string(port);
       }
    }();
-   if (!isClient) std::cout << "connection, MB, time, MB/s, user, system, total\n";
-   if (!isClient) doRunNoCommunication();
+   if (not isClient) std::cout << "connection, MB, time, MB/s, user, system, total\n";
    if (isLocal) {
+      if (not isClient) doRunNoCommunication();
       std::cout << "domainSocket, ";
       doRun<DomainSocketsTransportServer, DomainSocketsTransportClient>(isClient, "/tmp/testSocket");
       std::cout << "shared memory, ";
