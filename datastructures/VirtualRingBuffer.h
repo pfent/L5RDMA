@@ -6,6 +6,7 @@
 #include <atomic>
 #include <memory>
 #include <unistd.h>
+#include <util/virtualMemory.h>
 #include "util/virtualMemory.h"
 
 namespace l5 {
@@ -23,10 +24,10 @@ struct VirtualRingBuffer {
     const size_t size;
     const size_t bitmask;
 
-    std::shared_ptr<RingBufferInfo> localRw;
+    util::ShmMapping<RingBufferInfo> localRw;
     util::WraparoundBuffer local;
 
-    std::shared_ptr<RingBufferInfo> remoteRw;
+    util::ShmMapping<RingBufferInfo> remoteRw;
     util::WraparoundBuffer remote;
 
     /// Establish a shared memory region of size with the remote side of sock

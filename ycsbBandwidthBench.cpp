@@ -94,7 +94,7 @@ void doRun(bool isClient, std::string connection) {
 }
 
 /**
- * TODO: Bandwidth benchmark should do pagination
+ * Bandwidth benchmark with pagination
  * i.e. request batching
  * only do a actual new request every X bytes of data
  * probably try to keep the value as close possible to MSSQL -> 4096B per TDS packet

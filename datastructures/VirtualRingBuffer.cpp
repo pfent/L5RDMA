@@ -13,54 +13,55 @@ VirtualRingBuffer::VirtualRingBuffer(size_t size, const Socket &sock) : size(siz
         throw std::runtime_error{"size should be a power of 2"};
     }
 
-    localRw = malloc_shared<RingBufferInfo>(infoName + pid, sizeof(RingBufferInfo), true);
+    localRw = malloc_shared<RingBufferInfo>(infoName + pid, sizeof(RingBufferInfo));
+    domain::send_fd(sock, localRw.fd);
+
     local = mmapSharedRingBuffer(bufferName + pid, size, true);
+    domain::send_fd(sock, local.fd);
 
-    domain::write(sock, pid.c_str(), pid.size());
-    uint8_t buffer[255];
-    size_t readCount = domain::read(sock, buffer, 255);
-    const auto remotePid = std::string(buffer, buffer + readCount);
+    auto remoteRwFd = Socket::fromRaw(domain::receive_fd(sock));
+    remoteRw = malloc_shared<RingBufferInfo>(remoteRwFd.get(), sizeof(RingBufferInfo));
 
-    remoteRw = malloc_shared<RingBufferInfo>(infoName + remotePid, sizeof(RingBufferInfo), false);
-    remote = mmapSharedRingBuffer(bufferName + remotePid, size);
+    auto remoteFd = Socket::fromRaw(domain::receive_fd(sock));
+    remote = mmapRingBuffer(remoteFd.get(), size);
 }
 
 void VirtualRingBuffer::waitUntilSendFree(size_t localWritten, size_t length) const {
     size_t remoteRead;
     loop_while([&]() {
-        remoteRead = remoteRw->read; // probably buffer this in class, so we don't have as much remote reads
+        remoteRead = remoteRw.data->read; // probably buffer this in class, so we don't have as much remote reads
     }, [&]() { return (localWritten - remoteRead) > (size - length); }); // block until there is some space
 }
 
 void VirtualRingBuffer::send(const uint8_t *data, size_t length) {
-    const auto localWritten = localRw->written.load();
+    const auto localWritten = localRw.data->written.load();
     const auto pos = localWritten & bitmask;
 
     waitUntilSendFree(localWritten, length);
 
-    std::copy(data, data + length, &local.get()[pos]);
+    std::copy(data, data + length, &local.data.get()[pos]);
 
     // basically `localRw->written += length;`, but without the mfence or locked instructions
-    localRw->written.store(localWritten + length, std::memory_order_release);
+    localRw.data->written.store(localWritten + length, std::memory_order_release);
 }
 
 size_t VirtualRingBuffer::receive(void *whereTo, size_t maxSize) {
-    const auto localRead = localRw->read.load();
+    const auto localRead = localRw.data->read.load();
     const auto pos = localRead & bitmask;
 
     waitUntilReceiveAvailable(maxSize, localRead);
 
-    std::copy(&remote.get()[pos], &remote.get()[pos + maxSize], reinterpret_cast<uint8_t *>(whereTo));
+    std::copy(&remote.data.get()[pos], &remote.data.get()[pos + maxSize], reinterpret_cast<uint8_t *>(whereTo));
 
     // basically `localRw->read += maxSize;`, but without the mfence or locked instructions
-    localRw->read.store(localRead + maxSize, std::memory_order_release);
+    localRw.data->read.store(localRead + maxSize, std::memory_order_release);
     return maxSize;
 }
 
 void VirtualRingBuffer::waitUntilReceiveAvailable(size_t maxSize, size_t localRead) const {
     size_t remoteWritten;
     loop_while([&]() {
-        remoteWritten = remoteRw->written; // probably buffer this in class, so we don't have as much remote reads
+        remoteWritten = remoteRw.data->written; // probably buffer this in class, so we don't have as much remote reads
     }, [&]() { return (remoteWritten - localRead) < maxSize; }); // block until maxSize is available
 }
 } // namespace datastructure

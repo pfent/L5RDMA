@@ -25,10 +25,61 @@ struct SharedMemoryInfo {
     }
 };
 
-using WraparoundBuffer = std::shared_ptr<uint8_t>;
+class WraparoundBuffer {
+   public:
+   int fd = -1;
+   std::shared_ptr<uint8_t> data;
+
+   WraparoundBuffer() = default;
+
+   WraparoundBuffer(int fd, std::shared_ptr<uint8_t> data) : fd(fd), data(std::move(data)) {}
+
+   WraparoundBuffer(const WraparoundBuffer& other) = delete;
+
+   WraparoundBuffer(WraparoundBuffer&& other) noexcept : fd(other.fd), data(std::move(other.data)) {
+      other.fd = -1;
+   }
+
+   WraparoundBuffer& operator=(const WraparoundBuffer& other) = delete;
+
+   WraparoundBuffer& operator=(WraparoundBuffer&& other) noexcept {
+      std::swap(fd, other.fd);
+      std::swap(data, other.data);
+      return *this;
+   }
+
+   ~WraparoundBuffer() { if(fd > 0) ::close(fd); }
+};
+
+template <typename T>
+class ShmMapping {
+public:
+    int fd = -1;
+    std::shared_ptr<T> data;
+
+    ShmMapping() = default;
+
+    ShmMapping(int fd, std::shared_ptr<T> data) : fd(fd), data(std::move(data)) {}
+
+    ShmMapping(const ShmMapping& other) = delete;
+
+    ShmMapping(ShmMapping&& other) noexcept : fd(other.fd), data(std::move(other.data)) {
+        other.fd = -1;
+    }
+
+    ShmMapping& operator=(const ShmMapping& other) = delete;
+
+    ShmMapping& operator=(ShmMapping&& other) noexcept {
+       std::swap(fd, other.fd);
+       std::swap(data, other.data);
+       return *this;
+    }
+
+    ~ShmMapping() { if(fd > 0) ::close(fd); }
+};
 
 template<typename T>
-std::shared_ptr<T> malloc_shared(const std::string &name, size_t size, bool init, void *addr = nullptr) {
+ShmMapping<T> malloc_shared(const std::string &name, size_t size, void *addr = nullptr) {
     // create a new mapping in /dev/shm
     const auto fd = shm_open(name.c_str(), O_CREAT | O_TRUNC | O_RDWR, 0666);
     if (fd < 0) {
@@ -45,16 +96,22 @@ std::shared_ptr<T> malloc_shared(const std::string &name, size_t size, bool init
     };
     auto ptr = mmap(addr, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
 
-    close(fd); // no need to keep the fd open after the mapping
+    memset(ptr, 0, size);
 
-    if (init) {
-        memset(ptr, 0, size);
-    }
-
-    return std::shared_ptr<T>(reinterpret_cast<T *>(ptr), deleter);
+    return ShmMapping<T>( fd, std::shared_ptr<T>(reinterpret_cast<T *>(ptr), deleter) );
 }
 
-WraparoundBuffer mmapRingBuffer(int fd, size_t size, bool init);
+template<typename T>
+ShmMapping<T> malloc_shared(int fd, size_t size, void *addr = nullptr) {
+   auto deleter = [size](void *p) {
+      munmap(p, size);
+   };
+   auto ptr = mmap(addr, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+
+   return ShmMapping<T>( fd, std::shared_ptr<T>(reinterpret_cast<T *>(ptr), deleter) );
+}
+
+WraparoundBuffer mmapRingBuffer(int fd, size_t size, bool init = false);
 
 WraparoundBuffer mmapSharedRingBuffer(const std::string &name, size_t size, bool init = false);
 } // namespace util

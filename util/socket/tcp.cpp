@@ -22,7 +22,7 @@ void l5::util::tcp::connect(const l5::util::Socket &sock, const std::string &ip,
 }
 
 void l5::util::tcp::write(const l5::util::Socket &sock, const void* buffer, std::size_t size) {
-   auto current = 0;
+   size_t current = 0;
    for (;;) {
       auto res = ::send(sock.get(), reinterpret_cast<const char*>(buffer) + current, size, 0);
       if (res < 0) {
@@ -37,7 +37,7 @@ void l5::util::tcp::write(const l5::util::Socket &sock, const void* buffer, std:
 }
 
 void l5::util::tcp::read(const l5::util::Socket &sock, void* buffer, std::size_t size) {
-   auto current = 0;
+   size_t current = 0;
    for (;;) {
       auto res = ::recv(sock.get(), reinterpret_cast<char*>(buffer) + current, size, 0);
       if (res < 0) {
@@ -47,7 +47,7 @@ void l5::util::tcp::read(const l5::util::Socket &sock, void* buffer, std::size_t
          return;
       }
       current += res;
-      if (static_cast<size_t>(current) == size) {
+      if (current == size) {
          return;
       }
       size -= res;

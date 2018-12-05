@@ -46,7 +46,7 @@ public:
     void send(SizeReturner &&doWork) {
         static_assert(std::is_unsigned_v<std::result_of_t<SizeReturner(uint8_t *)>>);
         const auto startOfWrite = sendPos & bitmask;
-        auto sizePtr = reinterpret_cast<volatile size_t *>(&sendBuf.get()[startOfWrite]);
+        auto sizePtr = reinterpret_cast<volatile size_t *>(&sendBuf.data.get()[startOfWrite]);
         auto begin = reinterpret_cast<volatile uint8_t *>(sizePtr + 1);
 
         // let the caller do the data stuff
@@ -94,19 +94,19 @@ public:
         size_t receiveSize;
         size_t checkMe;
         do {
-            receiveSize = *reinterpret_cast<volatile size_t *>(&receiveBuf.get()[startOfRead]);
-            checkMe = *reinterpret_cast<volatile size_t *>(&receiveBuf.get()[startOfRead + sizeof(size_t) +
+            receiveSize = *reinterpret_cast<volatile size_t *>(&receiveBuf.data.get()[startOfRead]);
+            checkMe = *reinterpret_cast<volatile size_t *>(&receiveBuf.data.get()[startOfRead + sizeof(size_t) +
                     receiveSize]);
         } while (checkMe != validity);
 
-        const auto begin = &receiveBuf.get()[startOfRead + sizeof(receiveSize)];
+        const auto begin = &receiveBuf.data.get()[startOfRead + sizeof(receiveSize)];
         const auto end = begin + receiveSize;
 
         // let the caller do the data stuff
         callback(begin, end);
 
         const auto totalSizeRead = sizeof(receiveSize) + receiveSize + sizeof(validity);
-        std::fill(&receiveBuf.get()[startOfRead], &receiveBuf.get()[startOfRead + totalSizeRead], 0);
+        std::fill(&receiveBuf.data.get()[startOfRead], &receiveBuf.data.get()[startOfRead + totalSizeRead], 0);
 
         localReadPos.store(lastReadPos + totalSizeRead, std::memory_order_release);
     }

@@ -14,10 +14,10 @@ VirtualRDMARingBuffer::VirtualRDMARingBuffer(size_t size, const Socket &sock) :
         size(size), bitmask(size - 1), net(sock),
         sendBuf(mmapSharedRingBuffer(to_string(uuidGenerator()), size, true)),
         // Since we mapped twice the virtual memory, we can create memory regions of twice the size of the actual buffer
-        localSendMr(net.network.registerMr(sendBuf.get(), size * 2, {})),
+        localSendMr(net.network.registerMr(sendBuf.data.get(), size * 2, {})),
         localReadPosMr(net.network.registerMr(&localReadPos, sizeof(localReadPos), {Perm::REMOTE_READ})),
         receiveBuf(mmapSharedRingBuffer(to_string(uuidGenerator()), size, true)),
-        localReceiveMr(net.network.registerMr(receiveBuf.get(), size * 2, {Perm::LOCAL_WRITE, Perm::REMOTE_WRITE})),
+        localReceiveMr(net.network.registerMr(receiveBuf.data.get(), size * 2, {Perm::LOCAL_WRITE, Perm::REMOTE_WRITE})),
         remoteReadPosMr(net.network.registerMr(&remoteReadPos, sizeof(remoteReadPos), {Perm::LOCAL_WRITE})) {
     const bool powerOfTwo = (size != 0) && !(size & (size - 1));
     if (not powerOfTwo) {

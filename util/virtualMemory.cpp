@@ -35,7 +35,6 @@ WraparoundBuffer mmapRingBuffer(int fd, size_t size, bool init) {
     if (mmap(&ptr[size], size, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED, fd, 0) != &ptr[size]) {
         throw std::runtime_error{"mmaping the wraparound failed"};
     }
-    close(fd); // no need to keep the fd open after the mapping
 
     if (init) {
         memset(ptr, 0, size);
@@ -44,7 +43,7 @@ WraparoundBuffer mmapRingBuffer(int fd, size_t size, bool init) {
     const auto deleter = [size](void *p) {
         munmap(p, size);
     };
-    return {ptr, deleter};
+    return WraparoundBuffer(fd, {ptr, deleter});
 }
 } // namespace util
 } // namespace l5
