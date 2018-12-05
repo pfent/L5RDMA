@@ -27,10 +27,10 @@ void doRun(const std::string &name, bool isClient, std::string connection, size_
    std::vector<uint8_t> testdata(size);
 
    if (isClient) {
+      std::cout << "connecting to " << connection << "..." << std::flush;
+
       sleep(1);
       auto client = Client();
-
-      std::cout << "connecting to " << connection << "..." << std::flush;
       for (int i = 0;; ++i) {
          try {
             client.connect(connection);
@@ -40,21 +40,23 @@ void doRun(const std::string &name, bool isClient, std::string connection, size_
             if (i > 10) throw;
          }
       }
-      std::cout << "connected\n";
+      std::cout << " connected!\n";
+
+      std::cout << "receiving " << size << "B data from the server\n";
 
       client.read(testdata.data(), size);
       DoNotOptimize(testdata);
       ClobberMemory();
 
    } else { // server
-      std::cout << name << ", " << std::flush;
+      // immediately accept to not block the client
       auto server = Server(connection);
       server.accept();
 
       RandomString rand;
       rand.fill(size, reinterpret_cast<char*>(testdata.data()));
 
-      // measure bytes / s
+      std::cout << name << ", " << std::flush;
       bench(testdata.size(), [&] {
          server.write(testdata.data(), testdata.size());
       }, printResults);
@@ -62,18 +64,42 @@ void doRun(const std::string &name, bool isClient, std::string connection, size_
 }
 
 int main(int argc, char** argv) {
-   if (argc < 2) {
-      std::cout << "Usage: " << argv[0] << " <client / server> <(IP, optional) 127.0.0.1>" << std::endl;
+   if (argc < 3) {
+      std::cout << "Usage: " << argv[0] << " <client / server> messagesize <(optional) 127.0.0.1>" << std::endl;
       return -1;
    }
    const auto isClient = argv[1][0] == 'c';
-   const auto isLocal = [&] {
-      if (argc <= 2) {
-         return true;
+
+   const auto size = [&] {
+      auto specifiedSize = std::string(argv[2]);
+      size_t multiplier;
+      switch (specifiedSize.back()) {
+         case 'k':
+         case 'K':
+            multiplier = 1024;
+            break;
+         case 'm':
+         case 'M':
+            multiplier = 1024 * 1024;
+            break;
+         case 'g':
+         case 'G':
+            multiplier = 1024 * 1024 * 1024;
+            break;
+         default:
+            multiplier = 1;
       }
-      ip = argv[2];
+      specifiedSize.pop_back();
+      return stoi(specifiedSize) * multiplier;
+   }();
+
+   const auto isLocal = [&] {
+      if (argc > 3) {
+         ip = argv[3];
+      }
       return strcmp("127.0.0.1", ip) == 0;
    }();
+
    const auto connection = [&] {
       if (isClient) {
          return ip + std::string(":") + std::to_string(port);
@@ -82,17 +108,21 @@ int main(int argc, char** argv) {
       }
    }();
 
-   const auto size = 1024 * 1024;// todo
-
    if (not isClient) std::cout << "connection, MB, time, MB/s, user, system, total\n";
    if (isLocal) {
-      //doRun<DomainSocketsTransportServer, DomainSocketsTransportClient>("domainSocket", isClient, "/tmp/testSocket",
-      //                                                                  size);
-      doRun<SharedMemoryTransportServer, SharedMemoryTransportClient>("shared memory", isClient, "/tmp/testSocket",
-                                                                      size);
+      doRun<DomainSocketsTransportServer,
+            DomainSocketsTransportClient
+      >("domainSocket", isClient, "/tmp/testSocket", size);
+      doRun<SharedMemoryTransportServer,
+            SharedMemoryTransportClient
+      >("shared memory", isClient, "/tmp/testSocket", size);
    }
-   doRun<TcpTransportServer, TcpTransportClient>("tcp", isClient, connection, size);
+   doRun<TcpTransportServer,
+         TcpTransportClient
+   >("tcp", isClient, connection, size);
    if (not isLocal) {
-      doRun<RdmaTransportServer, RdmaTransportClient>("rdma", isClient, connection, size);
+      doRun<RdmaTransportServer,
+            RdmaTransportClient
+      >("rdma", isClient, connection, size);
    }
 }

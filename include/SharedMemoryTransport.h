@@ -6,15 +6,14 @@
 namespace l5 {
 namespace transport {
 class SharedMemoryTransportServer : public TransportServer<SharedMemoryTransportServer> {
-    const size_t BUFFER_SIZE = 16 * 1024 * 1024;
-    const util::Socket initialSocket;
-    const std::string file;
-    const std::string remoteBufferName;
-    const std::string remoteReadPosName;
+    util::Socket initialSocket;
+    std::string file;
     util::Socket communicationSocket;
     std::unique_ptr<datastructure::VirtualRingBuffer> messageBuffer;
 
 public:
+    // TODO: template BUFFER_SIZE
+    static constexpr size_t BUFFER_SIZE = 16 * 1024 * 1024;
     /**
      * Exchange information about the shared memory via the given domain socket
      * @param domainSocket filename of the domain socket
@@ -31,11 +30,13 @@ public:
 };
 
 class SharedMemoryTransportClient : public TransportClient<SharedMemoryTransportClient> {
-    const size_t BUFFER_SIZE = 16 * 1024 * 1024;
-    const util::Socket socket;
+    util::Socket socket;
     std::unique_ptr<datastructure::VirtualRingBuffer> messageBuffer;
 
 public:
+    // TODO: template BUFFER_SIZE
+    static constexpr size_t BUFFER_SIZE = 16 * 1024 * 1024;
+
     SharedMemoryTransportClient();
 
     ~SharedMemoryTransportClient() override;

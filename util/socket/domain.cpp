@@ -158,6 +158,9 @@ int receive_fd(const Socket &sock) {
    }
 
    const auto cmsg = CMSG_FIRSTHDR(&msg);
+   if (cmsg == nullptr) {
+      throw std::runtime_error("receive_fd: invalid FD received");
+   }
    int fd = *reinterpret_cast<int*>(CMSG_DATA(cmsg));
    return fd;
 }

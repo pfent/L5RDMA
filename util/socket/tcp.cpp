@@ -29,7 +29,7 @@ void l5::util::tcp::write(const l5::util::Socket &sock, const void* buffer, std:
          throw std::runtime_error("Couldn't write to socket: "s + strerror(errno));
       }
       current += res;
-      if (static_cast<size_t>(current) == size) {
+      if (current == size) {
          return;
       }
       size -= res;
