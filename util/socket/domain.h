@@ -24,12 +24,12 @@ void write(const Socket &sock, const T &object) {
    write(sock, reinterpret_cast<const uint8_t*>(&object), sizeof(object));
 }
 
-size_t read(const Socket &sock, void* buffer, std::size_t size);
+void read(const Socket &sock, void* buffer, std::size_t size);
 
 template<typename T>
-size_t read(const Socket &sock, T &object) {
+void read(const Socket &sock, T &object) {
    static_assert(std::is_trivially_copyable<T>::value, "");
-   return read(sock, &object, sizeof(object));
+   read(sock, &object, sizeof(object));
 }
 
 template<typename T>

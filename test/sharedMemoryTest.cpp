@@ -13,7 +13,7 @@ const size_t TIMEOUT_IN_SECONDS = 5;
 int main() {
     const auto serverPid = fork();
     if (serverPid == 0) {
-        auto pong = Pong(make_transportServer<SharedMemoryTransportServer>("/tmp/pingPong"));
+        auto pong = Pong(make_transportServer<SharedMemoryTransportServer<>>("/tmp/pingPong"));
         pong.start();
         for (size_t i = 0; i < MESSAGES; ++i) {
             pong.pong();
@@ -24,7 +24,7 @@ int main() {
     const auto clientPid = fork();
     if (clientPid == 0) {
         sleep(1); // server needs some time to start
-        auto ping = Ping(make_transportClient<SharedMemoryTransportClient>(), "/tmp/pingPong");
+        auto ping = Ping(make_transportClient<SharedMemoryTransportClient<>>(), "/tmp/pingPong");
         for (size_t i = 0; i < MESSAGES; ++i) {
             ping.ping();
         }

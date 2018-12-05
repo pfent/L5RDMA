@@ -125,7 +125,7 @@ int main(int argc, char** argv) {
       std::cout << "domainSocket, ";
       doRun<DomainSocketsTransportServer, DomainSocketsTransportClient>(isClient, "/tmp/testSocket");
       std::cout << "shared memory, ";
-      doRun<SharedMemoryTransportServer, SharedMemoryTransportClient>(isClient, "/tmp/testSocket");
+      doRun<SharedMemoryTransportServer<>, SharedMemoryTransportClient<>>(isClient, "/tmp/testSocket");
    }
    std::cout << "tcp, ";
    doRun<TcpTransportServer, TcpTransportClient>(isClient, connection);

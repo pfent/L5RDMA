@@ -10,7 +10,7 @@
 namespace l5 {
 namespace transport {
 class RdmaTransportServer : public TransportServer<RdmaTransportServer> {
-    const size_t BUFFER_SIZE = 16 * 1024 * 1024;
+    const size_t BUFFER_SIZE = 16 * 1024 * 1024; // TODO: allow buffersize to be templated
     const util::Socket sock;
     std::unique_ptr<datastructure::VirtualRDMARingBuffer> rdma = nullptr;
 
@@ -40,7 +40,7 @@ public:
 };
 
 class RdmaTransportClient : public TransportClient<RdmaTransportClient> {
-    const size_t BUFFER_SIZE = 16 * 1024 * 1024;
+    const size_t BUFFER_SIZE = 16 * 1024 * 1024; // TODO: allow buffersize to be templated
     const util::Socket sock;
     std::unique_ptr<datastructure::VirtualRDMARingBuffer> rdma = nullptr;
 

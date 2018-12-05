@@ -25,7 +25,7 @@ void RdmaTransportServer::listen(uint16_t port) {
 }
 
 void RdmaTransportServer::write_impl(const uint8_t *data, size_t size) {
-    rdma->send(data, size);
+    rdma->send(data, size); // TODO: chunked read / write
 }
 
 void RdmaTransportServer::read_impl(uint8_t *buffer, size_t size) {
@@ -49,7 +49,7 @@ RdmaTransportClient::RdmaTransportClient() : sock(Socket::create()) {}
 RdmaTransportClient::~RdmaTransportClient() = default;
 
 void RdmaTransportClient::write_impl(const uint8_t *data, size_t size) {
-    rdma->send(data, size);
+    rdma->send(data, size); // TODO: chunked read / write
 }
 
 void RdmaTransportClient::read_impl(uint8_t *buffer, size_t size) {

@@ -12,6 +12,10 @@ using namespace l5::transport;
 static constexpr uint16_t port = 1234;
 static const char* ip = "127.0.0.1";
 
+constexpr size_t operator "" _K(unsigned long long i) { return i * 1024; }
+constexpr size_t operator "" _M(unsigned long long i) { return i * 1024 * 1024; }
+constexpr size_t operator "" _G(unsigned long long i) { return i * 1024 * 1024 * 1024; }
+
 static constexpr auto printResults = []
       (double workSize, auto avgTime, auto userPercent, auto systemPercent, auto totalPercent) {
    std::cout << workSize / 1e6 << ", "
@@ -113,8 +117,8 @@ int main(int argc, char** argv) {
       doRun<DomainSocketsTransportServer,
             DomainSocketsTransportClient
       >("domainSocket", isClient, "/tmp/testSocket", size);
-      doRun<SharedMemoryTransportServer,
-            SharedMemoryTransportClient
+      doRun<SharedMemoryTransportServer<512_M>,
+            SharedMemoryTransportClient<512_M>
       >("shared memory", isClient, "/tmp/testSocket", size);
    }
    doRun<TcpTransportServer,

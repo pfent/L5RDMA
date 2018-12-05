@@ -34,34 +34,26 @@ void connect(const Socket &sock, const std::string &pathToFile) {
 }
 
 void write(const Socket &sock, const void* buffer, std::size_t size) {
-   size_t current = 0;
-   for (;;) {
+   for (size_t current = 0; size > 0;) {
       auto res = ::send(sock.get(), reinterpret_cast<const char*>(buffer) + current, size, 0);
       if (res < 0) {
          throw std::runtime_error("Couldn't write to socket: "s + strerror(errno));
       }
       current += res;
-      if (current == size) {
-         return;
-      }
       size -= res;
    }
 }
 
-size_t read(const Socket &sock, void* buffer, std::size_t size) {
-   size_t current = 0;
-   for (;;) {
+void read(const Socket &sock, void* buffer, std::size_t size) {
+   for (size_t current = 0; size > 0;) {
       auto res = ::recv(sock.get(), reinterpret_cast<char*>(buffer) + current, size, 0);
       if (res < 0) {
          throw std::runtime_error("Couldn't read from socket: "s + strerror(errno));
       }
       if (static_cast<size_t>(res) == size) {
-         return size;
+         return;
       }
       current += res;
-      if (current == size) {
-         return current;
-      }
       size -= res;
    }
 }

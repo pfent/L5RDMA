@@ -13,18 +13,6 @@
 
 namespace l5 {
 namespace util {
-struct SharedMemoryInfo {
-    std::string remoteBufferName;
-
-    /// Exchange shared memory information with the remote side of the socket
-    SharedMemoryInfo(Socket &sock, const std::string &bufferName) {
-        domain::write(sock, bufferName.c_str(), bufferName.size());
-        uint8_t buffer[255];
-        size_t readCount = domain::read(sock, buffer, 255);
-        this->remoteBufferName = std::string(buffer, buffer + readCount);
-    }
-};
-
 class WraparoundBuffer {
    public:
    int fd = -1;

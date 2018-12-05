@@ -97,7 +97,7 @@ void doRunSharedMemory(bool isClient) {
 
     if (isClient) {
         sleep(1);
-        auto client = SharedMemoryTransportClient();
+        auto client = SharedMemoryTransportClient<>();
 
         for (int i = 0;; ++i) {
             try {
@@ -121,7 +121,7 @@ void doRunSharedMemory(bool isClient) {
             DoNotOptimize(message);
         }
     } else {
-        auto server = SharedMemoryTransportServer("/dev/shm/pingPong");
+        auto server = SharedMemoryTransportServer<>("/dev/shm/pingPong");
         const auto database = YcsbDatabase();
         server.accept();
         bench(ycsb_tx_count, [&]() {
