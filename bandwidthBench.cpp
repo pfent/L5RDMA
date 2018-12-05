@@ -12,9 +12,9 @@ using namespace l5::transport;
 static constexpr uint16_t port = 1234;
 static const char* ip = "127.0.0.1";
 
-constexpr size_t operator "" _K(unsigned long long i) { return i * 1024; }
-constexpr size_t operator "" _M(unsigned long long i) { return i * 1024 * 1024; }
-constexpr size_t operator "" _G(unsigned long long i) { return i * 1024 * 1024 * 1024; }
+constexpr size_t operator "" _k(unsigned long long i) { return i * 1024; }
+constexpr size_t operator "" _m(unsigned long long i) { return i * 1024 * 1024; }
+constexpr size_t operator "" _g(unsigned long long i) { return i * 1024 * 1024 * 1024; }
 
 static constexpr auto printResults = []
       (double workSize, auto avgTime, auto userPercent, auto systemPercent, auto totalPercent) {
@@ -117,16 +117,16 @@ int main(int argc, char** argv) {
       doRun<DomainSocketsTransportServer,
             DomainSocketsTransportClient
       >("domainSocket", isClient, "/tmp/testSocket", size);
-      doRun<SharedMemoryTransportServer<512_M>,
-            SharedMemoryTransportClient<512_M>
+      doRun<SharedMemoryTransportServer<512_m>,
+            SharedMemoryTransportClient<512_m>
       >("shared memory", isClient, "/tmp/testSocket", size);
    }
    doRun<TcpTransportServer,
          TcpTransportClient
    >("tcp", isClient, connection, size);
    if (not isLocal) {
-      doRun<RdmaTransportServer<512_M>,
-            RdmaTransportClient<512_M>
+      doRun<RdmaTransportServer<512_m>,
+            RdmaTransportClient<512_m>
       >("rdma", isClient, connection, size);
    }
 }
