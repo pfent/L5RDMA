@@ -19,7 +19,7 @@ int main(int, const char** args) {
 
     const auto serverPid = fork();
     if (serverPid == 0) {
-        auto pong = Pong(make_transportServer<RdmaTransportServer>("1234"));
+        auto pong = Pong(make_transportServer<RdmaTransportServer<>>("1234"));
         pong.start();
         for (size_t i = 0; i < MESSAGES; ++i) {
             pong.pong();
@@ -30,7 +30,7 @@ int main(int, const char** args) {
     const auto clientPid = fork();
     if (clientPid == 0) {
         sleep(1); // server needs some time to start
-        auto ping = Ping(make_transportClient<RdmaTransportClient>(), "127.0.0.1:1234");
+        auto ping = Ping(make_transportClient<RdmaTransportClient<>>(), "127.0.0.1:1234");
         for (size_t i = 0; i < MESSAGES; ++i) {
             ping.ping();
         }

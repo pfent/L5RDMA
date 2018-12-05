@@ -5,65 +5,118 @@
 #include <memory>
 #include <util/socket/Socket.h>
 #include <datastructures/VirtualRDMARingBuffer.h>
+#include <util/socket/tcp.h>
 #include "Transport.h"
 
 namespace l5 {
 namespace transport {
-class RdmaTransportServer : public TransportServer<RdmaTransportServer> {
-    const size_t BUFFER_SIZE = 16 * 1024 * 1024; // TODO: allow buffersize to be templated
-    const util::Socket sock;
-    std::unique_ptr<datastructure::VirtualRDMARingBuffer> rdma = nullptr;
+template<size_t BUFFER_SIZE = 16 * 1024 * 1024>
+class RdmaTransportServer : public TransportServer<RdmaTransportServer<BUFFER_SIZE>> {
+   const util::Socket sock;
+   std::unique_ptr<datastructure::VirtualRDMARingBuffer> rdma = nullptr;
 
-    void listen(uint16_t port);
+   void listen(uint16_t port);
 
-public:
+   public:
 
-    explicit RdmaTransportServer(const std::string &port);
+   explicit RdmaTransportServer(const std::string &port);
 
-    ~RdmaTransportServer() override;
+   ~RdmaTransportServer() override = default;
 
-    void accept_impl();
+   void accept_impl();
 
-    void write_impl(const uint8_t *data, size_t size);
+   void write_impl(const uint8_t* data, size_t size);
 
-    void read_impl(uint8_t *buffer, size_t size);
+   void read_impl(uint8_t* buffer, size_t size);
 
-    template<typename RangeConsumer>
-    void readZC(RangeConsumer &&callback) {
-        rdma->receive(std::forward<RangeConsumer>(callback));
-    }
+   template<typename RangeConsumer>
+   void readZC(RangeConsumer &&callback) {
+      rdma->receive(std::forward<RangeConsumer>(callback));
+   }
 
-    template<typename SizeReturner>
-    void writeZC(SizeReturner &&doWork) {
-        rdma->send(std::forward<SizeReturner>(doWork));
-    }
+   template<typename SizeReturner>
+   void writeZC(SizeReturner &&doWork) {
+      rdma->send(std::forward<SizeReturner>(doWork));
+   }
 };
 
-class RdmaTransportClient : public TransportClient<RdmaTransportClient> {
-    const size_t BUFFER_SIZE = 16 * 1024 * 1024; // TODO: allow buffersize to be templated
-    const util::Socket sock;
-    std::unique_ptr<datastructure::VirtualRDMARingBuffer> rdma = nullptr;
+template<size_t BUFFER_SIZE = 16 * 1024 * 1024>
+class RdmaTransportClient : public TransportClient<RdmaTransportClient<BUFFER_SIZE>> {
+   const util::Socket sock;
+   std::unique_ptr<datastructure::VirtualRDMARingBuffer> rdma = nullptr;
 
-public:
-    RdmaTransportClient();
+   public:
+   RdmaTransportClient() : sock(util::Socket::create()) {};
 
-    ~RdmaTransportClient() override;
+   ~RdmaTransportClient() override = default;
 
-    void connect_impl(const std::string &port);
+   void connect_impl(const std::string &port);
 
-    void write_impl(const uint8_t *data, size_t size);
+   void write_impl(const uint8_t* data, size_t size);
 
-    void read_impl(uint8_t *buffer, size_t size);
+   void read_impl(uint8_t* buffer, size_t size);
 
-    template<typename RangeConsumer>
-    void readZC(RangeConsumer &&callback) {
-        rdma->receive(std::forward<RangeConsumer>(callback));
-    }
+   template<typename RangeConsumer>
+   void readZC(RangeConsumer &&callback) {
+      rdma->receive(std::forward<RangeConsumer>(callback));
+   }
 
-    template<typename SizeReturner>
-    void writeZC(SizeReturner &&doWork) {
-        rdma->send(std::forward<SizeReturner>(doWork));
-    }
+   template<typename SizeReturner>
+   void writeZC(SizeReturner &&doWork) {
+      rdma->send(std::forward<SizeReturner>(doWork));
+   }
 };
+
+template<size_t BUFFER_SIZE>
+RdmaTransportServer<BUFFER_SIZE>::RdmaTransportServer(const std::string &port) :
+      sock(util::Socket::create()) {
+   auto p = std::stoi(port);
+   listen(p);
+}
+
+template<size_t BUFFER_SIZE>
+void RdmaTransportServer<BUFFER_SIZE>::accept_impl() {
+   auto acced = util::tcp::accept(sock);
+   rdma = std::make_unique<datastructure::VirtualRDMARingBuffer>(BUFFER_SIZE, acced);
+}
+
+template<size_t BUFFER_SIZE>
+void RdmaTransportServer<BUFFER_SIZE>::listen(uint16_t port) {
+   util::tcp::bind(sock, port);
+   util::tcp::listen(sock);
+}
+
+template<size_t BUFFER_SIZE>
+void RdmaTransportServer<BUFFER_SIZE>::write_impl(const uint8_t *data, size_t size) {
+   rdma->send(data, size); // TODO: chunked read / write
+}
+
+template<size_t BUFFER_SIZE>
+void RdmaTransportServer<BUFFER_SIZE>::read_impl(uint8_t *buffer, size_t size) {
+   rdma->receive(buffer, size);
+}
+
+template<size_t BUFFER_SIZE>
+void RdmaTransportClient<BUFFER_SIZE>::connect_impl(const std::string &connection) {
+   const auto pos = connection.find(':');
+   if (pos == std::string::npos) {
+      throw std::runtime_error("usage: <0.0.0.0:port>");
+   }
+   const auto ip = std::string(connection.data(), pos);
+   const auto port = std::stoi(std::string(connection.begin() + pos + 1, connection.end()));
+
+   util::tcp::connect(sock, ip, port);
+   rdma = std::make_unique<datastructure::VirtualRDMARingBuffer>(BUFFER_SIZE, sock);
+}
+
+template<size_t BUFFER_SIZE>
+void RdmaTransportClient<BUFFER_SIZE>::write_impl(const uint8_t *data, size_t size) {
+   rdma->send(data, size); // TODO: chunked read / write
+}
+
+template<size_t BUFFER_SIZE>
+void RdmaTransportClient<BUFFER_SIZE>::read_impl(uint8_t *buffer, size_t size) {
+   rdma->receive(buffer, size);
+}
 } // namespace transport
 } // namespace l5

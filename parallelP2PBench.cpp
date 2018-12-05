@@ -14,9 +14,9 @@ static constexpr auto MESSAGES = 1024 * 1024;
 void doRun(size_t clients, bool isClient) {
     if (isClient) {
         sleep(2);
-        vector<Ping<RdmaTransportClient>> rdmaClients;
+        vector<Ping<RdmaTransportClient<>>> rdmaClients;
         for (size_t i = 0; i < clients; ++i) {
-            rdmaClients.emplace_back(make_transportClient<RdmaTransportClient>(),
+            rdmaClients.emplace_back(make_transportClient<RdmaTransportClient<>>(),
                                      ip + string(":") + to_string(port + i));
         }
 
@@ -30,9 +30,9 @@ void doRun(size_t clients, bool isClient) {
         }
         for (auto &t : clientThreads) t.join();
     } else {
-        vector<Pong<RdmaTransportServer>> servers;
+        vector<Pong<RdmaTransportServer<>>> servers;
         for (size_t i = 0; i < clients; ++i) {
-            servers.emplace_back(make_transportServer<RdmaTransportServer>(to_string(port + i)));
+            servers.emplace_back(make_transportServer<RdmaTransportServer<>>(to_string(port + i)));
             servers.back().start();
         }
 

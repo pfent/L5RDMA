@@ -161,9 +161,9 @@ int main(int argc, char **argv) {
     doRun<DomainSocketsTransportServer, DomainSocketsTransportClient>(isClient, "/tmp/testSocket");
     std::cout << "shared memory, ";
     doRunSharedMemory(isClient);
-    //doRun<SharedMemoryTransportServer, SharedMemoryTransportClient>(isClient, "/tmp/testSocket");
+    //doRun<SharedMemoryTransportServer<>, SharedMemoryTransportClient<>>(isClient, "/tmp/testSocket");
     std::cout << "tcp, ";
     doRun<TcpTransportServer, TcpTransportClient>(isClient, connection);
     std::cout << "rdma, ";
-    doRun<RdmaTransportServer, RdmaTransportClient>(isClient, connection);
+    doRun<RdmaTransportServer<>, RdmaTransportClient<>>(isClient, connection);
 }

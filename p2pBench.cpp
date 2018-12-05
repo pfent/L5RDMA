@@ -72,5 +72,5 @@ int main(int argc, char **argv) {
     if (!isClient) {
         cout << size << ", ";
     }
-    doRun<RdmaTransportClient, RdmaTransportServer>(isClient, size);
+    doRun<RdmaTransportClient<>, RdmaTransportServer<>>(isClient, size);
 }

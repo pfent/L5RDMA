@@ -63,7 +63,7 @@ int main(int argc, char **argv) {
             sleep(1);
             {
                 cout << size << ", " << "rdma, ";
-                auto client = Ping(make_transportClient<RdmaTransportClient>(), ip + string(":") + to_string(port),
+                auto client = Ping(make_transportClient<RdmaTransportClient<>>(), ip + string(":") + to_string(port),
                                    size);
                 bench(SHAREDMEM_MESSAGES, [&]() {
                     for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {
@@ -113,7 +113,7 @@ int main(int argc, char **argv) {
             }
             {
                 cout << size << ", " << "rdma, ";
-                auto server = Pong(make_transportServer<RdmaTransportServer>(to_string(port)), size);
+                auto server = Pong(make_transportServer<RdmaTransportServer<>>(to_string(port)), size);
                 server.start();
                 bench(SHAREDMEM_MESSAGES, [&]() {
                     for (size_t i = 0; i < SHAREDMEM_MESSAGES; ++i) {

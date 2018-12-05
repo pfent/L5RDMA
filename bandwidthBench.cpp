@@ -125,8 +125,8 @@ int main(int argc, char** argv) {
          TcpTransportClient
    >("tcp", isClient, connection, size);
    if (not isLocal) {
-      doRun<RdmaTransportServer,
-            RdmaTransportClient
+      doRun<RdmaTransportServer<512_M>,
+            RdmaTransportClient<512_M>
       >("rdma", isClient, connection, size);
    }
 }

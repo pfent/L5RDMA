@@ -36,7 +36,7 @@ int main(int argc, char **argv) {
             sleep(1);
             {
                 cout << size << ", " << "normal, ";
-                auto client = RdmaTransportClient();
+                auto client = RdmaTransportClient<>();
                 client.connect(ip + string(":") + to_string(port));
                 std::vector<uint8_t> buf(size);
                 bench(MESSAGES, [&]() {
@@ -53,7 +53,7 @@ int main(int argc, char **argv) {
             sleep(1);
             {
                 cout << size << ", " << "zerocopy, ";
-                auto client = RdmaTransportClient();
+                auto client = RdmaTransportClient<>();
                 client.connect(ip + string(":") + to_string(port));
                 std::vector<char> buf(size);
                 bench(MESSAGES, [&]() {

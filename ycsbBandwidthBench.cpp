@@ -131,6 +131,6 @@ int main(int argc, char** argv) {
    doRun<TcpTransportServer, TcpTransportClient>(isClient, connection);
    if (not isLocal) {
       std::cout << "rdma, ";
-      doRun<RdmaTransportServer, RdmaTransportClient>(isClient, connection);
+      doRun<RdmaTransportServer<>, RdmaTransportClient<>>(isClient, connection);
    }
 }
