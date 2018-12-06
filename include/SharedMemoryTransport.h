@@ -16,6 +16,7 @@ class SharedMemoryTransportServer : public TransportServer<SharedMemoryTransport
    std::unique_ptr<datastructure::VirtualRingBuffer> messageBuffer;
 
    public:
+   static constexpr auto buffer_size = BUFFER_SIZE;
    /**
     * Exchange information about the shared memory via the given domain socket
     * @param domainSocket filename of the domain socket
@@ -37,6 +38,7 @@ class SharedMemoryTransportClient : public TransportClient<SharedMemoryTransport
    std::unique_ptr<datastructure::VirtualRingBuffer> messageBuffer;
 
    public:
+   static constexpr auto buffer_size = BUFFER_SIZE;
    SharedMemoryTransportClient() : socket(util::domain::socket()) {};
 
    ~SharedMemoryTransportClient() override = default;

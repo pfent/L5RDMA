@@ -8,10 +8,14 @@ WraparoundBuffer mmapSharedRingBuffer(const std::string &name, size_t size, bool
     if (pos == std::string::npos) {
         pos = 0;
     }
-    const auto fd = shm_open(name.c_str() + pos, O_CREAT | O_TRUNC | O_RDWR, 0666);
+    const auto fd = shm_open(name.c_str() + pos, O_CREAT | O_TRUNC | O_RDWR | O_EXCL, 0666);
     if (fd < 0) {
         perror("shm_open");
         throw std::runtime_error{"shm_open failed"};
+    }
+    if (shm_unlink(name.c_str()) < 0) {
+        perror("shm_unlink");
+        throw std::runtime_error{"shm_unlink failed"};
     }
     return mmapRingBuffer(fd, size, init);
 }

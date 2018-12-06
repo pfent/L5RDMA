@@ -69,10 +69,14 @@ public:
 template<typename T>
 ShmMapping<T> malloc_shared(const std::string &name, size_t size, void *addr = nullptr) {
     // create a new mapping in /dev/shm
-    const auto fd = shm_open(name.c_str(), O_CREAT | O_TRUNC | O_RDWR, 0666);
+    const auto fd = shm_open(name.c_str(), O_CREAT | O_TRUNC | O_RDWR | O_EXCL, 0666);
     if (fd < 0) {
         perror("shm_open");
         throw std::runtime_error{"shm_open failed"};
+    }
+    if (shm_unlink(name.c_str()) < 0) {
+        perror("shm_unlink");
+        throw std::runtime_error{"shm_unlink failed"};
     }
     if (ftruncate(fd, size) != 0) {
         perror("ftruncate");
