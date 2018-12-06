@@ -66,6 +66,13 @@ public:
     ~ShmMapping() { if(fd > 0) ::close(fd); }
 };
 
+/**
+ * see: https://dvdhrm.wordpress.com/2014/06/10/memfd_create2/
+ * TODO: in the future maybe check of availability of (Linux 3.17+) `memfd_create` and use it instead of shm_open
+ * For reliability, the server should not mmap(2) client's objects for read-access as the client might truncate the file
+ * simultaneously, causing SIGBUS on the server. A server can protect itself via SIGBUS-handlers, but sealing is a much
+ * simpler way. By requiring F_SEAL_SHRINK, the server can be sure, the file will never shrink.
+ */
 template<typename T>
 ShmMapping<T> malloc_shared(const std::string &name, size_t size, void *addr = nullptr) {
     // create a new mapping in /dev/shm
