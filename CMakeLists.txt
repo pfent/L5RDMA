@@ -62,6 +62,7 @@ SET(EXECUTABLES
         ycsbBandwidthBench
         bandwidthBench
         bufferBandwidthBench
+        blockedBandwidthBench
         )
 
 foreach (exe ${EXECUTABLES})

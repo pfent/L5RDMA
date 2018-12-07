@@ -18,6 +18,7 @@ class RdmaTransportServer : public TransportServer<RdmaTransportServer<BUFFER_SI
    void listen(uint16_t port);
 
    public:
+   static constexpr auto buffer_size = BUFFER_SIZE;
 
    explicit RdmaTransportServer(const std::string &port);
 
@@ -46,6 +47,8 @@ class RdmaTransportClient : public TransportClient<RdmaTransportClient<BUFFER_SI
    std::unique_ptr<datastructure::VirtualRDMARingBuffer> rdma = nullptr;
 
    public:
+   static constexpr auto buffer_size = BUFFER_SIZE;
+
    RdmaTransportClient() : sock(util::Socket::create()) {};
 
    ~RdmaTransportClient() override = default;
@@ -87,12 +90,12 @@ void RdmaTransportServer<BUFFER_SIZE>::listen(uint16_t port) {
 }
 
 template<size_t BUFFER_SIZE>
-void RdmaTransportServer<BUFFER_SIZE>::write_impl(const uint8_t *data, size_t size) {
+void RdmaTransportServer<BUFFER_SIZE>::write_impl(const uint8_t* data, size_t size) {
    rdma->send(data, size); // TODO: chunked read / write
 }
 
 template<size_t BUFFER_SIZE>
-void RdmaTransportServer<BUFFER_SIZE>::read_impl(uint8_t *buffer, size_t size) {
+void RdmaTransportServer<BUFFER_SIZE>::read_impl(uint8_t* buffer, size_t size) {
    rdma->receive(buffer, size);
 }
 
@@ -110,12 +113,12 @@ void RdmaTransportClient<BUFFER_SIZE>::connect_impl(const std::string &connectio
 }
 
 template<size_t BUFFER_SIZE>
-void RdmaTransportClient<BUFFER_SIZE>::write_impl(const uint8_t *data, size_t size) {
+void RdmaTransportClient<BUFFER_SIZE>::write_impl(const uint8_t* data, size_t size) {
    rdma->send(data, size); // TODO: chunked read / write
 }
 
 template<size_t BUFFER_SIZE>
-void RdmaTransportClient<BUFFER_SIZE>::read_impl(uint8_t *buffer, size_t size) {
+void RdmaTransportClient<BUFFER_SIZE>::read_impl(uint8_t* buffer, size_t size) {
    rdma->receive(buffer, size);
 }
 } // namespace transport

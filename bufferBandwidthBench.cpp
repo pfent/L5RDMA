@@ -107,12 +107,12 @@ int main(int argc, char** argv) {
 
    if (not isClient) std::cout << "connection, buffer size [MB], MB, time, MB/s, user, system, total\n";
 
-   if (isLocal) { // TODO: the sharedBuffers are not deallocalted -> unlink them immediately
+   if (isLocal) {
       doRunHelper<SharedMemoryTransportServer, SharedMemoryTransportClient,
             1_m, 2_m, 4_m, 8_m, 16_m, 32_m, 64_m, 128_m, 256_m, 512_m, 1_g, 2_g
       >("shared memory", isClient, "/tmp/testSocket", size);
    } else {
-      doRunHelper<SharedMemoryTransportServer, SharedMemoryTransportClient,
+      doRunHelper<RdmaTransportServer, RdmaTransportClient,
             1_m, 2_m, 4_m, 8_m, 16_m, 32_m, 64_m, 128_m, 256_m, 512_m, 1_g, 2_g
       >("rdma", isClient, connection, size);
    }
