@@ -33,11 +33,11 @@ WraparoundBuffer mmapRingBuffer(int fd, size_t size, bool init) {
     );
     // map the shared memory to the first half
     if (mmap(ptr, size, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED, fd, 0) != ptr) {
-        throw std::runtime_error{"mmaping the wraparound failed"};
+        throw std::runtime_error{std::string("mmaping the first wraparound failed ") + strerror(errno)};
     }
     // and also to the second half
     if (mmap(&ptr[size], size, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED, fd, 0) != &ptr[size]) {
-        throw std::runtime_error{"mmaping the wraparound failed"};
+        throw std::runtime_error{std::string("mmaping the second wraparound failed ") +  + strerror(errno)};
     }
 
     if (init) {

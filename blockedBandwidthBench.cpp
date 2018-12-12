@@ -135,7 +135,7 @@ int main(int argc, char** argv) {
 
    auto testdata = TestData(isClient);
 
-   if (not isClient) std::cout << "connection, chunk size [MB], MB, time, MB/s, user, system, total\n";
+   if (not isClient) std::cout << "connection, chunk size [MB], MB transmitted, time, MB/s, user, system, total\n" << std::flush;
 
    for (auto i : {1_k, 2_k, 4_k, 8_k, 16_k, 32_k, 64_k, 128_k, 256_k, 512_k,
                   1_m, 2_m, 4_m, 8_m, 16_m, 32_m, 64_m, 128_m, 256_m, 512_m,
