@@ -30,21 +30,47 @@ static const char* ip = "127.0.0.1";
 static constexpr size_t DATA_SIZE = 10_g;
 static constexpr size_t BUFFER_SIZE = 256_m;
 
-template<class Server, class Client>
-void doRun(const std::string &name, bool isClient, const std::string &connection, size_t chunkSize) {
-   std::vector<uint8_t> testdata(DATA_SIZE);
+struct TestData {
+   std::vector<uint8_t> testdata;
 
+   TestData(bool isClient) : testdata(DATA_SIZE) {
+      if (not isClient) {
+         RandomString rand;
+         rand.fill(DATA_SIZE, reinterpret_cast<char*>(testdata.data()));
+      }
+   }
+
+   auto begin() {
+      return testdata.begin();
+   }
+
+   auto end() {
+      return testdata.end();
+   }
+
+   auto size() {
+      return testdata.size();
+   }
+
+   auto data() {
+      return testdata.data();
+   }
+};
+
+template<class Server, class Client>
+void
+doRun(const std::string &name, bool isClient, const std::string &connection, TestData &testdata, size_t chunkSize) {
    if (isClient) {
       std::cout << "connecting to " << connection << "..." << std::flush;
 
-      sleep(1);
       auto client = Client();
       for (int i = 0;; ++i) {
          try {
             client.connect(connection);
             break;
          } catch (...) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(20));
+            std::cout << "." << std::flush;
+            std::this_thread::sleep_for(std::chrono::milliseconds(500));
             if (i > 10) throw;
          }
       }
@@ -65,10 +91,8 @@ void doRun(const std::string &name, bool isClient, const std::string &connection
       auto server = Server(connection);
       server.accept();
 
-      RandomString rand;
-      rand.fill(DATA_SIZE, reinterpret_cast<char*>(testdata.data()));
 
-      if(chunkSize < 1_m) {
+      if (chunkSize < 1_m) {
          std::cout << name << ", " << chunkSize / 1024. << "KB, " << std::flush;
       } else if (chunkSize < 1_g) {
          std::cout << name << ", " << chunkSize / 1024. / 1024. << "MB, " << std::flush;
@@ -109,6 +133,8 @@ int main(int argc, char** argv) {
       }
    }();
 
+   auto testdata = TestData(isClient);
+
    if (not isClient) std::cout << "connection, chunk size [MB], MB, time, MB/s, user, system, total\n";
 
    for (auto i : {1_k, 2_k, 4_k, 8_k, 16_k, 32_k, 64_k, 128_k, 256_k, 512_k,
@@ -117,11 +143,17 @@ int main(int argc, char** argv) {
       if (isLocal) {
          doRun<SharedMemoryTransportServer<BUFFER_SIZE>,
                SharedMemoryTransportClient<BUFFER_SIZE>
-         >("shared memory", isClient, "/tmp/testSocket", i);
+         >("shared memory", isClient, "/tmp/testSocket", testdata, i);
+         doRun<DomainSocketsTransportServer,
+               DomainSocketsTransportClient
+         >("domain socket", isClient, "/tmp/testSocket", testdata, i);
+         doRun<TcpTransportServer,
+               TcpTransportClient
+         >("          tcp", isClient, connection, testdata, i);
       } else {
          doRun<RdmaTransportServer<BUFFER_SIZE>,
                RdmaTransportClient<BUFFER_SIZE>
-         >("rdma", isClient, connection, i);
+         >("rdma", isClient, connection, testdata, i);
       }
    }
 }

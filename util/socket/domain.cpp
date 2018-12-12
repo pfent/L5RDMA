@@ -17,8 +17,7 @@ Socket socket() {
 
 void listen(const Socket &sock) {
    if (::listen(sock.get(), SOMAXCONN) < 0) {
-      perror("listen");
-      throw std::runtime_error{"error close'ing"};
+      throw std::runtime_error{"error close'ing"s + strerror(errno)};
    }
 }
 
@@ -28,8 +27,7 @@ void connect(const Socket &sock, const std::string &pathToFile) {
    strncpy(local.sun_path, pathToFile.data(), pathToFile.size());
    local.sun_path[pathToFile.size()] = '\0';
    if (::connect(sock.get(), reinterpret_cast<const sockaddr*>(&local), sizeof local) < 0) {
-      perror("connect");
-      throw std::runtime_error{"error connect'ing"};
+      throw std::runtime_error{"error connect'ing"s + strerror(errno)};
    }
 }
 
@@ -66,15 +64,13 @@ void bind(const Socket &sock, const std::string &pathToFile) {
    local.sun_path[pathToFile.size()] = '\0';
    auto len = strlen(local.sun_path) + sizeof(local.sun_family);
    if (::bind(sock.get(), reinterpret_cast<const sockaddr*>(&local), len) < 0) {
-      perror("bind");
-      throw std::runtime_error{"error bind'ing"};
+      throw std::runtime_error{"error bind'ing"s + strerror(errno)};
    }
 }
 
 void unlink(const std::string &pathToFile) {
    if (::unlink(std::string(pathToFile.begin(), pathToFile.end()).c_str()) < 0) {
-      perror("unlink");
-      throw std::runtime_error{"error unlink'ing"};
+      throw std::runtime_error{"error unlink'ing"s + strerror(errno)};
    }
 }
 
@@ -82,8 +78,7 @@ Socket accept(const Socket &sock, ::sockaddr_un &inAddr) {
    socklen_t unAddrLen = sizeof(inAddr);
    auto acced = ::accept(sock.get(), reinterpret_cast<sockaddr*>(&inAddr), &unAddrLen);
    if (acced < 0) {
-      perror("accept");
-      throw std::runtime_error{"error accept'ing"};
+      throw std::runtime_error{"error accept'ing"s + strerror(errno)};
    }
    return Socket::fromRaw(acced);
 }
@@ -91,8 +86,7 @@ Socket accept(const Socket &sock, ::sockaddr_un &inAddr) {
 Socket accept(const Socket &sock) {
    auto acced = ::accept(sock.get(), nullptr, nullptr);
    if (acced < 0) {
-      perror("accept");
-      throw std::runtime_error{"error accept'ing"};
+      throw std::runtime_error{"error accept'ing"s + strerror(errno)};
    }
    return Socket::fromRaw(acced);
 }
@@ -120,8 +114,7 @@ void send_fd(const Socket &sock, int fd) {
    *reinterpret_cast<int*>(CMSG_DATA(cmsg)) = fd;
 
    if (::sendmsg(sock.get(), &msg, 0) < 0) {
-      perror("sendmsg");
-      throw std::runtime_error("send_fd: sendmsg failed");
+      throw std::runtime_error("send_fd: sendmsg failed"s + strerror(errno));
    }
 }
 
@@ -142,8 +135,7 @@ int receive_fd(const Socket &sock) {
 
    const auto n = ::recvmsg(sock.get(), &msg, 0);
    if (n < 0) {
-      perror("recvmsg");
-      throw std::runtime_error("receive_fd: recvmsg failed");
+      throw std::runtime_error("receive_fd: recvmsg failed"s + strerror(errno));
    }
    if (n == 0) {
       throw std::runtime_error("receive_fd: invalid FD received");
