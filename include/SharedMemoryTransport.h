@@ -120,7 +120,7 @@ void SharedMemoryTransportClient<BUFFER_SIZE>::read_impl(uint8_t* buffer, size_t
 
 template<size_t BUFFER_SIZE>
 void SharedMemoryTransportClient<BUFFER_SIZE>::reset_impl() {
-   socket.close();
+   socket = util::domain::socket();
    messageBuffer.reset();
 }
 

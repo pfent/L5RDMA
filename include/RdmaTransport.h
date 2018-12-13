@@ -126,7 +126,7 @@ void RdmaTransportClient<BUFFER_SIZE>::read_impl(uint8_t* buffer, size_t size) {
 
 template<size_t BUFFER_SIZE>
 void RdmaTransportClient<BUFFER_SIZE>::reset_impl() {
-   sock.close();
+   sock = util::Socket::create();
    rdma.reset();
 }
 } // namespace transport
