@@ -78,6 +78,7 @@ doRun(const std::string &name, bool isClient, const std::string &connection, Tes
             client.connect(connection);
             break;
          } catch (...) {
+            client.reset();
             std::cout << "." << std::flush;
             std::this_thread::sleep_for(std::chrono::milliseconds(500));
             if (i > 10) throw;
