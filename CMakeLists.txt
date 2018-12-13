@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.0)
 enable_testing()
-project(L5RDMA)
+project(L5RDMA CXX)
 
 IF (NOT CMAKE_BUILD_TYPE)
     SET(CMAKE_BUILD_TYPE Release
@@ -36,10 +36,6 @@ file(GLOB COMMON_HEADERS
         util/socket/*.h
         )
 
-add_library(l5rdma-common STATIC ${COMMON_SOURCES} ${COMMON_HEADERS})
-target_include_directories(l5rdma-common PUBLIC .)
-target_include_directories(l5rdma-common SYSTEM PUBLIC ext)
-
 SET(LINK_LIBRARIES
         ibverbs
         rt
@@ -47,6 +43,11 @@ SET(LINK_LIBRARIES
         rdmacm
         tbb
         )
+
+add_library(l5rdma-common STATIC ${COMMON_SOURCES} ${COMMON_HEADERS})
+target_include_directories(l5rdma-common PUBLIC .)
+target_include_directories(l5rdma-common SYSTEM PUBLIC ext)
+target_link_libraries(l5rdma-common ${LINK_LIBRARIES})
 
 SET(EXECUTABLES
         p2pBench
@@ -67,7 +68,7 @@ SET(EXECUTABLES
 
 foreach (exe ${EXECUTABLES})
     add_executable(${exe} ${exe}.cpp)
-    target_link_libraries(${exe} ${LINK_LIBRARIES} l5rdma-common)
+    target_link_libraries(${exe} ${LINK_LIBRARIES})
     target_include_directories(${exe} PRIVATE .)
 endforeach ()
 
