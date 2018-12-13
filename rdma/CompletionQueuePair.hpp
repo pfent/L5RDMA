@@ -3,7 +3,7 @@
 #include <vector>
 #include <cstdint>
 #include <mutex>
-#include "libibverbscpp/libibverbscpp.h"
+#include <libibverbscpp.h>
 
 namespace rdma {
     class CompletionQueuePair {

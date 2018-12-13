@@ -46,7 +46,7 @@ SET(LINK_LIBRARIES
 
 add_library(l5rdma-common STATIC ${COMMON_SOURCES} ${COMMON_HEADERS})
 target_include_directories(l5rdma-common PUBLIC .)
-target_include_directories(l5rdma-common SYSTEM PUBLIC ext)
+target_include_directories(l5rdma-common SYSTEM PUBLIC ext/libibverbscpp)
 target_link_libraries(l5rdma-common ${LINK_LIBRARIES})
 
 SET(EXECUTABLES
@@ -68,7 +68,7 @@ SET(EXECUTABLES
 
 foreach (exe ${EXECUTABLES})
     add_executable(${exe} ${exe}.cpp)
-    target_link_libraries(${exe} ${LINK_LIBRARIES})
+    target_link_libraries(${exe} l5rdma-common)
     target_include_directories(${exe} PRIVATE .)
 endforeach ()
 
@@ -76,7 +76,7 @@ file(GLOB tests "test/*Test.cpp")
 foreach (test ${tests})
     get_filename_component(testName ${test} NAME_WE)
     add_executable(${testName} ${test})
-    target_link_libraries(${testName} ${LINK_LIBRARIES} l5rdma-common)
+    target_link_libraries(${testName} l5rdma-common)
     target_include_directories(${testName} PRIVATE .)
     add_test(${testName} ${testName})
 endforeach ()
