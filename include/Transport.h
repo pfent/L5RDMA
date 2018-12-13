@@ -64,6 +64,11 @@ public:
     void connect(const std::string &whereTo) { static_cast<T *>(this)->connect_impl(whereTo); }
 
     /**
+     * Reset the connection to reuse resources and connect again
+     */
+    void reset() { static_cast<T *>(this)->reset_impl(); }
+
+    /**
      * Similar interface to TransportServer
      */
     void write(const uint8_t *buffer, size_t size) { static_cast<T *>(this)->write_impl(buffer, size); }

@@ -50,6 +50,8 @@ class SharedMemoryTransportClient : public TransportClient<SharedMemoryTransport
 
    void connect_impl(const std::string &file);
 
+   void reset_impl();
+
    void write_impl(const uint8_t* data, size_t size);
 
    void read_impl(uint8_t* buffer, size_t size);
@@ -114,6 +116,12 @@ void SharedMemoryTransportClient<BUFFER_SIZE>::read_impl(uint8_t* buffer, size_t
       messageBuffer->receive(buffer, chunk);
       i += chunk;
    }
+}
+
+template<size_t BUFFER_SIZE>
+void SharedMemoryTransportClient<BUFFER_SIZE>::reset_impl() {
+   socket.close();
+   messageBuffer.reset();
 }
 
 } // namespace transport

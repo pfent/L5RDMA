@@ -43,7 +43,7 @@ class RdmaTransportServer : public TransportServer<RdmaTransportServer<BUFFER_SI
 
 template<size_t BUFFER_SIZE = 16 * 1024 * 1024>
 class RdmaTransportClient : public TransportClient<RdmaTransportClient<BUFFER_SIZE>> {
-   const util::Socket sock;
+   util::Socket sock;
    std::unique_ptr<datastructure::VirtualRDMARingBuffer> rdma = nullptr;
 
    public:
@@ -53,7 +53,9 @@ class RdmaTransportClient : public TransportClient<RdmaTransportClient<BUFFER_SI
 
    ~RdmaTransportClient() override = default;
 
-   void connect_impl(const std::string &port);
+   void connect_impl(const std::string &connection);
+
+   void reset_impl();
 
    void write_impl(const uint8_t* data, size_t size);
 
@@ -120,6 +122,12 @@ void RdmaTransportClient<BUFFER_SIZE>::write_impl(const uint8_t* data, size_t si
 template<size_t BUFFER_SIZE>
 void RdmaTransportClient<BUFFER_SIZE>::read_impl(uint8_t* buffer, size_t size) {
    rdma->receive(buffer, size);
+}
+
+template<size_t BUFFER_SIZE>
+void RdmaTransportClient<BUFFER_SIZE>::reset_impl() {
+   sock.close();
+   rdma.reset();
 }
 } // namespace transport
 } // namespace l5
