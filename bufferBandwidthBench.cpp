@@ -182,8 +182,10 @@ int main(int argc, char** argv) {
                SIZES
          >("shared memory", isClient, "/tmp/testSocket", testdata, chunksize);
       } else {
-         doRun<RdmaTransportServer<BUFFER_SIZE>,
-               RdmaTransportClient<BUFFER_SIZE>
+         doRunHelper<
+               RdmaTransportServer,
+               RdmaTransportClient,
+               SIZES
          >("rdma", isClient, connection, testdata, chunksize);
       }
    }
