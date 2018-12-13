@@ -72,6 +72,7 @@ public:
         if (sendSlice.length <= net.queuePair.getMaxInlineSize()) {
             wr.setInline();
         }
+        waitUntilSendFree(sizeToWrite);
         net.queuePair.postWorkRequest(wr);
 
         if (shouldClearQueue) {
