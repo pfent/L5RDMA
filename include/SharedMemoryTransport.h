@@ -85,7 +85,7 @@ template<size_t BUFFER_SIZE>
 void SharedMemoryTransportServer<BUFFER_SIZE>::read_impl(uint8_t* buffer, size_t size) {
    for (size_t i = 0; i < size;) {
       auto chunk = std::min(size - i, BUFFER_SIZE);
-      messageBuffer->receive(buffer, chunk);
+      messageBuffer->receive(&buffer[i], chunk);
       i += chunk;
    }
 }
@@ -104,7 +104,7 @@ template<size_t BUFFER_SIZE>
 void SharedMemoryTransportClient<BUFFER_SIZE>::write_impl(const uint8_t* data, size_t size) {
    for (size_t i = 0; i < size;) {
       auto chunk = std::min(size - i, BUFFER_SIZE);
-      messageBuffer->send(data, chunk);
+      messageBuffer->send(&data[i], chunk);
       i += chunk;
    }
 }
@@ -113,7 +113,7 @@ template<size_t BUFFER_SIZE>
 void SharedMemoryTransportClient<BUFFER_SIZE>::read_impl(uint8_t* buffer, size_t size) {
    for (size_t i = 0; i < size;) {
       auto chunk = std::min(size - i, BUFFER_SIZE);
-      messageBuffer->receive(buffer, chunk);
+      messageBuffer->receive(&buffer[i], chunk);
       i += chunk;
    }
 }
