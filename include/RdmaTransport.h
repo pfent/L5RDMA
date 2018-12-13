@@ -133,9 +133,9 @@ void RdmaTransportClient<BUFFER_SIZE>::write_impl(const uint8_t* data, size_t si
 
 template<size_t BUFFER_SIZE>
 void RdmaTransportClient<BUFFER_SIZE>::read_impl(uint8_t* buffer, size_t size) {
-   for (size_t i = 0; i < size;) {
+   for (size_t i = 0; i < size;) { // TODO chunked read doesn't work right now...
       auto chunk = std::min(size - i, BUFFER_SIZE - 2 * sizeof(size_t));
-      rdma->receive(&buffer[i], chunk); // TODO buffer is wrong here, need to keep track of stuff?
+      rdma->receive(&buffer[i], chunk);
       i += chunk;
    }
 }

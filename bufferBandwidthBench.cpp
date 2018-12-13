@@ -27,9 +27,8 @@ static constexpr auto printResults = []
 
 static constexpr uint16_t port = 1234;
 static const char* ip = "127.0.0.1";
-static constexpr size_t DATA_SIZE = 10_g;
+static constexpr size_t DATA_SIZE = 1_g;
 static constexpr size_t BUFFER_SIZE = 256_m;
-
 
 struct TestData {
    std::vector<uint8_t> testdata;
@@ -132,7 +131,8 @@ template<template<size_t> typename Server,
 typename std::enable_if_t<sizeof...(bufferSizes) == 0>
 doRunHelper(const std::string &name, bool isClient, const std::string &connection, TestData &testdata,
             size_t chunkSize) {
-   doRun<Server<bufferSize>, Client<bufferSize> >(name, isClient, connection, testdata, chunkSize);
+   if (bufferSize > chunkSize)
+      doRun<Server<bufferSize>, Client<bufferSize> >(name, isClient, connection, testdata, chunkSize);
 }
 
 template<template<size_t> typename Server,
@@ -140,7 +140,7 @@ template<template<size_t> typename Server,
 typename std::enable_if_t<sizeof...(bufferSizes) != 0>
 doRunHelper(const std::string &name, bool isClient, const std::string &connection, TestData &testdata,
             size_t chunkSize) {
-   doRun<Server<bufferSize>, Client<bufferSize> >(name, isClient, connection, testdata, chunkSize);
+   doRunHelper<Server, Client, bufferSize>(name, isClient, connection, testdata, chunkSize);
    doRunHelper<Server, Client, bufferSizes...>(name, isClient, connection, testdata, chunkSize);
 }
 
@@ -166,7 +166,9 @@ int main(int argc, char** argv) {
 
    auto testdata = TestData(isClient);
 
-   if (not isClient) std::cout << "connection, chunk size, buffer size, MB transmitted,  time, MB/s, user, system, total\n" << std::flush;
+   if (not isClient)
+      std::cout << "connection, chunk size, buffer size, MB transmitted,  time, MB/s, user, system, total\n"
+                << std::flush;
 
 #define SIZES 4_k, 8_k, 16_k, 32_k, 64_k, 128_k, 256_k, 512_k, \
               1_m, 2_m, 4_m, 8_m, 16_m, 32_m, 64_m, 128_m, 256_m, 512_m, \
