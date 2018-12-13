@@ -1,7 +1,6 @@
 #include <iostream>
 #include <thread>
 #include <util/ycsb.h>
-#include "libibverbscpp/libibverbscpp.h"
 #include "rdma/Network.hpp"
 #include "util/bench.h"
 #include <unistd.h>

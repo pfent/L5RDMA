@@ -5,7 +5,6 @@
 #include <include/MulticlientRDMATransport.h>
 #include <include/MulticlientTCPTransport.h>
 #include <util/ycsb.h>
-#include "libibverbscpp/libibverbscpp.h"
 #include "rdma/Network.hpp"
 #include "rdma/QueuePair.hpp"
 #include "util/bench.h"

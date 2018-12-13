@@ -2,7 +2,6 @@
 #include <thread>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-#include "libibverbscpp/libibverbscpp.h"
 #include "util/socket/tcp.h"
 #include "rdma/Network.hpp"
 #include "rdma/QueuePair.hpp"
