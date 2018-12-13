@@ -93,12 +93,20 @@ void RdmaTransportServer<BUFFER_SIZE>::listen(uint16_t port) {
 
 template<size_t BUFFER_SIZE>
 void RdmaTransportServer<BUFFER_SIZE>::write_impl(const uint8_t* data, size_t size) {
-   rdma->send(data, size); // TODO: chunked read / write
+   for (size_t i = 0; i < size;) {
+      auto chunk = std::min(size - i, BUFFER_SIZE - 2 * sizeof(size_t));
+      rdma->send(data, chunk);
+      i += chunk;
+   }
 }
 
 template<size_t BUFFER_SIZE>
 void RdmaTransportServer<BUFFER_SIZE>::read_impl(uint8_t* buffer, size_t size) {
-   rdma->receive(buffer, size);
+   for (size_t i = 0; i < size;) {
+      auto chunk = std::min(size - i, BUFFER_SIZE - 2 * sizeof(size_t));
+      rdma->receive(buffer, chunk);
+      i += chunk;
+   }
 }
 
 template<size_t BUFFER_SIZE>
@@ -116,12 +124,20 @@ void RdmaTransportClient<BUFFER_SIZE>::connect_impl(const std::string &connectio
 
 template<size_t BUFFER_SIZE>
 void RdmaTransportClient<BUFFER_SIZE>::write_impl(const uint8_t* data, size_t size) {
-   rdma->send(data, size); // TODO: chunked read / write
+   for (size_t i = 0; i < size;) {
+      auto chunk = std::min(size - i, BUFFER_SIZE - 2 * sizeof(size_t));
+      rdma->send(data, chunk);
+      i += chunk;
+   }
 }
 
 template<size_t BUFFER_SIZE>
 void RdmaTransportClient<BUFFER_SIZE>::read_impl(uint8_t* buffer, size_t size) {
-   rdma->receive(buffer, size);
+   for (size_t i = 0; i < size;) {
+      auto chunk = std::min(size - i, BUFFER_SIZE - 2 * sizeof(size_t));
+      rdma->receive(buffer, chunk);
+      i += chunk;
+   }
 }
 
 template<size_t BUFFER_SIZE>
