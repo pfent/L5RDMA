@@ -8,6 +8,12 @@
 
 using namespace l5::transport;
 
+constexpr size_t operator "" _k(unsigned long long i) { return i * 1024; }
+
+constexpr size_t operator "" _m(unsigned long long i) { return i * 1024 * 1024; }
+
+constexpr size_t operator "" _g(unsigned long long i) { return i * 1024 * 1024 * 1024; }
+
 static constexpr uint16_t port = 1234;
 static const char* ip = "127.0.0.1";
 
@@ -44,8 +50,8 @@ void doRun(bool isClient, std::string connection) {
    };
 
    struct ReadResponse {
-      // 4KB response size -> similar to how MSSQL cursors work
-      std::array<YcsbDataSet, 4> data;
+      // 128KB response size -> optimal for shared memory
+      std::array<YcsbDataSet, 128> data;
    };
 
    if (isClient) {
@@ -86,6 +92,9 @@ void doRun(bool isClient, std::string connection) {
             for (auto &response : responses.data) {
                std::copy(lookupIt->second.begin(), lookupIt->second.end(), response.begin());
                ++lookupIt;
+               if (lookupIt == database.database.end()) {
+                  break;
+               }
             }
             server.write(responses);
          }
@@ -97,7 +106,7 @@ void doRun(bool isClient, std::string connection) {
  * Bandwidth benchmark with pagination
  * i.e. request batching
  * only do a actual new request every X bytes of data
- * probably try to keep the value as close possible to MSSQL -> 4096B per TDS packet
+ * From previous analysis: 128 KB blocks with a 1 MB buffer
  */
 int main(int argc, char** argv) {
    if (argc < 2) {
@@ -125,7 +134,7 @@ int main(int argc, char** argv) {
       std::cout << "domainSocket, ";
       doRun<DomainSocketsTransportServer, DomainSocketsTransportClient>(isClient, "/tmp/testSocket");
       std::cout << "shared memory, ";
-      doRun<SharedMemoryTransportServer<>, SharedMemoryTransportClient<>>(isClient, "/tmp/testSocket");
+      doRun<SharedMemoryTransportServer<1_m>, SharedMemoryTransportClient<1_m>>(isClient, "/tmp/testSocket");
    }
    std::cout << "tcp, ";
    doRun<TcpTransportServer, TcpTransportClient>(isClient, connection);

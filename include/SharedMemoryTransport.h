@@ -12,6 +12,7 @@ namespace transport {
 /**
  * A Shared Memory connection, the server side accepting connections on the given domain socket
  * @tparam BUFFER_SIZE the internally used buffer size. Needs to be a multiple of your used pagesize (usually 4KB)
+ *         for best performance, this buffer should also fit completely into the last-level / L3 cache
  */
 template<size_t BUFFER_SIZE = 16 * 1024 * 1024>
 class SharedMemoryTransportServer : public TransportServer<SharedMemoryTransportServer<BUFFER_SIZE>> {
