@@ -1,5 +1,5 @@
 # L5RDMA: A low level, low latency library for RDMA
-L5RDMA enables adaptive selection of best available connection type between processes or machines.
+L5RDMA enables adaptive selection of the best available connection type between processes or machines.
 
 ## Supported connections
 * Domain sockets (`AF_UNIX`, `SOCK_STREAM`)
