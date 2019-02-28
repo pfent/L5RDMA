@@ -28,6 +28,8 @@ static auto printResults = [](double workSize, auto avgTime,
 
 static std::atomic<size_t> clientsReady;
 
+static auto database = std::optional<YcsbDatabase>();
+
 template <class Server, class Client>
 void doRun(bool isClient, std::string connection, size_t numClientThreadsPerServer, size_t numServerThreads) {
    struct ReadMessage {
@@ -90,8 +92,6 @@ void doRun(bool isClient, std::string connection, size_t numClientThreadsPerServ
             });
       for (auto& t : clientThreads) { t.join(); }
    } else { // server
-      const auto database = YcsbDatabase();
-
       std::vector<std::thread> serverThreads;
       for (size_t s = 0; s < numServerThreads; ++s) serverThreads.emplace_back([&, s] {
          auto server = Server(connection + std::to_string(s));
@@ -104,12 +104,12 @@ void doRun(bool isClient, std::string connection, size_t numClientThreadsPerServ
             char request;
             auto client = server.read(request);
             auto responses = ReadResponse{};
-            for (auto lookupIt = database.database.begin();
-                 lookupIt != database.database.end();) {
+            for (auto lookupIt = database->database.begin();
+                 lookupIt != database->database.end();) {
                for (auto& response : responses.data) {
                   std::copy(lookupIt->second.begin(), lookupIt->second.end(), response.begin());
                   ++lookupIt;
-                  if (lookupIt == database.database.end()) {
+                  if (lookupIt == database->database.end()) {
                      break;
                   }
                }
@@ -124,12 +124,12 @@ void doRun(bool isClient, std::string connection, size_t numClientThreadsPerServ
                char request;
                auto client = server.read(request);
                auto responses = ReadResponse{};
-               for (auto lookupIt = database.database.begin();
-                    lookupIt != database.database.end();) {
+               for (auto lookupIt = database->database.begin();
+                    lookupIt != database->database.end();) {
                   for (auto& response : responses.data) {
                      std::copy(lookupIt->second.begin(), lookupIt->second.end(), response.begin());
                      ++lookupIt;
-                     if (lookupIt == database.database.end()) {
+                     if (lookupIt == database->database.end()) {
                         break;
                      }
                   }
@@ -164,6 +164,7 @@ int main(int argc, char** argv) {
       }
    }();
 
+   if (not isClient) database = YcsbDatabase();
    if (not isClient) std::cout << "connection, MB, time, MB/s, user, system, total\n";
    if (not isClient) std::cout << "tcp, ";
    doRun<MulticlientTCPTransportServer, MulticlientTCPTransportClient>(isClient, connection, numClientThreadsPerServer, numServerThreads);
