@@ -156,7 +156,7 @@ public:
 };
 
 class MultiClientRDMATransportClient {
-    static constexpr size_t MAX_MESSAGESIZE = 512;
+    static constexpr size_t MAX_MESSAGESIZE = 256 * 1024 * 1024;
     static constexpr char validity = '\4'; // ASCII EOT char
 
     const util::Socket sock;
