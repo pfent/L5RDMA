@@ -17,7 +17,7 @@ class MulticlientRDMATransportServer {
         ibv::workrequest::Simple<ibv::workrequest::Write> answerWr;
     };
 
-    static constexpr size_t MAX_MESSAGESIZE = 512;
+    static constexpr size_t MAX_MESSAGESIZE = 256 * 1024 * 1024;
     static constexpr char validity = '\4'; // ASCII EOT char
     const size_t MAX_CLIENTS;
 
@@ -66,6 +66,14 @@ class MulticlientRDMATransportServer {
         }
     }
 
+    std::initializer_list<ibv::workrequest::Flags> getWrFlags(bool signaled, bool inlineMsg) {
+        if (signaled && inlineMsg) return {ibv::workrequest::Flags::SIGNALED, ibv::workrequest::Flags::INLINE};
+        if (signaled && !inlineMsg) return {ibv::workrequest::Flags::SIGNALED};
+        if (!signaled && inlineMsg) return {ibv::workrequest::Flags::INLINE};
+        if (!signaled && !inlineMsg) return {};
+        __builtin_unreachable();
+    }
+
 public:
     explicit MulticlientRDMATransportServer(const std::string &port, size_t maxClients = 256);
 
@@ -111,11 +119,11 @@ public:
         con.answerWr.setLocalAddress(sendBuffer.getSlice(0, totalLength));
         sendCounter++;
         if (sendCounter % 1024 == 0) { // selective signaling
-            con.answerWr.setFlags({ibv::workrequest::Flags::INLINE, ibv::workrequest::Flags::SIGNALED});
+            con.answerWr.setFlags(getWrFlags(true, totalLength < 512));
             con.qp.postWorkRequest(con.answerWr);
             sharedCq->pollSendCompletionQueueBlocking(ibv::workcompletion::Opcode::RDMA_WRITE);
         } else {
-            con.answerWr.setFlags({ibv::workrequest::Flags::INLINE});
+            con.answerWr.setFlags(getWrFlags(false, totalLength < 512));
             con.qp.postWorkRequest(con.answerWr);
         }
     }

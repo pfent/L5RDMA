@@ -53,7 +53,7 @@ void doRun(bool isClient, std::string connection, size_t numClientThreadsPerServ
                      break;
                   } catch (...) {
                      std::this_thread::sleep_for(std::chrono::milliseconds(20));
-                     if (i > 10)
+                     if (i > 1000)
                         throw;
                   }
                }
