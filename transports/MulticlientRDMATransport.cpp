@@ -125,6 +125,16 @@ void MultiClientRDMATransportClient::rdmaConnect() {
     doorBellWr.setRemoteAddress(doorBellAddr);
 }
 
+void MultiClientRDMATransportClient::connect(std::string_view whereTo) {
+    const auto pos = whereTo.find(':');
+    if (pos == std::string::npos) {
+        throw std::runtime_error("usage: <0.0.0.0:port>");
+    }
+    const auto ip = std::string(whereTo.data(), pos);
+    const auto port = std::stoi(std::string(whereTo.begin() + pos + 1, whereTo.end()));
+    return connect(ip, port);
+}
+
 void MultiClientRDMATransportClient::connect(const std::string &ip, uint16_t port) {
     tcp::connect(sock, ip, port);
 

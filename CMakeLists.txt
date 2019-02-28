@@ -61,6 +61,7 @@ SET(EXECUTABLES
         ycsbWorkloadCBench
         manySlowSendersBench
         ycsbBandwidthBench
+        ycsbParallelBandwidthBench
         bandwidthBench
         bufferBandwidthBench
         blockedBandwidthBench

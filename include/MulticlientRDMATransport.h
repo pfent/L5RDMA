@@ -168,6 +168,8 @@ class MultiClientRDMATransportClient {
 public:
     MultiClientRDMATransportClient();
 
+    void connect(std::string_view whereTo);
+
     void connect(const std::string &ip, uint16_t port);
 
     void send(const uint8_t *data, size_t size);
