@@ -76,10 +76,9 @@ void doRun(bool isClient, std::string connection) {
                 auto message = ReadMessage{};
                 server.read(message);
                 auto&[lookupKey, field] = message;
-                server.write([&](auto begin) {
-                    database.lookup(lookupKey, field, begin);
-                    return ycsb_field_length;
-                });
+                auto response = ReadResponse{};
+                database.lookup(lookupKey, field, reinterpret_cast<char*>(&response));
+                server.write(response);
             }
         });
     }
@@ -128,12 +127,10 @@ void doRunSharedMemory(bool isClient) {
             for (size_t i = 0; i < ycsb_tx_count; ++i) {
                 auto message = ReadMessage{};
                 server.read(message);
-
                 auto&[lookupKey, field] = message;
-                server.write([&](auto begin) {
-                    database.lookup(lookupKey, field, begin);
-                    return ycsb_field_length;
-                });
+                auto response = ReadResponse{};
+                database.lookup(lookupKey, field, reinterpret_cast<char*>(&response));
+                server.write(response);
             }
         });
     }
