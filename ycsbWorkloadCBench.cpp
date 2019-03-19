@@ -117,7 +117,7 @@ void doRunSharedMemory(bool isClient) {
             const auto field = rand.next() % ycsb_field_count;
             auto message = ReadMessage{lookupKey, field};
             client.write(message);
-            client.read(message); // TODO this is probably a bug in the Shared memory transport
+            client.read(message);
             DoNotOptimize(message);
         }
     } else {
@@ -146,21 +146,27 @@ int main(int argc, char **argv) {
         return -1;
     }
     const auto isClient = argv[1][0] == 'c';
+    const auto isLocal = [&] {
+        if (argc <= 2) {
+            return true;
+        }
+        ip = argv[2];
+        return strcmp("127.0.0.1", ip) == 0;
+    }();
     std::string connection;
     if (isClient) {
         connection = ip + std::string(":") + std::to_string(port);
     } else {
         connection = std::to_string(port);
     }
-    if (argc > 2) {
-        ip = argv[2];
-    }
     std::cout << "connection, transactions, time, msgps, user, system, total\n";
-    if (!isClient) doRunNoCommunication();
-    std::cout << "domainSocket, ";
-    doRun<DomainSocketsTransportServer, DomainSocketsTransportClient>(isClient, "/tmp/testSocket");
-    std::cout << "shared memory, ";
-    doRunSharedMemory(isClient);
+    if (isLocal) {
+        if (!isClient) doRunNoCommunication();
+        std::cout << "domainSocket, ";
+        doRun<DomainSocketsTransportServer, DomainSocketsTransportClient>(isClient, "/tmp/testSocket");
+        std::cout << "shared memory, ";
+        doRunSharedMemory(isClient);
+    }
     //doRun<SharedMemoryTransportServer<>, SharedMemoryTransportClient<>>(isClient, "/tmp/testSocket");
     std::cout << "tcp, ";
     doRun<TcpTransportServer, TcpTransportClient>(isClient, connection);
