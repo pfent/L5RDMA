@@ -39,6 +39,11 @@ namespace rdma {
         return context->queryPort(ibport).getLid();
     }
 
+    /// Get the GID
+    ibv::Gid Network::getGID() {
+        return context->queryGid(ibport, 0);
+    }
+
     /// Print the capabilities of the RDMA host channel adapter
     void Network::printCapabilities() {
         using Cap = ibv::device::CapabilityFlag;

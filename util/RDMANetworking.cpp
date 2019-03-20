@@ -6,6 +6,7 @@ namespace l5 {
 namespace util {
 static void exchangeQPNAndConnect(const Socket &sock, rdma::Network &network, rdma::QueuePair &queuePair) {
     rdma::Address addr{};
+    addr.gid = network.getGID();
     addr.lid = network.getLID();
     addr.qpn = queuePair.getQPN();
     tcp::write(sock, &addr, sizeof(addr)); // Send own qpn to server

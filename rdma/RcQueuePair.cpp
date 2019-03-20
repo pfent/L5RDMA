@@ -33,6 +33,14 @@ void rdma::RcQueuePair::connect(const Address &address, uint8_t port, uint8_t re
         ahAttributes.setSl(0);                              // The service level (which determines the virtual lane)
         ahAttributes.setSrcPathBits(0);                     // Use the port base LID
         ahAttributes.setPortNum(port);                      // The local physical port
+        // see rc_pingpong.c::pp_connect_ctx
+        if (address.gid.getInterfaceId()) {
+            ahAttributes.setIsGlobal(true);
+            ibv::GlobalRoute globalRoute{};
+            globalRoute.setHopLimit(1);
+            globalRoute.setDgid(address.gid);
+            ahAttributes.setGrh(globalRoute);
+        }
         attributes.setAhAttr(ahAttributes);
 
         qp->modify(attributes, {Mod::STATE, Mod::AV, Mod::PATH_MTU, Mod::DEST_QPN, Mod::RQ_PSN,

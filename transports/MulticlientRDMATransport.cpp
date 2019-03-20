@@ -32,7 +32,7 @@ void MulticlientRDMATransportServer::accept() {
 
     auto qp = rdma::RcQueuePair(net);
 
-    auto address = rdma::Address{qp.getQPN(), net.getLID()};
+    auto address = rdma::Address{net.getGID(), qp.getQPN(), net.getLID()};
     tcp::write(acced, address);
     tcp::read(acced, address);
 
@@ -108,7 +108,7 @@ MultiClientRDMATransportClient::MultiClientRDMATransportClient()
 }
 
 void MultiClientRDMATransportClient::rdmaConnect() {
-    auto address = rdma::Address{qp.getQPN(), net.getLID()};
+    auto address = rdma::Address{net.getGID(), qp.getQPN(), net.getLID()};
     tcp::write(sock, address);
     tcp::read(sock, address);
 

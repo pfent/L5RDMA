@@ -80,7 +80,7 @@ void runImmData(bool isClient, uint32_t dataSize) {
         // *first* post recv to always have a recv pending, so incoming send don't get swallowed
         qp.postRecvRequest(recv);
 
-        auto remoteAddr = rdma::Address{qp.getQPN(), net.getLID()};
+        auto remoteAddr = rdma::Address{net.getGID(), qp.getQPN(), net.getLID()};
         tcp::write(socket, &remoteAddr, sizeof(remoteAddr));
         tcp::read(socket, &remoteAddr, sizeof(remoteAddr));
         auto remoteMr = ibv::memoryregion::RemoteAddress{reinterpret_cast<uintptr_t>(recvbuf.data()),
@@ -128,7 +128,7 @@ void runImmData(bool isClient, uint32_t dataSize) {
         // *first* post recv to always have a recv pending, so incoming send don't get swallowed
         qp.postRecvRequest(recv);
 
-        auto remoteAddr = rdma::Address{qp.getQPN(), net.getLID()};
+        auto remoteAddr = rdma::Address{net.getGID(), qp.getQPN(), net.getLID()};
         tcp::write(acced, &remoteAddr, sizeof(remoteAddr));
         tcp::read(acced, &remoteAddr, sizeof(remoteAddr));
         auto remoteMr = ibv::memoryregion::RemoteAddress{reinterpret_cast<uintptr_t>(recvbuf.data()),
@@ -202,7 +202,7 @@ void bigBuffer(bool isClient, size_t dataSize, uint16_t pollPositions, F pollFun
         // invalidate recv address
         std::fill(recvPosBuf.begin(), recvPosBuf.end(), -1);
 
-        auto remoteAddr = rdma::Address{qp.getQPN(), net.getLID()};
+        auto remoteAddr = rdma::Address{net.getGID(), qp.getQPN(), net.getLID()};
         tcp::write(socket, &remoteAddr, sizeof(remoteAddr));
         tcp::read(socket, &remoteAddr, sizeof(remoteAddr));
         auto remoteMr = ibv::memoryregion::RemoteAddress{reinterpret_cast<uintptr_t>(recvbuf.data()),
@@ -255,7 +255,7 @@ void bigBuffer(bool isClient, size_t dataSize, uint16_t pollPositions, F pollFun
         // invalidate recv address
         std::fill(recvPosBuf.begin(), recvPosBuf.end(), -1);
 
-        auto remoteAddr = rdma::Address{qp.getQPN(), net.getLID()};
+        auto remoteAddr = rdma::Address{net.getGID(), qp.getQPN(), net.getLID()};
         tcp::write(acced, &remoteAddr, sizeof(remoteAddr));
         tcp::read(acced, &remoteAddr, sizeof(remoteAddr));
         auto remoteMr = ibv::memoryregion::RemoteAddress{reinterpret_cast<uintptr_t>(recvbuf.data()),
@@ -395,7 +395,7 @@ void exclusiveBuffer(bool isClient, size_t dataSize, uint16_t pollPositions, F p
     // invalidate recv door bells
     std::fill(recvDoorBells.begin(), recvDoorBells.end(), '\0');
 
-    auto remoteAddr = rdma::Address{qp.getQPN(), net.getLID()};
+    auto remoteAddr = rdma::Address{net.getGID(), qp.getQPN(), net.getLID()};
     tcp::write(commsocket, &remoteAddr, sizeof(remoteAddr));
     tcp::read(commsocket, &remoteAddr, sizeof(remoteAddr));
 

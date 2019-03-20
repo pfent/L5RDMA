@@ -10,6 +10,7 @@ namespace rdma {
 
     /// The LID and QPN uniquely address a queue pair
     struct Address {
+        ibv::Gid gid;
         uint32_t qpn;
         uint16_t lid;
     };
@@ -43,6 +44,9 @@ namespace rdma {
 
         /// Get the LID
         uint16_t getLID();
+
+        /// Get the GID
+        ibv::Gid getGID();
 
         /// Print the capabilities of the RDMA host channel adapter
         void printCapabilities();
