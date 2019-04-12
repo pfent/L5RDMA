@@ -1,5 +1,5 @@
-#include <iostream>
 #include "RDMANetworking.h"
+#include <iostream>
 #include "util/socket/tcp.h"
 
 namespace l5 {

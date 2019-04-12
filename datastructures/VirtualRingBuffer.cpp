@@ -1,7 +1,6 @@
 #include "VirtualRingBuffer.h"
-#include <sys/mman.h>
-#include "util/virtualMemory.h"
 #include "util/busywait.h"
+#include "util/socket/domain.h"
 
 namespace l5 {
 namespace datastructure {
@@ -26,11 +25,12 @@ VirtualRingBuffer::VirtualRingBuffer(size_t size, const Socket &sock) : size(siz
     remote = mmapRingBuffer(remoteFd.get(), size);
 }
 
-void VirtualRingBuffer::waitUntilSendFree(size_t localWritten, size_t length) const {
-    size_t remoteRead;
+void VirtualRingBuffer::waitUntilSendFree(size_t localWritten, size_t length) {
+    // Don't read the remote memory if we don't have to
+    if ((localWritten - cachedRemoteRead) > (size - length)) return;
     loop_while([&]() {
-        remoteRead = remoteRw.data->read; // probably buffer this in class, so we don't have as much remote reads
-    }, [&]() { return (localWritten - remoteRead) > (size - length); }); // block until there is some space
+        cachedRemoteRead = remoteRw.data->read;
+    }, [&]() { return (localWritten - cachedRemoteRead) > (size - length); }); // block until there is some space
 }
 
 void VirtualRingBuffer::send(const uint8_t *data, size_t length) {
@@ -58,7 +58,7 @@ size_t VirtualRingBuffer::receive(void *whereTo, size_t maxSize) {
     return maxSize;
 }
 
-void VirtualRingBuffer::waitUntilReceiveAvailable(size_t maxSize, size_t localRead) const {
+void VirtualRingBuffer::waitUntilReceiveAvailable(size_t maxSize, size_t localRead) {
     size_t remoteWritten;
     loop_while([&]() {
         remoteWritten = remoteRw.data->written; // probably buffer this in class, so we don't have as much remote reads

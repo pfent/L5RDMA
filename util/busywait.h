@@ -6,25 +6,27 @@
 
 namespace {
     template<typename Fun, typename Cond>
-    void busyWait(Fun &&fun, Cond &&cond) {
+    constexpr void busyWait(Fun &&fun, Cond &&cond) {
         do {
             fun();
         } while (cond());
     }
 
-    // TODO: those values are a bit arbitrary, maybe more intelligence here?
-    // E.g. sample expected and deviation and set pause / yield accordingly
-    void yield(int tries) {
-        if (tries < 2) { // nop
-        } else if (tries < 64) {
+    // Yield depending on the number of retires
+    constexpr void yield(int tries) {
+        if (__builtin_expect(tries < 512, 1)) {
+            // NOOP in 99% of the cases
+        } else if (__builtin_expect(tries < 4096, 1)) {
+            // pause in almost all useful cases
             _mm_pause();
-        } else if (tries < 128) {
+        } else if (__builtin_expect(tries < 32768, 1)) {
             sched_yield();
         } else {
             usleep(1);
         }
     }
 
+    //static std::vector<int> samples = {};
     template<typename Fun, typename Cond>
     void niceWait(Fun &&fun, Cond &&cond) {
         int tries = 0;
@@ -33,11 +35,21 @@ namespace {
             fun();
             ++tries;
         } while (cond());
+        //samples.push_back(tries);
     }
+
+    //void printSamples() {
+    //    std::sort(samples.begin(), samples.end());
+    //    std::cout << "med: " << samples[samples.size() / 2] << '\n';
+    //    std::cout << "90%: " << samples[samples.size() * .9] << '\n';
+    //    std::cout << "95%: " << samples[samples.size() * .95] << '\n';
+    //    std::cout << "99%: " << samples[samples.size() * .99] << '\n';
+    //    std::cout << "99.9%: " << samples[samples.size() * .999] << '\n';
+    //}
 }
 
 template<typename... Args>
-void loop_while(Args &&... args) {
+constexpr void loop_while(Args &&... args) {
     return niceWait(std::forward<Args>(args)...);
 }
 

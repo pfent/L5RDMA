@@ -1,6 +1,4 @@
 #include "CompletionQueuePair.hpp"
-#include <cstring>
-#include <iomanip>
 #include "NetworkException.h"
 
 using namespace std;

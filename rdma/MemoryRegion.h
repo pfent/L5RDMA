@@ -2,7 +2,7 @@
 #define L5RDMA_MEMORYREGION_H
 
 #include <memory>
-#include <libibverbscpp.h>
+#include "ext/libibverbscpp/libibverbscpp.h"
 
 namespace rdma {
     template<typename T>

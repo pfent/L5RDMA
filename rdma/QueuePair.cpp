@@ -1,6 +1,5 @@
 #include "QueuePair.hpp"
 #include "Network.hpp"
-#include "CompletionQueuePair.hpp"
 #include <iomanip>
 
 using namespace std;
@@ -26,11 +25,11 @@ namespace rdma {
         // SRQ handle if QP is to be associated with an SRQ, otherwise NULL
         queuePairAttributes.setSharedReceiveQueue(receiveQueue);
         ibv::queuepair::Capabilities capabilities{};
-        capabilities.max_send_wr = maxOutstandingSendWrs;
-        capabilities.max_recv_wr = maxOutstandingRecvWrs;
-        capabilities.max_send_sge = maxSlicesPerSendWr;
-        capabilities.max_recv_sge = maxSlicesPerRecvWr;
-        capabilities.max_inline_data = maxInlineSize;
+        capabilities.setMaxSendWr(maxOutstandingSendWrs);
+        capabilities.setMaxRecvWr(maxOutstandingRecvWrs);
+        capabilities.setMaxSendSge(maxSlicesPerSendWr);
+        capabilities.setMaxRecvSge(maxSlicesPerRecvWr);
+        capabilities.setMaxInlineData(maxInlineSize);
         queuePairAttributes.setCapabilities(capabilities);
         queuePairAttributes.setType(type);
         queuePairAttributes.setSignalAll(signalAll);

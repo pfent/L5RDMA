@@ -1,5 +1,4 @@
 #include "Network.hpp"
-#include "CompletionQueuePair.hpp"
 #include <iostream>
 #include <iomanip>
 #include "NetworkException.h"

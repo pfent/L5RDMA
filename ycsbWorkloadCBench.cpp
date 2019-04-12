@@ -13,7 +13,7 @@
 using namespace l5::transport;
 
 static constexpr uint16_t port = 1234;
-static const char *ip = "127.0.0.1";
+static std::string_view ip = "127.0.0.1";
 
 void doRunNoCommunication() {
     const auto database = YcsbDatabase();
@@ -43,7 +43,6 @@ void doRun(bool isClient, std::string connection) {
     };
 
     if (isClient) {
-        sleep(1);
         auto client = Client();
 
         for (int i = 0;; ++i) {
@@ -52,7 +51,7 @@ void doRun(bool isClient, std::string connection) {
                 break;
             } catch (...) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(20));
-                if (i > 10) throw;
+                if (i > 1000) throw;
             }
         }
 
@@ -84,89 +83,34 @@ void doRun(bool isClient, std::string connection) {
     }
 }
 
-void doRunSharedMemory(bool isClient) {
-    struct ReadMessage {
-        YcsbKey lookupKey;
-        size_t field;
-    };
-
-    struct ReadResponse {
-        std::array<char, ycsb_field_length> data;
-    };
-
-    if (isClient) {
-        sleep(1);
-        auto client = SharedMemoryTransportClient<>();
-
-        for (int i = 0;; ++i) {
-            try {
-                client.connect("/dev/shm/pingPong");
-                break;
-            } catch (...) {
-                std::this_thread::sleep_for(std::chrono::milliseconds(20));
-                if (i > 10) throw;
-            }
-        }
-
-        auto rand = Random32();
-        const auto lookupKeys = generateZipfLookupKeys(ycsb_tx_count);
-        //auto response = ReadResponse{};
-
-        for (const auto lookupKey: lookupKeys) {
-            const auto field = rand.next() % ycsb_field_count;
-            auto message = ReadMessage{lookupKey, field};
-            client.write(message);
-            client.read(message);
-            DoNotOptimize(message);
-        }
-    } else {
-        auto server = SharedMemoryTransportServer<>("/dev/shm/pingPong");
-        const auto database = YcsbDatabase();
-        server.accept();
-        bench(ycsb_tx_count, [&]() {
-            for (size_t i = 0; i < ycsb_tx_count; ++i) {
-                auto message = ReadMessage{};
-                server.read(message);
-                auto&[lookupKey, field] = message;
-                auto response = ReadResponse{};
-                database.lookup(lookupKey, field, reinterpret_cast<char*>(&response));
-                server.write(response);
-            }
-        });
-    }
-
-}
-
 int main(int argc, char **argv) {
-    if (argc < 2) {
-        std::cout << "Usage: " << argv[0] << " <client / server> <(IP, optional) 127.0.0.1>" << std::endl;
+    if (argc < 3) {
+        std::cout << "Usage: " << argv[0] << " <client / server> <[DS|SHM|TCP|RDMA]> <(IP, optional) 127.0.0.1>" << std::endl;
         return -1;
     }
-    const auto isClient = argv[1][0] == 'c';
-    const auto isLocal = [&] {
-        if (argc <= 2) {
-            return true;
-        }
-        ip = argv[2];
-        return strcmp("127.0.0.1", ip) == 0;
-    }();
-    std::string connection;
+    const auto isClient = std::string_view(argv[1]) == "client";
+    const auto transportProtocol = std::string_view(argv[2]);
+    if (argc >= 3) ip = argv[2];
+    std::string connectionString;
     if (isClient) {
-        connection = ip + std::string(":") + std::to_string(port);
+        connectionString = std::string(ip) + ":" + std::to_string(port);
     } else {
-        connection = std::to_string(port);
+        connectionString = std::to_string(port);
     }
-    std::cout << "connection, transactions, time, msgps, user, system, total\n";
-    if (isLocal) {
-        if (!isClient) doRunNoCommunication();
-        std::cout << "domainSocket, ";
+    if (!isClient) std::cout << "connection, transactions, time, msgps, user, system, total\n";
+    if (!isClient) doRunNoCommunication();
+
+    if (transportProtocol == "DS") {
+        if (!isClient) std::cout << "domainSocket, ";
         doRun<DomainSocketsTransportServer, DomainSocketsTransportClient>(isClient, "/tmp/testSocket");
-        std::cout << "shared memory, ";
-        doRunSharedMemory(isClient);
+    } else if (transportProtocol == "SHM") {
+        if (!isClient) std::cout << "shared memory, ";
+        doRun<SharedMemoryTransportServer<>, SharedMemoryTransportClient<>>(isClient, "/tmp/testSocket");
+    } else if (transportProtocol == "TCP") {
+        if (!isClient) std::cout << "tcp, ";
+        doRun<TcpTransportServer, TcpTransportClient>(isClient, connectionString);
+    } else if (transportProtocol == "RDMA") {
+        if (!isClient) std::cout << "rdma, ";
+        doRun<RdmaTransportServer<>, RdmaTransportClient<>>(isClient, connectionString);
     }
-    //doRun<SharedMemoryTransportServer<>, SharedMemoryTransportClient<>>(isClient, "/tmp/testSocket");
-    std::cout << "tcp, ";
-    doRun<TcpTransportServer, TcpTransportClient>(isClient, connection);
-    std::cout << "rdma, ";
-    doRun<RdmaTransportServer<>, RdmaTransportClient<>>(isClient, connection);
 }

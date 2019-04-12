@@ -1,7 +1,5 @@
 #include "RDMAMessageBuffer.h"
-#include <iostream>
-#include <infiniband/verbs.h>
-#include <util/socket/tcp.h>
+#include "util/socket/tcp.h"
 
 using namespace std;
 using namespace rdma;

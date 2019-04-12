@@ -2,7 +2,6 @@
 
 #include <emmintrin.h>
 #include <util/socket/Socket.h>
-#include <ext/libibverbscpp/libibverbscpp.h>
 #include <rdma/CompletionQueuePair.hpp>
 #include <rdma/Network.hpp>
 #include <rdma/MemoryRegion.h>

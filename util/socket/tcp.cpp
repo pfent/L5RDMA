@@ -2,6 +2,7 @@
 #include <arpa/inet.h>
 #include <fcntl.h>
 #include "tcp.h"
+#include "util/socket/Socket.h"
 
 using namespace std::string_literals;
 

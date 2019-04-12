@@ -1,7 +1,6 @@
 #ifndef L5RDMA_BENCH_H
 #define L5RDMA_BENCH_H
 
-#include <tuple>
 #include <iostream>
 #include <fstream>
 #include <vector>

@@ -1,7 +1,6 @@
 #ifndef L5RDMA_PINGPONG_H
 #define L5RDMA_PINGPONG_H
 
-#include <cstdint>
 #include <vector>
 #include <thread>
 #include "include/Transport.h"

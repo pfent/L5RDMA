@@ -1,6 +1,4 @@
 #include "domain.h"
-#include <stdexcept>
-#include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>
 #include <array>

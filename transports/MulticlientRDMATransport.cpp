@@ -1,5 +1,4 @@
-#include <netinet/in.h>
-#include <boost/assert.hpp>
+#include <cassert>
 #include "include/MulticlientRDMATransport.h"
 #include "util/socket/tcp.h"
 

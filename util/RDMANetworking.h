@@ -4,10 +4,10 @@
 #include "rdma/RcQueuePair.h"
 #include "rdma/Network.hpp"
 #include "rdma/CompletionQueuePair.hpp"
-#include "util/socket/Socket.h"
 
 namespace l5 {
 namespace util {
+class Socket;
 struct RDMANetworking {
     rdma::Network network;
     rdma::CompletionQueuePair completionQueue;

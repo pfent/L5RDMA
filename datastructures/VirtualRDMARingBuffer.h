@@ -1,11 +1,7 @@
 #ifndef L5RDMA_VIRTUALRDMARINGBUFFER_H
 #define L5RDMA_VIRTUALRDMARINGBUFFER_H
 
-#include <cstdint>
-#include <cstddef>
 #include <atomic>
-#include <memory>
-#include <unistd.h>
 #include "util/RDMANetworking.h"
 #include "util/virtualMemory.h"
 

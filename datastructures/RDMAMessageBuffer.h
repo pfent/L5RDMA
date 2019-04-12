@@ -1,14 +1,15 @@
-#ifndef RDMA_HASH_MAP_RDMAMESSAGEBUFFER_H
-#define RDMA_HASH_MAP_RDMAMESSAGEBUFFER_H
+#ifndef RDMA_RDMAMESSAGEBUFFER_H
+#define RDMA_RDMAMESSAGEBUFFER_H
 
 #include <atomic>
 #include <vector>
 #include <memory>
-#include <util/socket/Socket.h>
 #include "util/RDMANetworking.h"
-#include "rdma/Network.hpp"
 
 namespace l5 {
+namespace util {
+class Socket;
+}
 namespace datastructure {
 class RDMAMessageBuffer {
 public:
@@ -56,4 +57,4 @@ private:
 } // namespace datastructure
 } // namespace l5
 
-#endif //RDMA_HASH_MAP_RDMAMESSAGEBUFFER_H
+#endif //RDMA_RDMAMESSAGEBUFFER_H

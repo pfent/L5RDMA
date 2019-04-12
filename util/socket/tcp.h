@@ -1,11 +1,12 @@
 #pragma once
 
-#include <netinet/in.h>
 #include <string>
-#include "Socket.h"
+
+struct sockaddr_in;
 
 namespace l5 {
 namespace util {
+class Socket;
 namespace tcp {
 void connect(const Socket &sock, const sockaddr_in &dest);
 

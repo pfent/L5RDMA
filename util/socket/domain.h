@@ -1,8 +1,6 @@
 #pragma once
 
-#include <cstddef>
 #include <string>
-#include <sys/un.h>
 #include "Socket.h"
 
 namespace l5 {
@@ -42,7 +40,7 @@ T read(const Socket &sock) {
 
 void bind(const Socket &sock, const std::string &pathToFile);
 
-Socket accept(const Socket &sock, ::sockaddr_un &inAddr);
+Socket accept(const Socket &sock, sockaddr_un &inAddr);
 
 Socket accept(const Socket &sock);
 

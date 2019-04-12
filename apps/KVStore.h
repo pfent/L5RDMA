@@ -1,7 +1,6 @@
 #ifndef L5RDMA_KVSTORE_H
 #define L5RDMA_KVSTORE_H
 
-#include <cstdint>
 #include <unordered_map>
 #include <cstring>
 #include "transports/Transport.h"

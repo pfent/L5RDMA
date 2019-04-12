@@ -1,15 +1,14 @@
 #ifndef EXCHANGABLE_TRANSPORTS_VIRTUALRINGBUFFER_H
 #define EXCHANGABLE_TRANSPORTS_VIRTUALRINGBUFFER_H
 
-#include <cstdint>
-#include <cstddef>
 #include <atomic>
 #include <memory>
-#include <unistd.h>
-#include <util/virtualMemory.h>
 #include "util/virtualMemory.h"
 
 namespace l5 {
+namespace util {
+class Socket;
+}
 namespace datastructure {
 struct RingBufferInfo {
     std::atomic<size_t> read;
@@ -27,6 +26,7 @@ struct VirtualRingBuffer {
     util::ShmMapping<RingBufferInfo> localRw;
     util::WraparoundBuffer local;
 
+    size_t cachedRemoteRead;
     util::ShmMapping<RingBufferInfo> remoteRw;
     util::WraparoundBuffer remote;
 
@@ -38,9 +38,9 @@ struct VirtualRingBuffer {
     size_t receive(void *whereTo, size_t maxSize);
 
 private:
-    void waitUntilSendFree(size_t localWritten, size_t length) const;
+    void waitUntilSendFree(size_t localWritten, size_t length);
 
-    void waitUntilReceiveAvailable(size_t maxSize, size_t localRead) const;
+    void waitUntilReceiveAvailable(size_t maxSize, size_t localRead);
 };
 } // namespace datastructure
 } // namespace l5

@@ -1,8 +1,6 @@
 #ifndef L5RDMA_RANDOM32_H
 #define L5RDMA_RANDOM32_H
 
-#include <cstdint>
-
 /// https://en.wikipedia.org/wiki/Xorshift
 class Random32 {
     uint32_t state;

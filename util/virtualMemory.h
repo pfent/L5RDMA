@@ -1,15 +1,11 @@
 #ifndef L5RDMA_VIRTUALMEMORY_H
 #define L5RDMA_VIRTUALMEMORY_H
 
-#include <cstdint>
-#include <cstddef>
 #include <memory>
 #include <unistd.h>
 #include <sys/mman.h>
 #include <cstring>
 #include <sys/file.h>
-#include "util/socket/Socket.h"
-#include "socket/domain.h"
 
 namespace l5 {
 namespace util {
@@ -95,7 +91,7 @@ ShmMapping<T> malloc_shared(const std::string &name, size_t size, void *addr = n
     };
     auto ptr = mmap(addr, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
 
-    memset(ptr, 0, size);
+    ::memset(ptr, 0, size);
 
     return ShmMapping<T>( fd, std::shared_ptr<T>(reinterpret_cast<T *>(ptr), deleter) );
 }
