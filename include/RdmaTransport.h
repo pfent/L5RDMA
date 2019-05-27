@@ -51,6 +51,10 @@ class RdmaTransportClient : public TransportClient<RdmaTransportClient<BUFFER_SI
 
    ~RdmaTransportClient() override = default;
 
+   RdmaTransportClient(RdmaTransportClient&&) noexcept = default;
+
+   RdmaTransportClient& operator=(RdmaTransportClient&&) noexcept = default;
+
    void connect_impl(const std::string &connection);
 
    void reset_impl();

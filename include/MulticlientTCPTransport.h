@@ -40,11 +40,15 @@ public:
 };
 
 class MulticlientTCPTransportClient {
-    const util::Socket socket;
+    util::Socket socket;
 public:
     MulticlientTCPTransportClient();
 
     ~MulticlientTCPTransportClient();
+
+    MulticlientTCPTransportClient(MulticlientTCPTransportClient&&) noexcept = default;
+
+    MulticlientTCPTransportClient& operator=(MulticlientTCPTransportClient&&) noexcept = default;
 
     void connect(std::string_view whereTo);
 

@@ -1,8 +1,9 @@
 #ifndef L5RDMA_MEMORYREGION_H
 #define L5RDMA_MEMORYREGION_H
 
-#include <memory>
 #include "ext/libibverbscpp/libibverbscpp.h"
+#include "rdma/Network.hpp"
+#include <memory>
 
 namespace rdma {
     template<typename T>

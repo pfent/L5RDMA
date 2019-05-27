@@ -56,6 +56,7 @@ SET(EXECUTABLES
         rawCommandBench
         indirectWriteBench
         multiclientPollingBench
+        multiclientRecvVsPoll
         many2OneBench
         zeroCopyBench
         ycsbWorkloadCBench
