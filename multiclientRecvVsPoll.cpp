@@ -82,6 +82,7 @@ void doRun(bool isClient, const std::string& connection, size_t concurrentInFlig
    } else { // server
       auto server = Server(connection, (concurrentInFlight + 15u) & ~15u); // next multiple of 16
       for (size_t i = 0; i < concurrentInFlight; ++i) { server.accept(); }
+      server.finishListen();
       bench(numMessages, [&] {
          for (size_t i = 0; i < numMessages; ++i) {
             uint32_t message = {};
@@ -106,14 +107,14 @@ int main(int argc, char** argv) {
       connectionString = std::to_string(port);
    }
 
-   std::cout << "concurrent, method, seconds, msgps, user, kernel, total\n";
+   std::cout << "concurrent, method, messages, seconds, msgps, user, kernel, total\n";
    for (size_t i = 1; i < 50; ++i) {
       // TODO: MulticlientRDMAMemoryRegions -> Suitable for *few* clients (x < ???)
       // MulticlientRDMADoorbells -> Suitable for *most* clients (??? < x < ???)
-      std::cout << i << ", Doorbells";
+      std::cout << i << ", Doorbells, ";
       doRun<MulticlientRDMATransportServer, MultiClientRDMATransportClient>(isClient, connectionString, i);
       // MulticlientRDMARecv -> Suitable for *many* clients (??? < x)
-      std::cout << i << ", Recv";
+      std::cout << i << ", Recv, ";
       doRun<MulticlientRDMARecvTransportServer, MulticlientRDMARecvTransportClient>(isClient, connectionString, i);
    }
 }

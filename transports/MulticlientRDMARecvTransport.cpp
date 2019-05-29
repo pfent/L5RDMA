@@ -57,7 +57,6 @@ size_t MulticlientRDMARecvTransportServer::receive(void* whereTo, size_t maxSize
    auto wc = net.getSharedCompletionQueue().pollRecvWorkCompletionBlocking();
    // find out, which client this message came from
    auto client = qpnToConnection.at(wc.getQueuePairNumber());
-   assert(client == wc.getId()); // TODO: if this does not fire, just use the ID
    auto& connection = connections[client];
    // immediately replace the consumed receive request
    connection.qp.postRecvRequest(connection.recv);
