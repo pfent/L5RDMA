@@ -96,6 +96,7 @@ void MulticlientRDMARecvTransportServer::send(size_t receiverId, const uint8_t* 
    *validityPtr = validity;
 
    con.answerWr.setLocalAddress(sendBuffer.getSlice(0, totalLength));
+   // TODO: selective signaling needs to happen per queue pair / connection
    sendCounter++;
    if (sendCounter % 1024 == 0) { // selective signaling
       con.answerWr.setFlags(getWrFlags(true, totalLength < 512));

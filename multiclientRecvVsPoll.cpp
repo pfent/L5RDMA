@@ -11,7 +11,6 @@
 
 using namespace l5::transport;
 
-static constexpr auto numMessages = size_t(1e3);
 static constexpr uint16_t port = 1234;
 static std::string_view ip = "127.0.0.1";
 
@@ -25,6 +24,7 @@ void emplace_initialize_n(Container& container, Size n, Args&&... args, Initiali
 
 template <typename Server, typename Client>
 void doRun(bool isClient, const std::string& connection, size_t concurrentInFlight) {
+   static constexpr auto numMessages = size_t(1e6);
    if (isClient) {
       auto rand = Random32();
       auto msgs = std::vector<uint32_t>();
@@ -33,11 +33,13 @@ void doRun(bool isClient, const std::string& connection, size_t concurrentInFlig
 
       auto numThreads = std::min(concurrentInFlight, size_t(std::thread::hardware_concurrency()));
       auto concurrentPerThread = concurrentInFlight / numThreads;
+      auto messagesPerThread = numMessages / numThreads;
       auto threads = std::vector<std::thread>();
       threads.reserve(numThreads);
       for (size_t threadId = 0; threadId < numThreads; ++threadId) {
-         bool needsExtra = (concurrentInFlight % numThreads) > threadId;
-         threads.emplace_back([thisThreadConcurrent = concurrentPerThread + needsExtra, &msgs, &connection] {
+         bool needsExtraConcurrent = (concurrentInFlight % numThreads) > threadId;
+         bool needsExtraMessage = (numMessages % numThreads) > threadId;
+         threads.emplace_back([thisThreadConcurrent = concurrentPerThread + needsExtraConcurrent, thisThreadMessages = messagesPerThread + needsExtraMessage, &msgs, &connection] {
             auto clients = std::vector<std::unique_ptr<Client>>();
             emplace_initialize_n(clients, thisThreadConcurrent, [&](Client& client) {
                for (int i = 0;; ++i) {
@@ -53,7 +55,7 @@ void doRun(bool isClient, const std::string& connection, size_t concurrentInFlig
 
             auto inFlight = std::deque<std::tuple<Client&, uint32_t>>();
             size_t done = 0;
-            for (size_t i = 0; i < numMessages; ++i) {
+            for (size_t i = 0; i < thisThreadMessages; ++i) {
                if (i >= thisThreadConcurrent) {
                   uint32_t response = 0;
                   auto [finClient, expected] = inFlight.front();
@@ -69,16 +71,18 @@ void doRun(bool isClient, const std::string& connection, size_t concurrentInFlig
                client.write(value);
                inFlight.emplace_back(client, value);
             }
-            for (; done < numMessages; ++done) {
+            for (; done < thisThreadMessages; ++done) {
                uint32_t response = 0;
                auto [finClient, expected] = inFlight.front();
                inFlight.pop_front();
                finClient.read(response);
                if (expected != response) throw std::runtime_error("unexpected value!");
             }
+            std::cout << "#";
          });
       }
       for (auto& thread : threads) { thread.join(); }
+      std::cout << std::endl;
    } else { // server
       auto server = Server(connection, (concurrentInFlight + 15u) & ~15u); // next multiple of 16
       for (size_t i = 0; i < concurrentInFlight; ++i) { server.accept(); }
@@ -95,7 +99,7 @@ void doRun(bool isClient, const std::string& connection, size_t concurrentInFlig
 
 int main(int argc, char** argv) {
    if (argc < 2) {
-      std::cout << "Usage: " << argv[0] << " <client / server> <(IP, optional) 127.0.0.1>" << std::endl;
+      std::cout << "Usage: " << argv[0] << " <client / server>  <(IP, optional) 127.0.0.1>" << std::endl;
       return -1;
    }
    const auto isClient = std::string_view(argv[1]) == "client";
@@ -107,14 +111,14 @@ int main(int argc, char** argv) {
       connectionString = std::to_string(port);
    }
 
-   std::cout << "concurrent, method, messages, seconds, msgps, user, kernel, total\n";
+   if (!isClient) std::cout << "concurrent, method, messages, seconds, msgps, user, kernel, total\n";
    for (size_t i = 1; i < 50; ++i) {
       // TODO: MulticlientRDMAMemoryRegions -> Suitable for *few* clients (x < ???)
       // MulticlientRDMADoorbells -> Suitable for *most* clients (??? < x < ???)
-      std::cout << i << ", Doorbells, ";
+      if (!isClient) std::cout << i << ", Doorbells, " << std::flush;
       doRun<MulticlientRDMATransportServer, MultiClientRDMATransportClient>(isClient, connectionString, i);
       // MulticlientRDMARecv -> Suitable for *many* clients (??? < x)
-      std::cout << i << ", Recv, ";
+      if (!isClient) std::cout << i << ", Recv, " << std::flush;
       doRun<MulticlientRDMARecvTransportServer, MulticlientRDMARecvTransportClient>(isClient, connectionString, i);
    }
 }
