@@ -50,7 +50,7 @@ void MulticlientRDMATransportServer::accept() {
     answer.setInline();
     answer.setSignaled();
 
-    connections.push_back(Connection{std::move(acced), std::move(qp), answer});
+    connections.emplace_back(std::move(acced), std::move(qp), answer);
 }
 
 MulticlientRDMATransportServer::~MulticlientRDMATransportServer() = default;

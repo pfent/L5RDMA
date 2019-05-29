@@ -96,9 +96,9 @@ void MulticlientRDMARecvTransportServer::send(size_t receiverId, const uint8_t* 
    *validityPtr = validity;
 
    con.answerWr.setLocalAddress(sendBuffer.getSlice(0, totalLength));
-   // TODO: selective signaling needs to happen per queue pair / connection
-   sendCounter++;
-   if (sendCounter % 1024 == 0) { // selective signaling
+   // selective signaling needs to happen per queuepair / connection
+   ++con.sendCounter;
+   if (con.sendCounter % 1024 == 0) {
       con.answerWr.setFlags(getWrFlags(true, totalLength < 512));
       con.qp.postWorkRequest(con.answerWr);
       sharedCq->pollSendCompletionQueueBlocking(ibv::workcompletion::Opcode::RDMA_WRITE);

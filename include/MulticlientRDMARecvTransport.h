@@ -9,30 +9,37 @@
 #include <emmintrin.h>
 
 namespace l5::transport {
-class MulticlientRDMARecvTransportServer { // TODO: RECV not send
+class MulticlientRDMARecvTransportServer {
+   /// State for each connection
    struct Connection {
+      /// Socket from accept (currently unused after bootstrapping)
       util::Socket socket;
+      /// RDMA Queue Pair
       rdma::RcQueuePair qp;
+      /// The pre-prepared answer work request. Only the local data source changes for each answer
       ibv::workrequest::Simple<ibv::workrequest::Write> answerWr;
+      /// The receive request for incoming messages
       ibv::workrequest::Recv recv;
-
+      /// Send counter to keep track when we need to signal
+      size_t sendCounter = 0; // TODO: instead of a send counter, maybe use an "unsignaled" count with a threshold
+      /// Constructor
       Connection(util::Socket socket, rdma::RcQueuePair qp, ibv::workrequest::Simple<ibv::workrequest::Write> answerWr,
                  ibv::workrequest::Recv recv)
          : socket(std::move(socket)), qp(std::move(qp)), answerWr(answerWr), recv(recv) {}
    };
 
-   static constexpr size_t MAX_MESSAGESIZE = 256 * 1024 * 1024;
+   /// Maximum supported message size in byte
+   static constexpr size_t MAX_MESSAGESIZE = 256 * 1024;
+   /// The OK byte used to detect partially written messages
    static constexpr char validity = '\4'; // ASCII EOT char
-   const size_t MAX_CLIENTS;
+   /// How many clients can concurrently connect
+   size_t MAX_CLIENTS;
 
    util::Socket listenSock;
    rdma::Network net;
    rdma::CompletionQueuePair* sharedCq;
    rdma::RegisteredMemoryRegion<uint8_t[MAX_MESSAGESIZE]> receives;
-
    rdma::RegisteredMemoryRegion<uint8_t> sendBuffer;
-   size_t sendCounter = 0;
-
    std::vector<Connection> connections;
    std::unordered_map<uint32_t, uint32_t> qpnToConnection;
 
@@ -81,7 +88,7 @@ class MulticlientRDMARecvTransportClient {
    static constexpr size_t MAX_MESSAGESIZE = 256 * 1024 * 1024;
    static constexpr char validity = '\4'; // ASCII EOT char
 
-   const util::Socket sock;
+   util::Socket sock;
    rdma::Network net;
    rdma::CompletionQueuePair& cq;
    rdma::RcQueuePair qp;

@@ -10,15 +10,24 @@
 namespace l5 {
 namespace transport {
 class MulticlientRDMATransportServer {
+    /// State for each connection
     struct Connection {
+        /// Socket from accept (currently unused after bootstrapping)
         util::Socket socket;
+        /// RDMA Queue Pair
         rdma::RcQueuePair qp;
+        /// The pre-prepared answer work request. Only the local data source changes for each answer
         ibv::workrequest::Simple<ibv::workrequest::Write> answerWr;
+        /// Send counter to keep track when we need to signal
+        size_t sendCounter = 0;
+        /// Constructor
+        Connection(util::Socket socket, rdma::RcQueuePair qp, ibv::workrequest::Simple<ibv::workrequest::Write> answerWr)
+            : socket(std::move(socket)), qp(std::move(qp)), answerWr(answerWr){}
     };
 
     static constexpr size_t MAX_MESSAGESIZE = 256 * 1024 * 1024;
     static constexpr char validity = '\4'; // ASCII EOT char
-    const size_t MAX_CLIENTS;
+    size_t MAX_CLIENTS;
 
     util::Socket listenSock;
     rdma::Network net;
@@ -116,9 +125,9 @@ public:
         *validityPtr = validity;
 
         con.answerWr.setLocalAddress(sendBuffer.getSlice(0, totalLength));
-        // TODO: selective signaling needs to happen per queue pair / connection
-        sendCounter++;
-        if (sendCounter % 1024 == 0) { // selective signaling
+        // selective signaling needs to happen per queuepair / connection
+        ++con.sendCounter;
+        if (con.sendCounter % 1024 == 0) { // selective signaling
             con.answerWr.setFlags(getWrFlags(true, totalLength < 512));
             con.qp.postWorkRequest(con.answerWr);
             sharedCq->pollSendCompletionQueueBlocking(ibv::workcompletion::Opcode::RDMA_WRITE);
@@ -159,7 +168,7 @@ class MultiClientRDMATransportClient {
     static constexpr size_t MAX_MESSAGESIZE = 256 * 1024 * 1024;
     static constexpr char validity = '\4'; // ASCII EOT char
 
-    const util::Socket sock;
+    util::Socket sock;
     rdma::Network net;
     rdma::CompletionQueuePair &cq;
     rdma::RcQueuePair qp;
