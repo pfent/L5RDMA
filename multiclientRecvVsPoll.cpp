@@ -36,10 +36,8 @@ void doRun(bool isClient, const std::string& connection, size_t concurrentInFlig
       auto threads = std::vector<std::thread>();
       threads.reserve(numThreads);
       for (size_t threadId = 0; threadId < numThreads; ++threadId) {
-         threads.emplace_back([&, id = threadId] {
-            bool needsExtra = (concurrentInFlight % numThreads) > id;
-            auto thisThreadConcurrent = concurrentPerThread + needsExtra;
-
+         bool needsExtra = (concurrentInFlight % numThreads) > threadId;
+         threads.emplace_back([thisThreadConcurrent = concurrentPerThread + needsExtra, &msgs, &connection] {
             auto clients = std::vector<std::unique_ptr<Client>>();
             emplace_initialize_n(clients, thisThreadConcurrent, [&](Client& client) {
                for (int i = 0;; ++i) {
@@ -56,13 +54,7 @@ void doRun(bool isClient, const std::string& connection, size_t concurrentInFlig
             auto inFlight = std::deque<std::tuple<Client&, uint32_t>>();
             size_t done = 0;
             for (size_t i = 0; i < numMessages; ++i) {
-               auto current = i % concurrentInFlight;
-               auto value = msgs[i];
-               auto& client = *clients[current];
-               client.write(value);
-               inFlight.emplace_back(client, value);
-
-               if (i >= concurrentInFlight) {
+               if (i >= thisThreadConcurrent) {
                   uint32_t response = 0;
                   auto [finClient, expected] = inFlight.front();
                   inFlight.pop_front();
@@ -70,6 +62,12 @@ void doRun(bool isClient, const std::string& connection, size_t concurrentInFlig
                   if (expected != response) throw std::runtime_error("unexpected value!");
                   ++done;
                }
+
+               auto current = i % thisThreadConcurrent;
+               auto value = msgs[i];
+               auto& client = *clients[current];
+               client.write(value);
+               inFlight.emplace_back(client, value);
             }
             for (; done < numMessages; ++done) {
                uint32_t response = 0;
@@ -82,7 +80,7 @@ void doRun(bool isClient, const std::string& connection, size_t concurrentInFlig
       }
       for (auto& thread : threads) { thread.join(); }
    } else { // server
-      auto server = Server(connection);
+      auto server = Server(connection, (concurrentInFlight + 15u) & ~15u);
       for (size_t i = 0; i < concurrentInFlight; ++i) { server.accept(); }
       bench(numMessages, [&] {
          for (size_t i = 0; i < numMessages; ++i) {
