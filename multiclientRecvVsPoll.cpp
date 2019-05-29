@@ -45,8 +45,8 @@ void doRun(bool isClient, const std::string& connection, size_t concurrentInFlig
                      client.connect(connection);
                      break;
                   } catch (...) {
-                     std::this_thread::sleep_for(std::chrono::milliseconds(20));
                      if (i > 1000) throw;
+                     std::this_thread::sleep_for(std::chrono::milliseconds(20));
                   }
                }
             });
@@ -80,7 +80,7 @@ void doRun(bool isClient, const std::string& connection, size_t concurrentInFlig
       }
       for (auto& thread : threads) { thread.join(); }
    } else { // server
-      auto server = Server(connection, (concurrentInFlight + 15u) & ~15u);
+      auto server = Server(connection, (concurrentInFlight + 15u) & ~15u); // next multiple of 16
       for (size_t i = 0; i < concurrentInFlight; ++i) { server.accept(); }
       bench(numMessages, [&] {
          for (size_t i = 0; i < numMessages; ++i) {

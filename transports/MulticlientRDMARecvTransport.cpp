@@ -160,8 +160,12 @@ void MulticlientRDMARecvTransportClient::send(const uint8_t* data, size_t size) 
       throw std::runtime_error("can't send messages > MAX_MESSAGESIZE");
    }
 
-   std::copy(data, data + size, sendBuffer.data());
-   dataWr.setLocalAddress(sendBuffer.getSlice(0, size));
+   auto sizePtr = reinterpret_cast<size_t*>(sendBuffer.data());
+   *sizePtr = size;
+   auto payloadBegin = sendBuffer.data() + sizeof(size_t);
+
+   std::copy(data, data + size, payloadBegin);
+   dataWr.setLocalAddress(sendBuffer.getSlice(0, dataWrSize));
    qp.postWorkRequest(dataWr);
    cq.pollSendCompletionQueueBlocking(ibv::workcompletion::Opcode::RDMA_WRITE);
 }
