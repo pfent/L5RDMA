@@ -4,12 +4,13 @@
 #include "util/Random32.h"
 #include "util/bench.h"
 #include "util/doNotOptimize.h"
-#include <array>
 #include <deque>
+#include <future>
 #include <thread>
 #include <vector>
 
 using namespace l5::transport;
+using std::chrono_literals::operator""s;
 
 static constexpr uint16_t port = 1234;
 static std::string_view ip = "127.0.0.1";
@@ -25,81 +26,106 @@ void emplace_initialize_n(Container& container, Size n, Args&&... args, Initiali
 template <typename Server, typename Client>
 void doRun(bool isClient, const std::string& connection, size_t concurrentInFlight) {
    static constexpr auto numMessages = size_t(1e6);
-   if (isClient) {
-      auto rand = Random32();
-      auto msgs = std::vector<uint32_t>();
-      msgs.reserve(numMessages);
-      std::generate_n(std::back_inserter(msgs), numMessages, [&] { return rand.next(); });
+   for (size_t run = 0; run < 5;) {
+      try {
+         if (isClient) {
+            auto rand = Random32();
+            auto msgs = std::vector<uint32_t>();
+            msgs.reserve(numMessages);
+            std::generate_n(std::back_inserter(msgs), numMessages, [&] { return rand.next(); });
 
-      auto numThreads = std::min(concurrentInFlight, size_t(std::thread::hardware_concurrency()));
-      auto concurrentPerThread = concurrentInFlight / numThreads;
-      auto messagesPerThread = numMessages / numThreads;
-      auto threads = std::vector<std::thread>();
-      threads.reserve(numThreads);
-      auto connected = std::atomic<size_t>(0);
-      for (size_t threadId = 0; threadId < numThreads; ++threadId) {
-         bool needsExtraConcurrent = (concurrentInFlight % numThreads) > threadId;
-         bool needsExtraMessage = (numMessages % numThreads) > threadId;
-         threads.emplace_back([thisThreadConcurrent = concurrentPerThread + needsExtraConcurrent, thisThreadMessages = messagesPerThread + needsExtraMessage, &msgs, &connection, &connected, &concurrentInFlight] {
-            auto clients = std::vector<std::unique_ptr<Client>>();
-            emplace_initialize_n(clients, thisThreadConcurrent, [&](Client& client) {
-               for (int i = 0;; ++i) {
-                  try {
-                     client.connect(connection);
-                     break;
-                  } catch (...) {
-                     if (i > 1000) throw;
-                     std::this_thread::sleep_for(std::chrono::milliseconds(20));
+            auto numThreads = std::min(concurrentInFlight, size_t(std::thread::hardware_concurrency()));
+            auto concurrentPerThread = concurrentInFlight / numThreads;
+            auto messagesPerThread = numMessages / numThreads;
+            auto threads = std::vector<std::thread>();
+            threads.reserve(numThreads);
+            auto futures = std::vector<std::future<void>>();
+            futures.reserve(numThreads);
+            auto connected = std::atomic<size_t>(0);
+            for (size_t threadId = 0; threadId < numThreads; ++threadId) {
+               bool needsExtraConcurrent = (concurrentInFlight % numThreads) > threadId;
+               bool needsExtraMessage = (numMessages % numThreads) > threadId;
+               auto task = std::packaged_task<void()>(
+                  [thisThreadConcurrent = concurrentPerThread + needsExtraConcurrent, thisThreadMessages = messagesPerThread + needsExtraMessage, &msgs, &connection, &connected, &concurrentInFlight] {
+                     auto clients = std::vector<std::unique_ptr<Client>>();
+                     emplace_initialize_n(clients, thisThreadConcurrent, [&](Client& client) {
+                        for (int i = 0;; ++i) {
+                           try {
+                              client.connect(connection);
+                              break;
+                           } catch (...) {
+                              if (i > 1000) throw;
+                              std::this_thread::sleep_for(std::chrono::milliseconds(20));
+                           }
+                        }
+                        ++connected;
+                     });
+
+                     // sync all clients, so we start after the server finished accepting
+                     while (connected != concurrentInFlight)
+                        ;
+
+                     auto inFlight = std::deque<std::tuple<Client&, uint32_t>>();
+                     size_t done = 0;
+                     for (size_t i = 0; i < thisThreadMessages; ++i) {
+                        if (i >= thisThreadConcurrent) {
+                           uint32_t response = 0;
+                           auto [finClient, expected] = inFlight.front();
+                           inFlight.pop_front();
+                           finClient.read(response);
+                           if (expected != response) throw std::runtime_error("unexpected value!");
+                           ++done;
+                        }
+
+                        auto current = i % thisThreadConcurrent;
+                        auto value = msgs[i];
+                        auto& client = *clients[current];
+                        client.write(value);
+                        inFlight.emplace_back(client, value);
+                     }
+                     for (; done < thisThreadMessages; ++done) {
+                        uint32_t response = 0;
+                        auto [finClient, expected] = inFlight.front();
+                        inFlight.pop_front();
+                        finClient.read(response);
+                        if (expected != response) throw std::runtime_error("unexpected value!");
+                     }
+                     std::cout << "#" << std::flush;
+                  });
+               futures.emplace_back(task.get_future());
+               threads.emplace_back(move(task));
+            }
+            for (auto& future : futures) {
+               if (future.wait_for(10s) == std::future_status::timeout) {
+                  throw std::runtime_error("run took longer than 10s");
+               }
+            }
+            for (auto& thread : threads) { thread.join(); }
+            std::cout << std::endl;
+         } else { // server
+            auto task = std::packaged_task<void()>([&] {
+               auto server = Server(connection, (concurrentInFlight + 15u) & ~15u); // next multiple of 16
+               for (size_t i = 0; i < concurrentInFlight; ++i) { server.accept(); }
+               server.finishListen();
+               bench(numMessages, [&] {
+                  for (size_t i = 0; i < numMessages; ++i) {
+                     uint32_t message = {};
+                     auto client = server.read(message);
+                     server.write(client, message);
                   }
-               }
-               ++connected;
+               });
             });
-
-            // sync all clients, so we start after the server finished accepting
-            while (connected != concurrentInFlight)
-               ;
-
-            auto inFlight = std::deque<std::tuple<Client&, uint32_t>>();
-            size_t done = 0;
-            for (size_t i = 0; i < thisThreadMessages; ++i) {
-               if (i >= thisThreadConcurrent) {
-                  uint32_t response = 0;
-                  auto [finClient, expected] = inFlight.front();
-                  inFlight.pop_front();
-                  finClient.read(response);
-                  if (expected != response) throw std::runtime_error("unexpected value!");
-                  ++done;
-               }
-
-               auto current = i % thisThreadConcurrent;
-               auto value = msgs[i];
-               auto& client = *clients[current];
-               client.write(value);
-               inFlight.emplace_back(client, value);
+            auto future = task.get_future();
+            auto thread = std::thread(move(task));
+            if (future.wait_for(10s) == std::future_status::timeout) {
+               throw std::runtime_error("run took longer than 10s");
             }
-            for (; done < thisThreadMessages; ++done) {
-               uint32_t response = 0;
-               auto [finClient, expected] = inFlight.front();
-               inFlight.pop_front();
-               finClient.read(response);
-               if (expected != response) throw std::runtime_error("unexpected value!");
-            }
-            std::cout << "#" << std::flush;
-         });
-      }
-      for (auto& thread : threads) { thread.join(); }
-      std::cout << std::endl;
-   } else { // server
-      auto server = Server(connection, (concurrentInFlight + 15u) & ~15u); // next multiple of 16
-      for (size_t i = 0; i < concurrentInFlight; ++i) { server.accept(); }
-      server.finishListen();
-      bench(numMessages, [&] {
-         for (size_t i = 0; i < numMessages; ++i) {
-            uint32_t message = {};
-            auto client = server.read(message);
-            server.write(client, message);
+            thread.join();
          }
-      });
+         ++run;
+      } catch (const std::runtime_error& e) {
+         std::cout << "error: " << e.what() << ", retrying..." << std::endl;
+      }
    }
 }
 
