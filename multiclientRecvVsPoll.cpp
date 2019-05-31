@@ -10,7 +10,7 @@
 #include <vector>
 
 using namespace l5::transport;
-using std::chrono_literals::operator""s;
+using namespace std::chrono_literals;
 
 static constexpr uint16_t port = 1234;
 static std::string_view ip = "127.0.0.1";
@@ -24,7 +24,7 @@ void emplace_initialize_n(Container& container, Size n, Args&&... args, Initiali
 }
 
 template <typename Server, typename Client>
-void doRun(bool isClient, const std::string& connection, size_t concurrentInFlight) {
+void doRun(bool isClient, const std::string& connection, size_t concurrentInFlight, const std::string& method) {
    static constexpr auto numMessages = size_t(1e6);
    for (size_t run = 0; run < 5;) {
       try {
@@ -95,14 +95,21 @@ void doRun(bool isClient, const std::string& connection, size_t concurrentInFlig
                futures.emplace_back(task.get_future());
                threads.emplace_back(move(task));
             }
-            for (auto& future : futures) {
+            auto timeout = false;
+            for (size_t i = 0; i < futures.size(); ++i) {
+               auto& future = futures[i];
                if (future.wait_for(10s) == std::future_status::timeout) {
-                  throw std::runtime_error("run took longer than 10s");
+                  pthread_cancel(threads[i].native_handle());
+                  timeout = true;
                }
             }
             for (auto& thread : threads) { thread.join(); }
             std::cout << std::endl;
+            if (timeout) {
+               throw std::runtime_error("run took longer than 10s");
+            }
          } else { // server
+            std::cout << concurrentInFlight << method << std::flush;
             auto task = std::packaged_task<void()>([&] {
                auto server = Server(connection, (concurrentInFlight + 15u) & ~15u); // next multiple of 16
                for (size_t i = 0; i < concurrentInFlight; ++i) { server.accept(); }
@@ -117,10 +124,15 @@ void doRun(bool isClient, const std::string& connection, size_t concurrentInFlig
             });
             auto future = task.get_future();
             auto thread = std::thread(move(task));
+            auto timeout = false;
             if (future.wait_for(10s) == std::future_status::timeout) {
-               throw std::runtime_error("run took longer than 10s");
+               pthread_cancel(thread.native_handle());
+               timeout = true;
             }
             thread.join();
+            if (timeout) {
+               throw std::runtime_error("run took longer than 10s");
+            }
          }
          ++run;
       } catch (const std::runtime_error& e) {
@@ -147,10 +159,8 @@ int main(int argc, char** argv) {
    for (size_t i = 1; i < 50; ++i) {
       // TODO: MulticlientRDMAMemoryRegions -> Suitable for *few* clients (x < ???)
       // MulticlientRDMADoorbells -> Suitable for *most* clients (??? < x < ???)
-      if (!isClient) std::cout << i << ", Doorbells, " << std::flush;
-      doRun<MulticlientRDMATransportServer, MultiClientRDMATransportClient>(isClient, connectionString, i);
+      doRun<MulticlientRDMATransportServer, MultiClientRDMATransportClient>(isClient, connectionString, i, ", Doorbells, ");
       // MulticlientRDMARecv -> Suitable for *many* clients (??? < x)
-      if (!isClient) std::cout << i << ", Recv, " << std::flush;
-      doRun<MulticlientRDMARecvTransportServer, MulticlientRDMARecvTransportClient>(isClient, connectionString, i);
+      doRun<MulticlientRDMARecvTransportServer, MulticlientRDMARecvTransportClient>(isClient, connectionString, i, ", Recv, ");
    }
 }
