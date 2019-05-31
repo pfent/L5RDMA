@@ -52,7 +52,7 @@ class MulticlientRDMADistinctMrTransportServer {
 public:
     explicit MulticlientRDMADistinctMrTransportServer(const std::string &port, size_t maxClients = 256);
 
-    ~MulticlientRDMADistinctMrTransportServer();
+    ~MulticlientRDMADistinctMrTransportServer() = default;
 
     MulticlientRDMADistinctMrTransportServer(MulticlientRDMADistinctMrTransportServer &&) = default;
 
