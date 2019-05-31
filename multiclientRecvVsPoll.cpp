@@ -36,10 +36,11 @@ void doRun(bool isClient, const std::string& connection, size_t concurrentInFlig
       auto messagesPerThread = numMessages / numThreads;
       auto threads = std::vector<std::thread>();
       threads.reserve(numThreads);
+      auto connected = std::atomic<size_t>(0);
       for (size_t threadId = 0; threadId < numThreads; ++threadId) {
          bool needsExtraConcurrent = (concurrentInFlight % numThreads) > threadId;
          bool needsExtraMessage = (numMessages % numThreads) > threadId;
-         threads.emplace_back([thisThreadConcurrent = concurrentPerThread + needsExtraConcurrent, thisThreadMessages = messagesPerThread + needsExtraMessage, &msgs, &connection] {
+         threads.emplace_back([thisThreadConcurrent = concurrentPerThread + needsExtraConcurrent, thisThreadMessages = messagesPerThread + needsExtraMessage, &msgs, &connection, &connected, &concurrentInFlight] {
             auto clients = std::vector<std::unique_ptr<Client>>();
             emplace_initialize_n(clients, thisThreadConcurrent, [&](Client& client) {
                for (int i = 0;; ++i) {
@@ -51,7 +52,12 @@ void doRun(bool isClient, const std::string& connection, size_t concurrentInFlig
                      std::this_thread::sleep_for(std::chrono::milliseconds(20));
                   }
                }
+               ++connected;
             });
+
+            // sync all clients, so we start after the server finished accepting
+            while (connected != concurrentInFlight)
+               ;
 
             auto inFlight = std::deque<std::tuple<Client&, uint32_t>>();
             size_t done = 0;
@@ -78,7 +84,7 @@ void doRun(bool isClient, const std::string& connection, size_t concurrentInFlig
                finClient.read(response);
                if (expected != response) throw std::runtime_error("unexpected value!");
             }
-            std::cout << "#";
+            std::cout << "#" << std::flush;
          });
       }
       for (auto& thread : threads) { thread.join(); }

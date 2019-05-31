@@ -27,37 +27,39 @@ void MulticlientRDMARecvTransportServer::accept() {
 
    auto qp = rdma::RcQueuePair(net);
 
-   auto address = rdma::Address{net.getGID(), qp.getQPN(), net.getLID()};
-   tcp::write(acced, address);
-   tcp::read(acced, address);
-
-   auto receiveAddr = receives.getAddr().offset(sizeof(uint8_t[MAX_MESSAGESIZE]) * clientId);
-   tcp::write(acced, receiveAddr);
-   tcp::read(acced, receiveAddr);
-
-   qp.connect(address);
-
    auto recv = ibv::workrequest::Recv{};
-   recv.setId(connections.size()); // TODO: could we use the ID to identify the client here?
+   recv.setId(connections.size());
 
    auto answer = ibv::workrequest::Simple<ibv::workrequest::Write>();
-   answer.setLocalAddress(sendBuffer.getSlice());
-   answer.setRemoteAddress(receiveAddr);
-   answer.setInline();
-   answer.setSignaled();
 
    // map QueuePairNumber to client id
    qpnToConnection[qp.getQPN()] = connections.size();
    auto& connection = connections.emplace_back(std::move(acced), std::move(qp), answer, recv);
    // immediately post a recv to ensure that we always have a receive request ready for each accepted connection
    connection.qp.postRecvRequest(connection.recv);
+   // the recv needs to be posted before we can exchange addresses
+
+   auto address = rdma::Address{net.getGID(), connection.qp.getQPN(), net.getLID()};
+   tcp::write(connection.socket, address);
+   tcp::read(connection.socket, address);
+
+   auto receiveAddr = receives.getAddr().offset(sizeof(uint8_t[MAX_MESSAGESIZE]) * clientId);
+   tcp::write(connection.socket, receiveAddr);
+   tcp::read(connection.socket, receiveAddr);
+
+   connection.answerWr.setLocalAddress(sendBuffer.getSlice());
+   connection.answerWr.setRemoteAddress(receiveAddr);
+   connection.answerWr.setInline();
+   connection.answerWr.setSignaled();
+
+   connection.qp.connect(address);
 }
 
 size_t MulticlientRDMARecvTransportServer::receive(void* whereTo, size_t maxSize) {
    auto wc = net.getSharedCompletionQueue().pollRecvWorkCompletionBlocking();
    // find out, which client this message came from
    auto client = qpnToConnection.at(wc.getQueuePairNumber());
-   auto& connection = connections[client];
+   auto& connection = connections[client]; // TODO: could we use the ID to identify the client here? -> log ID?
    // immediately replace the consumed receive request
    connection.qp.postRecvRequest(connection.recv);
 
