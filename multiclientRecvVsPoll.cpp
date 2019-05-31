@@ -1,3 +1,4 @@
+#include "include/MulticlientRDMADistinctMrTransport.h"
 #include "include/MulticlientRDMARecvTransport.h"
 #include "include/MulticlientRDMATransport.h"
 #include "include/RdmaTransport.h"
@@ -143,11 +144,13 @@ void doRun(bool isClient, const std::string& connection, size_t concurrentInFlig
 
 int main(int argc, char** argv) {
    if (argc < 2) {
-      std::cout << "Usage: " << argv[0] << " <client / server>  <(IP, optional) 127.0.0.1>" << std::endl;
+      std::cout << "Usage: " << argv[0] << " <client / server> <(concurrent, optional)> <(IP, optional) 127.0.0.1>" << std::endl;
       return -1;
    }
    const auto isClient = std::string_view(argv[1]) == "client";
-   if (argc >= 2) ip = argv[1];
+   auto concurrent = std::optional<size_t>();
+   if (argc >= 2) concurrent = atoi(argv[1]);
+   if (argc >= 3) ip = argv[2];
    std::string connectionString;
    if (isClient) {
       connectionString = std::string(ip) + ":" + std::to_string(port);
@@ -156,11 +159,21 @@ int main(int argc, char** argv) {
    }
 
    if (!isClient) std::cout << "concurrent, method, messages, seconds, msgps, user, kernel, total\n";
-   for (size_t i = 1; i < 50; ++i) {
-      // TODO: MulticlientRDMAMemoryRegions -> Suitable for *few* clients (x < ???)
-      // MulticlientRDMADoorbells -> Suitable for *most* clients (??? < x < ???)
-      doRun<MulticlientRDMATransportServer, MultiClientRDMATransportClient>(isClient, connectionString, i, ", Doorbells, ");
-      // MulticlientRDMARecv -> Suitable for *many* clients (??? < x)
-      doRun<MulticlientRDMARecvTransportServer, MulticlientRDMARecvTransportClient>(isClient, connectionString, i, ", Recv, ");
+   if (concurrent) {
+      // MulticlientRDMADistinctMr -> Suitable for *few* clients (x < ???)
+      doRun<MulticlientRDMADistinctMrTransportServer, MulticlientRDMADistinctMrTransportClient>(isClient, connectionString, *concurrent, ", Direct, ");
+      // MulticlientRDMADoorbells -> Suitable for *most* clients (??? < x < 9)
+      doRun<MulticlientRDMATransportServer, MultiClientRDMATransportClient>(isClient, connectionString, *concurrent, ", Doorbells, ");
+      // MulticlientRDMARecv -> Suitable for *many* clients (9 < x)
+      doRun<MulticlientRDMARecvTransportServer, MulticlientRDMARecvTransportClient>(isClient, connectionString, *concurrent, ", Recv, ");
+   } else {
+      for (size_t i = 1; i < 50; ++i) {
+          // MulticlientRDMADistinctMr -> Suitable for *few* clients (x < ???)
+         doRun<MulticlientRDMADistinctMrTransportServer, MulticlientRDMADistinctMrTransportClient>(isClient, connectionString, *concurrent, ", Direct, ");
+         // MulticlientRDMADoorbells -> Suitable for *most* clients (??? < x < 9)
+         doRun<MulticlientRDMATransportServer, MultiClientRDMATransportClient>(isClient, connectionString, i, ", Doorbells, ");
+         // MulticlientRDMARecv -> Suitable for *many* clients (9 < x)
+         doRun<MulticlientRDMARecvTransportServer, MulticlientRDMARecvTransportClient>(isClient, connectionString, i, ", Recv, ");
+      }
    }
 }
