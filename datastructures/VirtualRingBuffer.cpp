@@ -1,10 +1,16 @@
 #include "VirtualRingBuffer.h"
 #include "util/busywait.h"
 #include "util/socket/domain.h"
+#include <boost/uuid/uuid.hpp>
+#include <boost/uuid/uuid_generators.hpp>
+#include <boost/uuid/uuid_io.hpp>
 
 namespace l5 {
 namespace datastructure {
 using namespace util;
+namespace {
+static auto uuidGenerator = boost::uuids::random_generator{};
+}
 
 VirtualRingBuffer::VirtualRingBuffer(size_t size, const Socket &sock) : size(size), bitmask(size - 1) {
     const bool powerOfTwo = (size != 0) && !(size & (size - 1));
@@ -12,10 +18,11 @@ VirtualRingBuffer::VirtualRingBuffer(size_t size, const Socket &sock) : size(siz
         throw std::runtime_error{"size should be a power of 2"};
     }
 
-    localRw = malloc_shared<RingBufferInfo>(infoName + pid, sizeof(RingBufferInfo));
+    auto name = to_string(uuidGenerator());
+    localRw = malloc_shared<RingBufferInfo>(infoName + name, sizeof(RingBufferInfo));
     domain::send_fd(sock, localRw.fd);
 
-    local = mmapSharedRingBuffer(bufferName + pid, size, true);
+    local = mmapSharedRingBuffer(bufferName + name, size, true);
     domain::send_fd(sock, local.fd);
 
     auto remoteRwFd = Socket::fromRaw(domain::receive_fd(sock));
