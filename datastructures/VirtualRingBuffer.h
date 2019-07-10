@@ -35,7 +35,11 @@ struct VirtualRingBuffer {
 
     void send(const uint8_t *data, size_t length);
 
+    /// Receive exactly size bytes
     size_t receive(void *whereTo, size_t maxSize);
+
+    /// Receive at least 1, up to maxSize bytes
+    size_t receiveSome(void* whereTo, size_t maxSize);
 
 private:
     void waitUntilSendFree(size_t localWritten, size_t length);

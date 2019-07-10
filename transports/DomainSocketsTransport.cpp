@@ -26,6 +26,10 @@ void DomainSocketsTransportServer::read_impl(uint8_t *buffer, size_t size) {
     domain::read(communicationSocket, buffer, size);
 }
 
+size_t DomainSocketsTransportServer::readSome_impl(uint8_t *buffer, size_t maxSize) {
+    return domain::readSome(communicationSocket, buffer, maxSize);
+}
+
 DomainSocketsTransportClient::DomainSocketsTransportClient() : socket(domain::socket()) {}
 
 DomainSocketsTransportClient::~DomainSocketsTransportClient() = default;
@@ -43,6 +47,10 @@ void DomainSocketsTransportClient::write_impl(const uint8_t *data, size_t size) 
 
 void DomainSocketsTransportClient::read_impl(uint8_t *buffer, size_t size) {
     domain::read(socket, buffer, size);
+}
+
+size_t DomainSocketsTransportClient::readSome_impl(uint8_t *buffer, size_t size) {
+    return domain::readSome(socket, buffer, size);
 }
 } // namespace transport
 } // namespace l5

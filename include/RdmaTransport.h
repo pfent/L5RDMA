@@ -33,6 +33,8 @@ class RdmaTransportServer : public TransportServer<RdmaTransportServer<BUFFER_SI
       rdma->receive(std::forward<RangeConsumer>(callback));
    }
 
+   size_t readSome_impl(uint8_t *buffer, size_t maxSize);
+
    template<typename SizeReturner>
    void writeZC(SizeReturner &&doWork) {
       rdma->send(std::forward<SizeReturner>(doWork));
@@ -67,6 +69,8 @@ class RdmaTransportClient : public TransportClient<RdmaTransportClient<BUFFER_SI
    void readZC(RangeConsumer &&callback) {
       rdma->receive(std::forward<RangeConsumer>(callback));
    }
+
+    size_t readSome_impl(uint8_t *buffer, size_t maxSize);
 
    template<typename SizeReturner>
    void writeZC(SizeReturner &&doWork) {
@@ -112,6 +116,12 @@ void RdmaTransportServer<BUFFER_SIZE>::read_impl(uint8_t* buffer, size_t size) {
 }
 
 template<size_t BUFFER_SIZE>
+size_t RdmaTransportServer<BUFFER_SIZE>::readSome_impl(uint8_t* buffer, size_t size) {
+    auto chunk = std::min(size, BUFFER_SIZE);
+    return rdma->receive(buffer, chunk);
+}
+
+template<size_t BUFFER_SIZE>
 void RdmaTransportClient<BUFFER_SIZE>::connect_impl(const std::string &connection) {
    const auto pos = connection.find(':');
    if (pos == std::string::npos) {
@@ -140,6 +150,12 @@ void RdmaTransportClient<BUFFER_SIZE>::read_impl(uint8_t* buffer, size_t size) {
       rdma->receive(&buffer[i], chunk);
       i += chunk;
    }
+}
+
+template<size_t BUFFER_SIZE>
+size_t RdmaTransportClient<BUFFER_SIZE>::readSome_impl(uint8_t* buffer, size_t size) {
+    auto chunk = std::min(size, BUFFER_SIZE);
+    return rdma->receive(buffer, chunk);
 }
 
 template<size_t BUFFER_SIZE>

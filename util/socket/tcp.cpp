@@ -47,6 +47,14 @@ void l5::util::tcp::read(const l5::util::Socket &sock, void* buffer, std::size_t
    }
 }
 
+size_t l5::util::tcp::readSome(const Socket &sock, void *buffer, size_t maxSize) {
+    auto res = ::recv(sock.get(), buffer, maxSize, 0);
+    if (res < 0) {
+        throw std::runtime_error("Couldn't read from socket: "s + strerror(errno));
+    }
+    return res;
+}
+
 void l5::util::tcp::bind(const l5::util::Socket &sock, const sockaddr_in &addr) {
    auto what = reinterpret_cast<const sockaddr*>(&addr);
    if (::bind(sock.get(), what, sizeof(addr)) < 0) {

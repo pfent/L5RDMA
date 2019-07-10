@@ -58,6 +58,22 @@ size_t VirtualRingBuffer::receive(void *whereTo, size_t maxSize) {
     return maxSize;
 }
 
+size_t VirtualRingBuffer::receiveSome(void *whereTo, size_t maxSize) {
+    const auto localRead = localRw.data->read.load();
+    const auto pos = localRead & bitmask;
+
+    // read at least 1 byte
+    waitUntilReceiveAvailable(1, localRead);
+
+    const auto written = remoteRw.data->written.load();
+    const auto size = std::min(written - localRead, maxSize);
+    std::copy(&remote.data.get()[pos], &remote.data.get()[pos + size], reinterpret_cast<uint8_t *>(whereTo));
+
+    // basically `localRw->read += size;`, but without the mfence or locked instructions
+    localRw.data->read.store(localRead + size, std::memory_order_release);
+    return size;
+}
+
 void VirtualRingBuffer::waitUntilReceiveAvailable(size_t maxSize, size_t localRead) {
     size_t remoteWritten;
     loop_while([&]() {

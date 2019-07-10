@@ -26,6 +26,10 @@ void TcpTransportServer::read_impl(uint8_t *buffer, size_t size) {
     tcp::read(communicationSocket, buffer, size);
 }
 
+size_t TcpTransportServer::readSome_impl(uint8_t *buffer, size_t maxSize) {
+    return tcp::readSome(communicationSocket, buffer, maxSize);
+}
+
 void TcpTransportServer::accept_impl() {
     communicationSocket = tcp::accept(initialSocket);
 }
@@ -51,6 +55,10 @@ void TcpTransportClient::write_impl(const uint8_t *data, size_t size) {
 
 void TcpTransportClient::read_impl(uint8_t *buffer, size_t size) {
     tcp::read(socket, buffer, size);
+}
+
+size_t TcpTransportClient::readSome_impl(uint8_t *buffer, size_t size) {
+    return tcp::readSome(socket, buffer, size);
 }
 } // namespace transport
 } // namespace l5

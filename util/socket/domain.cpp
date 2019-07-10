@@ -54,6 +54,14 @@ void read(const Socket &sock, void* buffer, std::size_t size) {
    }
 }
 
+size_t readSome(const Socket &sock, void *buffer, size_t maxSize) {
+    auto res = ::recv(sock.get(), buffer, maxSize, 0);
+    if (res < 0) {
+        throw std::runtime_error("Couldn't read from socket: "s + strerror(errno));
+    }
+    return res;
+}
+
 void bind(const Socket &sock, const std::string &pathToFile) {
    // c.f. http://beej.us/guide/bgipc/output/html/multipage/unixsock.html
    ::sockaddr_un local{};

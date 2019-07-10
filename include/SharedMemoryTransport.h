@@ -34,6 +34,8 @@ class SharedMemoryTransportServer : public TransportServer<SharedMemoryTransport
    void write_impl(const uint8_t* data, size_t size);
 
    void read_impl(uint8_t* buffer, size_t size);
+
+   size_t readSome_impl(uint8_t *buffer, size_t maxSize);
 };
 
 template<size_t BUFFER_SIZE = 16 * 1024 * 1024>
@@ -54,6 +56,8 @@ class SharedMemoryTransportClient : public TransportClient<SharedMemoryTransport
    void write_impl(const uint8_t* data, size_t size);
 
    void read_impl(uint8_t* buffer, size_t size);
+
+   size_t readSome_impl(uint8_t *buffer, size_t maxSize);
 };
 
 template<size_t BUFFER_SIZE>
@@ -90,6 +94,12 @@ void SharedMemoryTransportServer<BUFFER_SIZE>::read_impl(uint8_t* buffer, size_t
 }
 
 template<size_t BUFFER_SIZE>
+size_t SharedMemoryTransportServer<BUFFER_SIZE>::readSome_impl(uint8_t* buffer, size_t size) {
+   auto chunk = std::min(size, BUFFER_SIZE);
+   return messageBuffer->receiveSome(buffer, chunk);
+}
+
+template<size_t BUFFER_SIZE>
 void SharedMemoryTransportClient<BUFFER_SIZE>::connect_impl(const std::string &file) {
    const auto pos = file.find(':');
    const auto whereTo = std::string(file.begin() + pos + 1, file.end());
@@ -115,6 +125,12 @@ void SharedMemoryTransportClient<BUFFER_SIZE>::read_impl(uint8_t* buffer, size_t
       messageBuffer->receive(&buffer[i], chunk);
       i += chunk;
    }
+}
+
+template<size_t BUFFER_SIZE>
+size_t SharedMemoryTransportClient<BUFFER_SIZE>::readSome_impl(uint8_t* buffer, size_t size) {
+   auto chunk = std::min(size, BUFFER_SIZE);
+   return messageBuffer->receiveSome(buffer, chunk);
 }
 
 template<size_t BUFFER_SIZE>

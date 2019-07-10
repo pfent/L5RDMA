@@ -21,6 +21,8 @@ public:
     void write_impl(const uint8_t *data, size_t size);
 
     void read_impl(uint8_t *buffer, size_t size);
+
+    size_t readSome_impl(uint8_t *buffer, size_t maxSize);
 };
 
 class DomainSocketsTransportClient : public TransportClient<DomainSocketsTransportClient> {
@@ -36,6 +38,8 @@ public:
     void write_impl(const uint8_t *data, size_t size);
 
     void read_impl(uint8_t *buffer, size_t size);
+
+    size_t readSome_impl(uint8_t *buffer, size_t maxSize);
 };
 } // namespace transport
 } // namespace l5

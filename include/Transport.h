@@ -32,6 +32,12 @@ public:
     }
 
     /**
+     * Read *some* bytes to an arbitrary memory location
+     * The number of bytes is [1, maxSize]
+     */
+    size_t readSome(uint8_t *whereTo, size_t maxSize) { return static_cast<T *>(this)->readSome_impl(whereTo, maxSize); }
+
+    /**
      * Receive data to an arbitrary memory location
      */
     void read(uint8_t *whereTo, size_t size) { static_cast<T *>(this)->read_impl(whereTo, size); }
@@ -79,6 +85,13 @@ public:
     }
 
     void read(uint8_t *whereTo, size_t size) { static_cast<T *>(this)->read_impl(whereTo, size); }
+
+    /**
+     * Read *some* bytes to an arbitrary memory location
+     * The number of bytes is [1, maxSize]
+     */
+    size_t readSome(uint8_t *whereTo, size_t maxSize) { return static_cast<T *>(this)->readSome_impl(whereTo, maxSize); }
+
 
     template<typename TriviallyCopyable>
     void read(TriviallyCopyable &data) {

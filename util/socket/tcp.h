@@ -22,6 +22,8 @@ void write(const Socket &sock, const T &object) {
 
 void read(const Socket &sock, void *buffer, std::size_t size);
 
+size_t readSome(const Socket &sock, void *buffer, size_t maxSize);
+
 template<typename T>
 void read(const Socket &sock, T &object) {
     static_assert(std::is_trivially_copyable<T>::value, "");
