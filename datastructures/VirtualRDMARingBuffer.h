@@ -45,31 +45,44 @@ public:
         auto sizePtr = reinterpret_cast<volatile size_t *>(&sendBuf.data.get()[startOfWrite]);
         auto begin = reinterpret_cast<volatile uint8_t *>(sizePtr + 1);
 
-        // let the caller do the data stuff
+        // let the caller fill the data
         const size_t dataSize = doWork(begin);
-        const auto sizeToWrite = sizeof(size) + dataSize + sizeof(validity);
-        if (sizeToWrite > size) throw std::runtime_error{"data > buffersize!"};
+        const auto sizeSize = sizeof(size);
+        const auto dataSizeToWrite = dataSize + sizeof(validity);
+        if (sizeSize + dataSizeToWrite > size) throw std::runtime_error{"data > buffersize!"};
 
         *sizePtr = dataSize;
         auto validityPtr = reinterpret_cast<volatile size_t *>(begin + dataSize);
         *validityPtr = validity;
 
-        // actually send the message via rdma (similar to send)
-        const auto sendSlice = localSendMr->getSlice(startOfWrite, sizeToWrite);
-        const auto remoteSlice = remoteReceiveRmr.offset(startOfWrite);
+        // first the data
+        const auto dataSlice = localSendMr->getSlice(startOfWrite + sizeSize, dataSizeToWrite);
+        const auto remoteDataSlice = remoteReceiveRmr.offset(startOfWrite + sizeSize);
+        // afterwards the size
+        const auto sizeSlice = localSendMr->getSlice(startOfWrite, sizeSize);
+        const auto remoteSizeSlice = remoteReceiveRmr.offset(startOfWrite);
+        // selective signaling?
         const auto shouldClearQueue = messageCounter % (4 * 1024) == 0;
 
-        ibv::workrequest::Simple<ibv::workrequest::Write> wr;
-        wr.setLocalAddress(sendSlice);
-        wr.setRemoteAddress(remoteSlice);
+        auto dataWr = ibv::workrequest::Simple<ibv::workrequest::Write>();
+        dataWr.setLocalAddress(dataSlice);
+        dataWr.setRemoteAddress(remoteDataSlice);
+        if (dataSlice.length <= net.queuePair.getMaxInlineSize()) {
+            dataWr.setInline();
+        }
+
+        auto sizeWr = ibv::workrequest::Simple<ibv::workrequest::Write>();
+        sizeWr.setLocalAddress(sizeSlice);
+        sizeWr.setRemoteAddress(remoteSizeSlice);
+        sizeWr.setInline();
         if (shouldClearQueue) {
-            wr.setSignaled();
+            sizeWr.setSignaled();
         }
-        if (sendSlice.length <= net.queuePair.getMaxInlineSize()) {
-            wr.setInline();
-        }
-        waitUntilSendFree(sizeToWrite);
-        net.queuePair.postWorkRequest(wr);
+
+        waitUntilSendFree(sizeSize + dataSizeToWrite);
+        // significant order: size is only visible after data
+        net.queuePair.postWorkRequest(dataWr);
+        net.queuePair.postWorkRequest(sizeWr);
 
         if (shouldClearQueue) {
             net.completionQueue.waitForCompletion();
@@ -77,7 +90,7 @@ public:
         ++messageCounter;
 
         // finally, update sendPos
-        sendPos += sizeToWrite;
+        sendPos += sizeSize + dataSizeToWrite;
     }
 
     /// receive data via a lambda to enable zerocopy operation
