@@ -74,12 +74,12 @@ class MulticlientRDMATransportServer {
         }
     }
 
-    std::initializer_list<ibv::workrequest::Flags> getWrFlags(bool signaled, bool inlineMsg) {
-        if (signaled && inlineMsg) return {ibv::workrequest::Flags::SIGNALED, ibv::workrequest::Flags::INLINE};
-        if (signaled && !inlineMsg) return {ibv::workrequest::Flags::SIGNALED};
-        if (!signaled && inlineMsg) return {ibv::workrequest::Flags::INLINE};
-        if (!signaled && !inlineMsg) return {};
-        __builtin_unreachable();
+    template <class T>
+    static constexpr auto setWrFlags(T& wr, bool signaled, bool inlineMsg) {
+        if (signaled && inlineMsg) return wr.setFlags({ibv::workrequest::Flags::SIGNALED, ibv::workrequest::Flags::INLINE});
+        if (signaled) return wr.setFlags({ibv::workrequest::Flags::SIGNALED});
+        if (inlineMsg) return wr.setFlags({ibv::workrequest::Flags::INLINE});
+        return wr.setFlags({});
     }
 
 public:
@@ -128,11 +128,11 @@ public:
         // selective signaling needs to happen per queuepair / connection
         ++con.sendCounter;
         if (con.sendCounter % 1024 == 0) { // selective signaling
-            con.answerWr.setFlags(getWrFlags(true, totalLength < 512));
+            setWrFlags(con.answerWr, true, totalLength < 512);
             con.qp.postWorkRequest(con.answerWr);
             sharedCq->pollSendCompletionQueueBlocking(ibv::workcompletion::Opcode::RDMA_WRITE);
         } else {
-            con.answerWr.setFlags(getWrFlags(false, totalLength < 512));
+            setWrFlags(con.answerWr, false, totalLength < 512);
             con.qp.postWorkRequest(con.answerWr);
         }
     }

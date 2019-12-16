@@ -45,12 +45,12 @@ class MulticlientRDMARecvTransportServer {
 
    void listen(uint16_t port);
 
-   static std::initializer_list<ibv::workrequest::Flags> getWrFlags(bool signaled, bool inlineMsg) {
-      if (signaled && inlineMsg) return {ibv::workrequest::Flags::SIGNALED, ibv::workrequest::Flags::INLINE};
-      if (signaled && !inlineMsg) return {ibv::workrequest::Flags::SIGNALED};
-      if (!signaled && inlineMsg) return {ibv::workrequest::Flags::INLINE};
-      if (!signaled && !inlineMsg) return {};
-      __builtin_unreachable();
+   template <class T>
+   static constexpr auto setWrFlags(T& wr, bool signaled, bool inlineMsg) {
+      if (signaled && inlineMsg) return wr.setFlags({ibv::workrequest::Flags::SIGNALED, ibv::workrequest::Flags::INLINE});
+      if (signaled) return wr.setFlags({ibv::workrequest::Flags::SIGNALED});
+      if (inlineMsg) return wr.setFlags({ibv::workrequest::Flags::INLINE});
+      return wr.setFlags({});
    }
 
    public:

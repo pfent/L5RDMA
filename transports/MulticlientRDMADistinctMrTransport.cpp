@@ -97,11 +97,11 @@ void MulticlientRDMADistinctMrTransportServer::send(size_t receiverId, const uin
    // selective signaling needs to happen per queuepair / connection
    ++con.sendCounter;
    if (con.sendCounter % 1024 == 0) {
-      con.answerWr.setFlags(getWrFlags(true, totalLength < 512));
+      setWrFlags(con.answerWr, true, totalLength < 512);
       con.qp.postWorkRequest(con.answerWr);
       sharedCq->pollSendCompletionQueueBlocking(ibv::workcompletion::Opcode::RDMA_WRITE);
    } else {
-      con.answerWr.setFlags(getWrFlags(false, totalLength < 512));
+      setWrFlags(con.answerWr, false, totalLength < 512);
       con.qp.postWorkRequest(con.answerWr);
    }
 }

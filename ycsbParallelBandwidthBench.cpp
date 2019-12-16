@@ -26,8 +26,6 @@ static auto printResults = [](double workSize, auto avgTime,
    accumulated += (workSize / 1e6 / avgTime);
 };
 
-static std::atomic<size_t> clientsReady;
-
 static auto database = std::optional<YcsbDatabase>();
 
 template <class Server, class Client>
