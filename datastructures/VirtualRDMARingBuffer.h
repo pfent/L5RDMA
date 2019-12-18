@@ -45,6 +45,50 @@ public:
         auto sizePtr = reinterpret_cast<volatile size_t *>(&sendBuf.data.get()[startOfWrite]);
         auto begin = reinterpret_cast<volatile uint8_t *>(sizePtr + 1);
 
+        // let the caller do the data stuff
+        const size_t dataSize = doWork(begin);
+        const auto sizeToWrite = sizeof(size) + dataSize + sizeof(validity);
+        if (sizeToWrite > size) throw std::runtime_error{"data > buffersize!"};
+
+        *sizePtr = dataSize;
+        auto validityPtr = reinterpret_cast<volatile size_t *>(begin + dataSize);
+        *validityPtr = validity;
+
+        // actually send the message via rdma (similar to send)
+        const auto sendSlice = localSendMr->getSlice(startOfWrite, sizeToWrite);
+        const auto remoteSlice = remoteReceiveRmr.offset(startOfWrite);
+        const auto shouldClearQueue = messageCounter % (4 * 1024) == 0;
+
+        ibv::workrequest::Simple<ibv::workrequest::Write> wr;
+        wr.setLocalAddress(sendSlice);
+        wr.setRemoteAddress(remoteSlice);
+        if (shouldClearQueue) {
+            wr.setSignaled();
+        }
+        if (sendSlice.length <= net.queuePair.getMaxInlineSize()) {
+            wr.setInline();
+        }
+        waitUntilSendFree(sizeToWrite);
+        net.queuePair.postWorkRequest(wr);
+
+        if (shouldClearQueue) {
+            net.completionQueue.waitForCompletion();
+        }
+        ++messageCounter;
+
+        // finally, update sendPos
+        sendPos += sizeToWrite;
+    }
+
+    /// RFC 5040 compliant version that uses two separate writes that are explicitly ordered.
+    /// Would be needed for exotic implementations that don't write messages front-to-back, but is unused by default
+    template<typename SizeReturner>
+    void sendParanoid(SizeReturner &&doWork) {
+        static_assert(std::is_unsigned_v<std::result_of_t<SizeReturner(uint8_t *)>>);
+        const auto startOfWrite = sendPos & bitmask;
+        auto sizePtr = reinterpret_cast<volatile size_t *>(&sendBuf.data.get()[startOfWrite]);
+        auto begin = reinterpret_cast<volatile uint8_t *>(sizePtr + 1);
+
         // let the caller fill the data
         const size_t dataSize = doWork(begin);
         const auto sizeSize = sizeof(size);
