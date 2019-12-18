@@ -352,6 +352,97 @@ void runWriteMemPolling(bool isClient, size_t dataSize) {
     }
 }
 
+template<class QueuePair>
+void runParanoidWriteMemPolling(bool isClient, size_t dataSize) {
+   std::string data(dataSize, 'A');
+   auto net = rdma::Network();
+   auto &cq = net.getSharedCompletionQueue();
+   auto qp = QueuePair(net);
+
+   auto recvbuf = std::vector<char>(data.size());
+   auto recvmr = net.registerMr(recvbuf.data(), recvbuf.size(),
+                                {ibv::AccessFlag::LOCAL_WRITE, ibv::AccessFlag::REMOTE_WRITE});
+   auto sendbuf = std::vector<char>(data.size());
+   auto sendmr = net.registerMr(sendbuf.data(), sendbuf.size(), {});
+
+   auto socket = Socket::create();
+   if (isClient) {
+      connectSocket(socket);
+
+      std::copy(data.begin(), data.end(), sendbuf.begin());
+
+      auto remoteAddr = rdma::Address{net.getGID(), qp.getQPN(), net.getLID()};
+      tcp::write(socket, &remoteAddr, sizeof(remoteAddr));
+      tcp::read(socket, &remoteAddr, sizeof(remoteAddr));
+      auto remoteMr = ibv::memoryregion::RemoteAddress{reinterpret_cast<uintptr_t>(recvbuf.data()),
+                                                       recvmr->getRkey()};
+      tcp::write(socket, &remoteMr, sizeof(remoteMr));
+      tcp::read(socket, &remoteMr, sizeof(remoteMr));
+
+      qp.connect(remoteAddr);
+
+      // Goal of this experiment: measure RFC 5040 compliant pollable data transmission.
+      // We don't have intra-write ordering, but only inter-write, so we need 2 separate writes with the poll byte last
+      auto writeFirstByte = createWriteWrNoImm(sendmr->getSlice(0, 1), remoteMr);
+      auto writeRest = createWriteWrNoImm(sendmr->getSlice(1, sendmr->getLength() - 1), remoteMr.offset(1));
+
+      bench(MESSAGES, [&]() {
+          for (size_t i = 0; i < MESSAGES; ++i) {
+             std::fill(recvbuf.begin(), recvbuf.end(), 0);
+
+             qp.postWorkRequest(writeRest);
+             qp.postWorkRequest(writeFirstByte);
+             cq.pollSendCompletionQueueBlocking(ibv::workcompletion::Opcode::RDMA_WRITE);
+             cq.pollSendCompletionQueueBlocking(ibv::workcompletion::Opcode::RDMA_WRITE);
+
+             // wait for message being written
+             while (*static_cast<volatile char *>(recvbuf.data()) == '\0');
+
+             // check if the data is still the same
+             if (not std::equal(recvbuf.begin(), recvbuf.end(), data.begin(), data.end())) {
+                throw;
+             }
+          }
+      });
+
+   } else {
+      setUpListenSocket(socket);
+
+      const auto acced = [&] {
+          sockaddr_in ignored{};
+          return tcp::accept(socket, ignored);
+      }();
+
+      auto remoteAddr = rdma::Address{net.getGID(), qp.getQPN(), net.getLID()};
+      tcp::write(acced, &remoteAddr, sizeof(remoteAddr));
+      tcp::read(acced, &remoteAddr, sizeof(remoteAddr));
+      auto remoteMr = ibv::memoryregion::RemoteAddress{reinterpret_cast<uintptr_t>(recvbuf.data()),
+                                                       recvmr->getRkey()};
+      tcp::write(acced, &remoteMr, sizeof(remoteMr));
+      tcp::read(acced, &remoteMr, sizeof(remoteMr));
+
+      qp.connect(remoteAddr);
+
+      auto writeFirstByte = createWriteWrNoImm(sendmr->getSlice(0, 1), remoteMr);
+      auto writeRest = createWriteWrNoImm(sendmr->getSlice(1, sendmr->getLength() - 1), remoteMr.offset(1));
+
+      bench(MESSAGES, [&]() {
+          for (size_t i = 0; i < MESSAGES; ++i) {
+             // wait for message being written
+             while (*static_cast<volatile char *>(recvbuf.data()) == '\0');
+
+             std::copy(recvbuf.begin(), recvbuf.end(), sendbuf.begin());
+             std::fill(recvbuf.begin(), recvbuf.end(), 0);
+             // echo back the received data in same
+             qp.postWorkRequest(writeRest);
+             qp.postWorkRequest(writeFirstByte);
+             cq.pollSendCompletionQueueBlocking(ibv::workcompletion::Opcode::RDMA_WRITE);
+             cq.pollSendCompletionQueueBlocking(ibv::workcompletion::Opcode::RDMA_WRITE);
+          }
+      });
+   }
+}
+
 auto createWriteWrWithImm(const ibv::memoryregion::Slice &slice, const ibv::memoryregion::RemoteAddress &rmr) {
     auto write = ibv::workrequest::Simple<ibv::workrequest::WriteWithImm>{};
     write.setLocalAddress(slice);
@@ -666,6 +757,8 @@ int main(int argc, char **argv) {
         runConnected<rdma::RcQueuePair>(isClient, length);
         cout << length << ", Write + Polling, ";
         runWriteMemPolling<rdma::RcQueuePair>(isClient, length);
+        cout << length << ", Two writes, ";
+        runParanoidWriteMemPolling<rdma::RcQueuePair>(isClient, length);
         cout << length << ", Write + Immediate, ";
         runWriteWithImm<rdma::RcQueuePair>(isClient, length);
         if (isClient)
