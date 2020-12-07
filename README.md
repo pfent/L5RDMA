@@ -16,6 +16,10 @@ Building the library requires a reasonably modern compiler (C++17). Ubuntu 17.10
 
 ### Prerequisites
 Necessary libraries:
+```bash
+# For Ubuntu
+sudo apt install rdma-core libibverbs-dev librdmacm-dev libtbb2 libboost-all-dev cmake-curses-gui
+```
 * libibverbs (on Ubuntu >= 18.04 install `rdma-core`, <= 17.10 `libibverbs`, `librdmacm` and drivers for your Infiniband card)
 * Intel tbb (`libtbb2`)
 
